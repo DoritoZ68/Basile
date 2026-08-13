@@ -6,6 +6,11 @@ type IllustrationProps = {
   className?: string;
 };
 
+/** Rounds trig output to a fixed precision so server/client renders serialize identically. */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 function Frame({
   children,
   className,
@@ -69,10 +74,10 @@ export function BallStarIllustration({ className }: IllustrationProps) {
       <g stroke="#ffb703" strokeOpacity="0.5" strokeWidth="2">
         {Array.from({ length: 12 }).map((_, i) => {
           const a = (i / 12) * Math.PI * 2;
-          const x1 = 200 + Math.cos(a) * 70;
-          const y1 = 140 + Math.sin(a) * 70;
-          const x2 = 200 + Math.cos(a) * 150;
-          const y2 = 140 + Math.sin(a) * 150;
+          const x1 = round2(200 + Math.cos(a) * 70);
+          const y1 = round2(140 + Math.sin(a) * 70);
+          const x2 = round2(200 + Math.cos(a) * 150);
+          const y2 = round2(140 + Math.sin(a) * 150);
           return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} />;
         })}
       </g>

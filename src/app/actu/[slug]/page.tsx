@@ -7,7 +7,9 @@ import { CategoryPill } from "@/components/CategoryPill";
 import { ThreePoints } from "@/components/ThreePoints";
 import { ArticleCard } from "@/components/ArticleCard";
 import { WeekBadge } from "@/components/WeekBadge";
+import { ShareButtons } from "@/components/ShareButtons";
 import { formatFullDate } from "@/lib/date";
+import { SITE_URL } from "@/lib/site";
 
 export function generateStaticParams() {
   return articles.map((a) => ({ slug: a.slug }));
@@ -74,15 +76,19 @@ export default async function ArticlePage({
         ))}
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-2">
-        {article.tags.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-full border border-line px-3 py-1 text-xs text-mist-dim"
-          >
-            #{tag}
-          </span>
-        ))}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-6">
+        <div className="flex flex-wrap gap-2">
+          {article.tags.map((tag) => (
+            <Link
+              key={tag}
+              href={`/tag/${encodeURIComponent(tag)}`}
+              className="rounded-full border border-line px-3 py-1 text-xs text-mist-dim transition hover:border-sky hover:text-sky"
+            >
+              #{tag}
+            </Link>
+          ))}
+        </div>
+        <ShareButtons title={article.title} url={`${SITE_URL}/actu/${article.slug}`} />
       </div>
 
       {related.length > 0 && (

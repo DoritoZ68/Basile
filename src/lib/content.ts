@@ -12,8 +12,13 @@ export const CATEGORIES: Record<Category, { label: string; short: string }> = {
 
 export type Media =
   | { kind: "illustration"; key: IllustrationKey }
-  | { kind: "image"; src: string; alt: string }
-  | { kind: "video"; poster: IllustrationKey | { src: string; alt: string }; caption: string; src?: string };
+  | { kind: "image"; src: string; alt: string; credit?: string }
+  | {
+      kind: "video";
+      poster: IllustrationKey | { src: string; alt: string; credit?: string };
+      caption: string;
+      src?: string;
+    };
 
 export type Article = {
   slug: string;
@@ -52,7 +57,12 @@ export const articles: Article[] = [
       "Plusieurs profils sont annoncés en défense centrale et au milieu de terrain, sans qu'aucun accord ne soit encore acté publiquement. Le club dispose encore de plusieurs semaines avant la fermeture du marché pour boucler ses dossiers prioritaires.",
       "Reste une urgence : trouver un numéro un pour remplacer le gardien parti à Manchester City, un chantier qui occupe une bonne partie des discussions internes ces derniers jours.",
     ],
-    media: { kind: "image", src: "photo-1489944440615-453fc2b6a9a9", alt: "Stade au toit spectaculaire, vue aérienne sous les projecteurs" },
+    media: {
+      kind: "image",
+      src: "/images/velodrome/interieur-marseille.jpg",
+      alt: "Intérieur de l'Orange Vélodrome, tribunes vides avec l'inscription MARSEILLE",
+      credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
+    },
     tags: ["mercato", "recrutement", "masse salariale"],
     featured: true,
   },
@@ -216,7 +226,11 @@ export const articles: Article[] = [
     ],
     media: {
       kind: "video",
-      poster: { src: "photo-1459865264687-595d652de67e", alt: "Gros plan sur une ligne de craie fraîche tracée sur la pelouse" },
+      poster: {
+        src: "/images/velodrome/facade-orange-velodrome.jpg",
+        alt: "Façade de l'Orange Vélodrome et son parvis, en plein jour",
+        credit: "Bernard Ddd / Wikimedia Commons, CC BY-SA 2.0",
+      },
       caption: "Vidéo à intégrer : la tournée des coulisses du stade avant match.",
     },
     tags: ["vélodrome", "coulisses", "logistique"],
@@ -260,4 +274,19 @@ export function getRelated(article: Article, limit = 3): Article[] {
     .filter((a) => a.slug !== article.slug && a.category === article.category)
     .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1))
     .slice(0, limit);
+}
+
+export function getLatestArticles(limit = 6): Article[] {
+  return [...articles].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1)).slice(0, limit);
+}
+
+export function getAllTags(): string[] {
+  const set = new Set(articles.flatMap((a) => a.tags));
+  return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+export function getArticlesByTag(tag: string): Article[] {
+  return articles
+    .filter((a) => a.tags.includes(tag))
+    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
 }

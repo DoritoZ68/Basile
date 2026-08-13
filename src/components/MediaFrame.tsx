@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import type { Media } from "@/lib/content";
 import { illustrationByKey } from "@/components/illustrations";
-import { unsplashUrl } from "@/lib/images";
+import { resolveImageSrc } from "@/lib/images";
 
 const BADGE_LABEL: Record<Media["kind"], string> = {
   illustration: "Illustration",
@@ -12,20 +12,28 @@ const BADGE_LABEL: Record<Media["kind"], string> = {
   video: "Vidéo",
 };
 
-function renderPoster(poster: { src: string; alt: string } | keyof typeof illustrationByKey, sizes: string) {
+type ImagePoster = { src: string; alt: string; credit?: string };
+
+function renderPoster(poster: ImagePoster | keyof typeof illustrationByKey, sizes: string) {
   if (typeof poster === "string") {
     const Illustration = illustrationByKey[poster];
     return <Illustration className="h-full w-full" />;
   }
   return (
     <Image
-      src={unsplashUrl(poster.src, 900)}
+      src={resolveImageSrc(poster.src, 900)}
       alt={poster.alt}
       fill
       sizes={sizes}
       className="object-cover"
     />
   );
+}
+
+function creditOf(media: Media): string | undefined {
+  if (media.kind === "image") return media.credit;
+  if (media.kind === "video" && typeof media.poster !== "string") return media.poster.credit;
+  return undefined;
 }
 
 export function MediaFrame({
@@ -35,6 +43,7 @@ export function MediaFrame({
   rounded = "rounded-2xl",
   aspect = "aspect-[4/3] w-full",
   showBadge = true,
+  showCredit = true,
 }: {
   media: Media;
   priority?: boolean;
@@ -42,8 +51,10 @@ export function MediaFrame({
   rounded?: string;
   aspect?: string;
   showBadge?: boolean;
+  showCredit?: boolean;
 }) {
   const [playing, setPlaying] = useState(false);
+  const credit = creditOf(media);
 
   return (
     <div className={`group relative overflow-hidden ${aspect} ${rounded} border border-line bg-panel`}>
@@ -60,7 +71,7 @@ export function MediaFrame({
 
       {media.kind === "image" && (
         <Image
-          src={unsplashUrl(media.src, 900)}
+          src={resolveImageSrc(media.src, 900)}
           alt={media.alt}
           fill
           priority={priority}
@@ -92,6 +103,12 @@ export function MediaFrame({
             </div>
           )}
         </>
+      )}
+
+      {showCredit && credit && (
+        <span className="absolute bottom-2 right-2.5 z-10 text-[10px] text-white/50">
+          © {credit}
+        </span>
       )}
     </div>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CATEGORIES } from "@/lib/content";
+import { SearchOverlay } from "@/components/SearchOverlay";
 
 const NAV = [
   { href: "/#mercato", label: CATEGORIES.mercato.short },
@@ -10,6 +11,7 @@ const NAV = [
   { href: "/#vestiaire", label: CATEGORIES.vestiaire.short },
   { href: "/#video", label: CATEGORIES.video.short },
   { href: "/archives", label: "Archives" },
+  { href: "/a-propos", label: "À propos" },
 ];
 
 export function SiteHeader() {
@@ -39,19 +41,22 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label="Ouvrir le menu"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-line text-white md:hidden"
-        >
-          <svg width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true">
-            <path d="M0 1H18" stroke="currentColor" strokeWidth="2" />
-            <path d="M0 7H18" stroke="currentColor" strokeWidth="2" />
-            <path d="M0 13H18" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <SearchOverlay />
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-label="Ouvrir le menu"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-line text-white md:hidden"
+          >
+            <svg width="18" height="14" viewBox="0 0 18 14" fill="none" aria-hidden="true">
+              <path d="M0 1H18" stroke="currentColor" strokeWidth="2" />
+              <path d="M0 7H18" stroke="currentColor" strokeWidth="2" />
+              <path d="M0 13H18" stroke="currentColor" strokeWidth="2" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {open && (

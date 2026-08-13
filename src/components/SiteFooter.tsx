@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { CATEGORIES } from "@/lib/content";
+import { NewsletterSignup } from "@/components/NewsletterSignup";
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-line bg-panel/40">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-        <div className="grid gap-10 sm:grid-cols-3">
+        <NewsletterSignup variant="inline" />
+
+        <div className="mt-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-sky to-sky-strong font-display text-base text-ink">
@@ -35,6 +38,27 @@ export function SiteFooter() {
                 <Link href="/archives" className="text-mist-dim transition hover:text-sky">
                   Éditions précédentes
                 </Link>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-display text-sm tracking-wide text-white">Ressources</h3>
+            <ul className="mt-4 space-y-2 text-sm">
+              <li>
+                <Link href="/a-propos" className="text-mist-dim transition hover:text-sky">
+                  À propos &amp; crédits
+                </Link>
+              </li>
+              <li>
+                <a href="/rss.xml" className="text-mist-dim transition hover:text-sky">
+                  Flux RSS
+                </a>
+              </li>
+              <li>
+                <a href="mailto:redaction@om-en-3-points.fr" className="text-mist-dim transition hover:text-sky">
+                  Nous contacter
+                </a>
               </li>
             </ul>
           </div>

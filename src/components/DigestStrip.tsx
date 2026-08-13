@@ -21,6 +21,7 @@ export function DigestStrip({ articles }: { articles: Article[] }) {
               rounded="rounded-none"
               aspect="h-full w-full"
               showBadge={false}
+              showCredit={false}
               sizes="96px"
             />
           </div>
