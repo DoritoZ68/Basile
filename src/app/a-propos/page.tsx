@@ -1,75 +1,52 @@
 import type { Metadata } from "next";
-import { TrophyIllustration } from "@/components/illustrations";
 
 export const metadata: Metadata = {
   title: "À propos",
-  description: "La mission, le fonctionnement et les crédits d'Actu OM en 3 points.",
+  description: "3 Points : Marseille résumée en 3 points, sans détour.",
 };
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-20 pt-8 sm:px-6 sm:pt-12">
-      <p className="font-display text-xs tracking-[0.2em] text-sky">À propos</p>
-      <h1 className="mt-1 text-balance font-display text-2xl text-white sm:text-3xl">
-        Un média, une promesse : 3 points, chaque semaine
+    <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+      <p className="text-sm font-semibold text-blue">À propos</p>
+      <h1 className="mt-2 text-balance font-display text-3xl text-ink">
+        Marseille, sans le blabla.
       </h1>
 
-      <div className="mt-8 overflow-hidden rounded-2xl border border-line">
-        <TrophyIllustration className="h-48 w-full" />
-      </div>
-
-      <div className="prose-om mt-8 space-y-5 text-[15px] leading-relaxed text-mist">
+      <div className="mt-8 space-y-5 text-[15px] leading-relaxed text-ink-soft">
         <p>
-          <strong className="text-white">Actu OM en 3 points</strong> est un média indépendant
-          consacré à l&apos;actualité de l&apos;Olympique de Marseille. Notre pari : plutôt que
-          d&apos;ajouter du bruit à un flux d&apos;informations déjà saturé, condenser chaque
-          sujet — mercato, match, vestiaire, coulisses — en trois points clairs, complétés
-          d&apos;une vidéo, d&apos;une illustration ou d&apos;une photo selon ce qui raconte le
-          mieux l&apos;histoire.
+          <strong className="text-ink">3 Points</strong> résume l&apos;actualité marseillaise —
+          l&apos;OM, la ville, la culture, la mer — en trois idées par sujet, à parcourir comme
+          des stories : on glisse, on tape, on repart avec l&apos;essentiel.
         </p>
         <p>
-          Une nouvelle édition est publiée chaque semaine. La page d&apos;accueil affiche
-          toujours la dernière édition disponible, et l&apos;historique complet reste
-          consultable dans les <a href="/archives" className="text-sky hover:text-white">archives</a>.
+          Chaque histoire peut se prolonger d&apos;une phrase de contexte pour qui veut creuser un
+          peu plus, jamais davantage.
         </p>
         <p>
-          Ce média n&apos;est <strong className="text-white">pas affilié</strong> à
-          l&apos;Olympique de Marseille SA, à la LFP ni à aucun diffuseur officiel. Les analyses
-          et résumés publiés ici reflètent le travail éditorial de la rédaction.
+          Média indépendant, non affilié à l&apos;Olympique de Marseille SA ni à la ville de
+          Marseille.
         </p>
       </div>
 
       <div className="mt-12 border-t border-line pt-8">
-        <h2 className="font-display text-lg text-white">Crédits photo</h2>
-        <p className="mt-3 text-sm leading-relaxed text-mist-dim">
-          Les photographies de l&apos;Orange Vélodrome utilisées sur ce site proviennent de
-          Wikimedia Commons, sous licence Creative Commons Attribution-ShareAlike :
-        </p>
-        <ul className="mt-3 space-y-1.5 text-sm text-mist-dim">
-          <li>
-            Intérieur du stade — Randy110912, CC BY-SA 4.0
-          </li>
-          <li>
-            Façade de l&apos;Orange Vélodrome — Bernard Ddd, CC BY-SA 2.0
-          </li>
-          <li>
-            Tribune du virage Sud — Rémi Mathis, CC BY-SA 3.0
-          </li>
-        </ul>
-        <p className="mt-4 text-sm leading-relaxed text-mist-dim">
-          Les autres photographies proviennent d&apos;Unsplash (libres de droits). Les
-          illustrations sont des créations originales du site.
+        <h2 className="font-display text-lg text-ink">Crédits photo</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Les photographies proviennent de Wikimedia Commons, sous licence Creative Commons
+          Attribution-ShareAlike : Randy110912, Bernard Ddd, Rémi Mathis (Orange Vélodrome) ;
+          Chabe01 (tramway) ; Ingo Mehling (Vieux-Port) ; Houss 2020 (Mucem) ; Kallerna
+          (Notre-Dame de la Garde) ; Georges Seguin (calanques). Détail des licences sur chaque
+          fichier.
         </p>
       </div>
 
       <div className="mt-12 border-t border-line pt-8">
-        <h2 className="font-display text-lg text-white">Contact</h2>
-        <p className="mt-3 text-sm leading-relaxed text-mist-dim">
-          Une info, une correction à signaler ? Écrivez à{" "}
-          <a href="mailto:redaction@om-en-3-points.fr" className="text-sky hover:text-white">
-            redaction@om-en-3-points.fr
+        <h2 className="font-display text-lg text-ink">Contact</h2>
+        <p className="mt-3 text-sm leading-relaxed text-ink-soft">
+          Une correction à signaler ?{" "}
+          <a href="mailto:redaction@3points.fr" className="text-blue hover:underline">
+            redaction@3points.fr
           </a>
-          .
         </p>
       </div>
     </div>

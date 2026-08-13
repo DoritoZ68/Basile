@@ -1,8 +1,8 @@
-# Actu OM en 3 points
+# 3 Points
 
-Média en ligne indépendant qui résume l'actualité de l'Olympique de Marseille
-en 3 points par sujet — mercato, match, vestiaire, vidéos — avec une nouvelle
-édition chaque semaine.
+Marseille — l'OM, la ville, la culture, la mer — résumée en 3 points par
+sujet, à parcourir comme des stories : on glisse, on tape, on repart avec
+l'essentiel.
 
 Stack : Next.js (App Router) + TypeScript + Tailwind CSS v4. Contenu 100 %
 statique (pas de CMS ni de base de données) : tout part d'un seul fichier de
@@ -22,41 +22,34 @@ npm run build   # build de production
 npm run lint    # ESLint
 ```
 
-## Comment fonctionne l'édition hebdomadaire
+## Le principe
 
-Chaque article a une date de publication (`publishedAt`) dans
-`src/lib/content.ts`. La semaine ISO d'un article (`weekId`) en est déduite
-automatiquement — il n'y a rien à synchroniser à la main.
+Chaque sujet est une **histoire** (`Story`, dans `src/lib/content.ts`) : un
+titre, une catégorie (`om` / `ville` / `culture` / `mer`), une photo de
+couverture et exactement 3 points courts. Publier une nouvelle histoire, c'est
+ajouter un objet à la fin du tableau `stories` — rien d'autre à toucher, elle
+apparaît automatiquement dans la bande de stories, la grille filtrable et la
+recherche.
 
-- La page d'accueil affiche toujours la **dernière édition publiée** (le plus
-  grand `weekId` présent dans les données), pas une semaine calendaire figée :
-  s'il n'y a pas encore d'article pour la semaine en cours, l'accueil continue
-  d'afficher la dernière édition disponible plutôt qu'une page vide.
-- La page `/archives` liste automatiquement toutes les éditions passées,
-  regroupées par semaine, de la plus récente à la plus ancienne.
-
-**Publier une nouvelle édition** revient simplement à ajouter de nouveaux
-objets `Article` en tête du tableau `articles` dans `src/lib/content.ts`, avec
-la date du jour. Rien d'autre à toucher : l'accueil, les rubriques et les
-archives se réorganisent tout seuls.
-
-## Types de médias
-
-Chaque article choisit un type de média (`media.kind`) dans
-`src/lib/content.ts` :
-
-- `illustration` — une des illustrations SVG maison (`src/components/illustrations.tsx`),
-  sans dépendance à une image externe.
-- `image` — une photo (actuellement servies depuis Unsplash, libres de droits ;
-  `next.config.ts` autorise le domaine `images.unsplash.com`).
-- `video` — une vignette (poster) + un lecteur ; brancher un vrai fichier vidéo
-  se fait en renseignant `src` sur l'entrée `media` de l'article.
+Sur `/histoire/[slug]`, ces 3 points se parcourent comme des stories
+(`StoryViewer`) : barre de progression, tap/flèches/swipe pour naviguer,
+défilement automatique, et un enchaînement direct vers l'histoire suivante en
+fin de parcours.
 
 ## Structure
 
 ```
-src/app/                page d'accueil, page article ([slug]), archives
-src/components/         composants d'UI (cartes, hero, lecteur média, illustrations SVG)
-src/lib/content.ts      les articles + toute la logique de regroupement par semaine/catégorie
-src/lib/date.ts         calculs de semaine ISO (aucune dépendance externe)
+src/app/                accueil, page story ([slug]), à propos
+src/components/         StoryViewer (le lecteur), StoryBubbles, StoryCard,
+                         CategoryFilterGrid, recherche, header/footer
+src/lib/content.ts      les histoires + catégories
+src/lib/accent.ts       couleurs d'accent par catégorie
+src/lib/date.ts         formatage de dates (aucune dépendance externe)
 ```
+
+## Photos
+
+Les photos (Orange Vélodrome, Vieux-Port, Mucem, Notre-Dame de la Garde,
+calanques, tramway) viennent de Wikimedia Commons sous licence Creative
+Commons Attribution-ShareAlike, stockées dans `public/images/`. Crédits
+détaillés sur `/a-propos`.

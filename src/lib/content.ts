@@ -1,292 +1,238 @@
-import type { IllustrationKey } from "@/components/illustrations";
-import { isoWeekId } from "@/lib/date";
+export type Category = "om" | "ville" | "culture" | "mer";
 
-export type Category = "mercato" | "match" | "vestiaire" | "video";
-
-export const CATEGORIES: Record<Category, { label: string; short: string }> = {
-  mercato: { label: "Mercato", short: "Mercato" },
-  match: { label: "Match & Terrain", short: "Match" },
-  vestiaire: { label: "Vestiaire & Coulisses", short: "Coulisses" },
-  video: { label: "Images & Vidéos", short: "Vidéos" },
+export const CATEGORIES: Record<Category, { label: string; accent: "blue" | "violet" | "coral" | "teal" }> = {
+  om: { label: "OM", accent: "blue" },
+  ville: { label: "Ville", accent: "violet" },
+  culture: { label: "Culture", accent: "coral" },
+  mer: { label: "Mer & nature", accent: "teal" },
 };
 
-export type Media =
-  | { kind: "illustration"; key: IllustrationKey }
-  | { kind: "image"; src: string; alt: string; credit?: string }
-  | {
-      kind: "video";
-      poster: IllustrationKey | { src: string; alt: string; credit?: string };
-      caption: string;
-      src?: string;
-    };
+export type Media = { src: string; alt: string; credit?: string };
 
-export type Article = {
+export type Story = {
   slug: string;
   title: string;
-  dek: string;
   category: Category;
-  /** ISO date, e.g. "2026-08-13". The weekly edition is derived from this. */
   publishedAt: string;
-  readMinutes: number;
+  cover: Media;
+  /** The three punchy beats told across the story viewer's slides. */
   points: [string, string, string];
-  body: string[];
-  media: Media;
-  tags: string[];
-  featured?: boolean;
+  /** One short sentence of extra context, shown after the slides. */
+  more: string;
 };
 
-export function weekIdOf(article: Pick<Article, "publishedAt">): string {
-  return isoWeekId(new Date(`${article.publishedAt}T00:00:00Z`));
-}
-
-export const articles: Article[] = [
+export const stories: Story[] = [
   {
-    slug: "mercato-om-toujours-a-larret",
-    title: "Un mercato à l'arrêt : l'OM toujours sans recrue mi-août",
-    dek: "Seul club de Ligue 1 à ne pas avoir enregistré la moindre arrivée, Marseille joue la montre entre contraintes financières et dossiers en attente.",
-    category: "mercato",
+    slug: "mercato-a-larret",
+    title: "Mercato à l'arrêt",
+    category: "om",
     publishedAt: "2026-08-12",
-    readMinutes: 3,
-    points: [
-      "Début août, l'OM restait le seul club de Ligue 1 — avec l'Athletic Bilbao parmi les cinq grands championnats — à n'avoir officialisé aucune arrivée depuis l'ouverture du mercato.",
-      "Le club doit d'abord alléger sa masse salariale : plusieurs départs de gros contrats sont priorisés avant toute nouvelle signature.",
-      "Le dossier le plus urgent concerne le poste de gardien, laissé vacant par un départ majeur, avec plusieurs pistes explorées en défense et au milieu.",
-    ],
-    body: [
-      "À une poignée de jours de la reprise de la Ligue 1, la Commanderie tourne au ralenti côté arrivées. La direction sportive assume une stratégie prudente, contrainte par les équilibres financiers du club, et privilégie les départs avant de dégainer sur le marché.",
-      "Plusieurs profils sont annoncés en défense centrale et au milieu de terrain, sans qu'aucun accord ne soit encore acté publiquement. Le club dispose encore de plusieurs semaines avant la fermeture du marché pour boucler ses dossiers prioritaires.",
-      "Reste une urgence : trouver un numéro un pour remplacer le gardien parti à Manchester City, un chantier qui occupe une bonne partie des discussions internes ces derniers jours.",
-    ],
-    media: {
-      kind: "image",
+    cover: {
       src: "/images/velodrome/interieur-marseille.jpg",
-      alt: "Intérieur de l'Orange Vélodrome, tribunes vides avec l'inscription MARSEILLE",
+      alt: "Intérieur de l'Orange Vélodrome, tribunes avec l'inscription MARSEILLE",
       credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
     },
-    tags: ["mercato", "recrutement", "masse salariale"],
-    featured: true,
+    points: [
+      "Seul club de Ligue 1 sans la moindre recrue depuis l'ouverture du mercato.",
+      "Priorité du moment : dégraisser la masse salariale avant de recruter.",
+      "Urgence absolue : trouver un gardien après le départ de Rulli.",
+    ],
+    more:
+      "Après le départ de Gerónimo Rulli à Manchester City, l'OM doit conjuguer contraintes budgétaires et besoins sportifs avant la reprise de la Ligue 1.",
   },
   {
-    slug: "rulli-quitte-om-manchester-city",
-    title: "Départ acté : Rulli s'envole pour Manchester City",
-    dek: "Deux saisons après son arrivée, le gardien argentin quitte l'OM et referme un chapitre important du vestiaire phocéen.",
-    category: "vestiaire",
+    slug: "rulli-manchester-city",
+    title: "Rulli file à Manchester City",
+    category: "om",
     publishedAt: "2026-08-11",
-    readMinutes: 2,
+    cover: {
+      src: "/images/velodrome/facade-orange-velodrome.jpg",
+      alt: "Façade de l'Orange Vélodrome en plein jour",
+      credit: "Bernard Ddd / Wikimedia Commons, CC BY-SA 2.0",
+    },
     points: [
-      "Gerónimo Rulli, 34 ans, quitte officiellement l'Olympique de Marseille pour rejoindre Manchester City.",
-      "Le portier argentin laisse un vide dans la hiérarchie des gardiens après deux saisons passées à Marseille.",
-      "Son transfert relance en urgence la recherche d'un nouveau numéro un avant le coup d'envoi de la saison.",
+      "Deux saisons à Marseille, puis départ pour Manchester City.",
+      "Un cadre du vestiaire qui tire sa révérence.",
+      "La succession dans les buts s'ouvre à trois semaines de la reprise.",
     ],
-    body: [
-      "C'est un cadre du vestiaire qui s'en va. Arrivé libre il y a deux ans, Gerónimo Rulli avait fini par s'imposer comme une valeur sûre entre les perches marseillaises, au point de devenir l'un des points d'ancrage du groupe.",
-      "Son départ vers Manchester City, validé cet été, illustre aussi la logique de dégraissage financier voulue par la direction. Il laisse derrière lui un poste stratégique à pourvoir en quelques semaines à peine avant la reprise du championnat.",
-    ],
-    media: { kind: "illustration", key: "jersey" },
-    tags: ["vestiaire", "gardien", "transfert"],
+    more:
+      "Arrivé libre en 2024, le gardien argentin de 34 ans s'était imposé comme un pilier du vestiaire marseillais.",
   },
   {
-    slug: "trophee-des-champions-koweit-psg-om",
-    title: "Cap sur le Koweït : l'OM ouvre sa saison face au PSG",
-    dek: "Le traditionnel Trophée des Champions délocalisé dans le Golfe donne le coup d'envoi symbolique de la saison marseillaise.",
-    category: "match",
+    slug: "om-psg-koweit",
+    title: "OM-PSG au Koweït",
+    category: "om",
     publishedAt: "2026-08-10",
-    readMinutes: 3,
-    points: [
-      "Le Trophée des Champions 2026 opposant le PSG à l'OM se dispute au Koweït, confirmant la tournée internationale de la compétition.",
-      "Cette affiche sert de match de lancement à une saison où l'OM veut confirmer sa place de dauphin de la Ligue 1.",
-      "Le déplacement dans le Golfe s'accompagne d'un programme promotionnel pour le club, entre séance ouverte aux supporters locaux et opérations marketing.",
-    ],
-    body: [
-      "Avant même le premier coup de sifflet de Ligue 1, l'OM entre en scène sur une pelouse neutre, à des milliers de kilomètres du Vélodrome. Le Trophée des Champions, désormais habitué aux organisations à l'étranger, fait escale au Koweït pour cette nouvelle édition face au rival parisien.",
-      "Sur le papier, la rencontre n'attribue qu'un trophée honorifique. Dans les faits, elle sert de test grandeur nature pour un groupe encore en construction, à quelques jours de la première journée de championnat.",
-    ],
-    media: {
-      kind: "video",
-      poster: { src: "photo-1522778119026-d647f0596c20", alt: "Stade plein à craquer sous les lumières, ambiance de grand soir" },
-      caption: "Résumé vidéo à intégrer : ambiance et arrivée du groupe au Koweït.",
+    cover: {
+      src: "/images/velodrome/tribune-virage-sud.jpg",
+      alt: "Tribune du virage Sud du Vélodrome un soir de match",
+      credit: "Rémi Mathis / Wikimedia Commons, CC BY-SA 3.0",
     },
-    tags: ["trophée des champions", "psg", "calendrier"],
-    featured: true,
+    points: [
+      "Le Trophée des Champions s'exporte au Koweït cette année.",
+      "Un premier test grandeur nature avant la Ligue 1.",
+      "Le coup d'envoi symbolique d'une nouvelle saison.",
+    ],
+    more:
+      "Comme les éditions précédentes, ce Trophée des Champions se joue loin du Vélodrome, sur une pelouse neutre du Golfe.",
   },
   {
-    slug: "calendrier-ligue-1-2026-2027-devoile",
-    title: "Le calendrier 2026-2027 dévoilé : un menu corsé pour l'OM",
-    dek: "La Ligue de Football Professionnel a publié le calendrier de la saison : entrée en matière et enchaînements à surveiller pour les Marseillais.",
-    category: "match",
+    slug: "calendrier-2026-2027",
+    title: "Le calendrier est sorti",
+    category: "om",
     publishedAt: "2026-08-13",
-    readMinutes: 2,
-    points: [
-      "Le calendrier complet de la saison 2026-2027 de Ligue 1 a été officiellement dévoilé cette semaine.",
-      "L'OM découvre son enchaînement de matchs pour les premières journées, entre déplacements sensibles et réceptions au Vélodrome.",
-      "Les supporters peuvent d'ores et déjà repérer les rendez-vous à ne pas manquer sur la première partie de saison.",
-    ],
-    body: [
-      "Chaque mois d'août, le même rituel : la publication du calendrier officiel relance les discussions sur les temps forts de la saison à venir. Pour l'OM, l'exercice 2026-2027 s'annonce dense, avec son lot de rendez-vous à forte intensité dès les premières semaines.",
-      "Au-delà du seul calendrier de championnat, le club devra aussi composer avec ses engagements européens et coupes nationales, un enchaînement qui pèsera vite dans la gestion de l'effectif.",
-    ],
-    media: { kind: "illustration", key: "calendar" },
-    tags: ["calendrier", "ligue 1"],
-  },
-  {
-    slug: "commanderie-images-reprise",
-    title: "Retour à la Commanderie : les premières images de la reprise",
-    dek: "Entre gammes physiques et ateliers tactiques, le groupe professionnel a repris le chemin de l'entraînement sous le soleil marseillais.",
-    category: "video",
-    publishedAt: "2026-08-13",
-    readMinutes: 2,
-    points: [
-      "Le groupe professionnel a repris l'entraînement à la Commanderie avec un programme axé sur le physique et le collectif.",
-      "Les jeunes du centre de formation intégrés au groupe pro profitent de cette période pour se montrer aux yeux du staff.",
-      "Les premières séances ouvertes ont permis aux observateurs de noter les automatismes déjà en place avant les matchs de préparation.",
-    ],
-    body: [
-      "Ballons au sol, ateliers de vitesse et travail tactique par séquences : la reprise à la Commanderie a suivi le format classique d'une préparation estivale, avec une montée en charge progressive sur les premiers jours.",
-      "Quelques jeunes talents du centre de formation ont été conviés à s'entraîner avec le groupe professionnel, une occasion pour eux de se montrer avant les premières coupes d'effectif.",
-    ],
-    media: {
-      kind: "video",
-      poster: { src: "photo-1517466787929-bc90951d0974", alt: "Joueur en pleine frappe sur un terrain d'entraînement" },
-      caption: "Vidéo à intégrer : mosaïque des ateliers du jour à la Commanderie.",
+    cover: {
+      src: "/images/velodrome/interieur-marseille.jpg",
+      alt: "Intérieur de l'Orange Vélodrome, tribunes avec l'inscription MARSEILLE",
+      credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
     },
-    tags: ["entraînement", "commanderie", "vidéo"],
-  },
-  {
-    slug: "apres-de-zerbi-nouveau-cycle",
-    title: "Après De Zerbi : la Commanderie referme un chapitre agité",
-    dek: "Six mois après la rupture avec l'entraîneur italien, retour sur une page tumultueuse avant d'aborder la nouvelle saison sur des bases stabilisées.",
-    category: "vestiaire",
-    publishedAt: "2026-08-06",
-    readMinutes: 3,
     points: [
-      "La rupture avec Roberto De Zerbi, actée en plein hiver après une lourde défaite face au PSG, a marqué la fin d'un cycle court et contrasté.",
-      "Le club a depuis travaillé à stabiliser son organisation sportive pour aborder la nouvelle saison sur des bases plus sereines.",
-      "La préparation estivale sert aussi à ressouder un vestiaire fragilisé par plusieurs mois d'instabilité.",
+      "La Ligue de Football Professionnel a dévoilé le calendrier 2026-2027.",
+      "Un enchaînement dense dès les premières journées.",
+      "De quoi déjà cocher les rendez-vous à ne pas manquer.",
     ],
-    body: [
-      "Il aura fallu une soirée particulièrement douloureuse à Paris pour précipiter la fin. Le split avec Roberto De Zerbi, au cœur de l'hiver, avait alors surpris par sa soudaineté autant que par son timing.",
-      "Six mois plus tard, à l'heure de la reprise, le club affiche la volonté de tourner la page sans en effacer les leçons : un vestiaire plus solidaire, une organisation clarifiée et une préparation estivale pensée comme un nouveau départ.",
-    ],
-    media: { kind: "illustration", key: "press" },
-    tags: ["coaching staff", "vestiaire", "rétrospective"],
+    more: "Le calendrier complet, journée par journée, est disponible sur le site officiel de la Ligue 1.",
   },
   {
-    slug: "amicaux-ete-onze-type",
-    title: "Amicaux d'été : les contours du onze type se précisent",
-    dek: "Au fil des matchs de préparation, le staff affine ses certitudes avant la première journée de Ligue 1.",
-    category: "match",
+    slug: "tramway-t3-nord-sud",
+    title: "Le T3 relie enfin nord et sud",
+    category: "ville",
+    publishedAt: "2026-08-09",
+    cover: {
+      src: "/images/marseille/tramway.jpg",
+      alt: "Station de tramway sur la Canebière, un jour d'été",
+      credit: "Chabe01 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+    points: [
+      "Le tramway T3 s'étend désormais sur 9,8 km, contre 3,6 auparavant.",
+      "Douze nouvelles stations, de Capitaine Gèze à La Gaye.",
+      "Les quartiers nord et le centre-ville enfin reliés directement.",
+    ],
+    more:
+      "L'extension a été inaugurée le 10 janvier 2026 par le ministre délégué aux Transports, Philippe Tabarot.",
+  },
+  {
+    slug: "t3-vers-la-bricarde",
+    title: "Le T3 file vers la Bricarde",
+    category: "ville",
+    publishedAt: "2026-08-07",
+    cover: {
+      src: "/images/marseille/tramway.jpg",
+      alt: "Station de tramway sur la Canebière, un jour d'été",
+      credit: "Chabe01 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+    points: [
+      "Une deuxième phase d'extension se précise au nord de la ville.",
+      "Le tracé est rallongé d'environ 700 mètres supplémentaires.",
+      "Objectif affiché : desservir le secteur de la Bricarde.",
+    ],
+    more: "La Métropole Aix-Marseille-Provence continue de faire évoluer le tracé de cette phase 2, encore à l'étude.",
+  },
+  {
+    slug: "vieux-port-coeur-de-ville",
+    title: "Le Vieux-Port, cœur battant",
+    category: "ville",
     publishedAt: "2026-08-05",
-    readMinutes: 3,
-    points: [
-      "Les matchs amicaux estivaux ont permis de tester plusieurs schémas tactiques face à des adversaires de niveaux variés.",
-      "Certains cadres de la saison passée confirment leur statut, pendant que de nouveaux profils tentent de se faire une place.",
-      "Le onze de départ pour la première journée reste encore ouvert, entre choix tactiques et dernières arrivées attendues.",
-    ],
-    body: [
-      "Comme chaque été, les matchs de préparation servent avant tout de laboratoire. Plusieurs organisations ont été testées ces dernières semaines, entre système à quatre défenseurs et variantes à trois axiaux.",
-      "Si l'ossature de l'équipe semble se dessiner autour des cadres habituels, la concurrence reste vive à plusieurs postes, notamment sur les ailes et devant la défense.",
-    ],
-    media: { kind: "image", src: "photo-1431324155629-1a6deb1dec8d", alt: "Match nocturne dans le brouillard, ambiance intense sur la pelouse" },
-    tags: ["préparation", "tactique", "amicaux"],
-  },
-  {
-    slug: "ventes-prioritaires-masse-salariale",
-    title: "Dégraisser avant de recruter : la priorité assumée de la direction",
-    dek: "Pour respecter ses contraintes budgétaires, l'OM concentre ses efforts sur les départs de gros salaires avant d'activer de nouvelles pistes.",
-    category: "mercato",
-    publishedAt: "2026-08-04",
-    readMinutes: 2,
-    points: [
-      "La direction sportive a fait des départs de joueurs à fort salaire une priorité absolue de ce mercato estival.",
-      "Cette stratégie explique en partie la lenteur du club sur le volet des arrivées depuis l'ouverture du marché.",
-      "Plusieurs dossiers de départ seraient en discussion avancée, sans qu'aucun ne soit encore officialisé.",
-    ],
-    body: [
-      "Derrière la lenteur apparente du mercato marseillais se cache une équation budgétaire assumée par la direction : impossible de recruter sereinement sans d'abord alléger une masse salariale sous contrainte.",
-      "Plusieurs joueurs figurant parmi les plus gros contrats du club seraient concernés par ces discussions, dans l'optique de dégager la marge de manœuvre nécessaire aux arrivées jugées prioritaires.",
-    ],
-    media: { kind: "illustration", key: "transfer" },
-    tags: ["mercato", "budget", "départs"],
-  },
-  {
-    slug: "velodrome-coulisses-preparation",
-    title: "Dans les coulisses du Vélodrome avant la reprise",
-    dek: "Pelouse, tribunes, logistique : plongée dans les préparatifs du stade avant le retour de la Ligue 1 sous les yeux du public.",
-    category: "video",
-    publishedAt: "2026-08-03",
-    readMinutes: 2,
-    points: [
-      "Les équipes du stade multiplient les opérations d'entretien de la pelouse avant la reprise de la compétition.",
-      "La billetterie et les services aux abonnés s'organisent en amont du premier match à domicile de la saison.",
-      "Ces coulisses logistiques restent peu visibles du grand public mais conditionnent le bon déroulement des soirées de match.",
-    ],
-    body: [
-      "Loin des projecteurs braqués sur le mercato, une autre course contre la montre se joue au Vélodrome : celle de la préparation du stade. Tonte, resemis, arrosage millimétré, la pelouse fait l'objet d'une attention constante avant la reprise.",
-      "En parallèle, les équipes billetterie et accueil peaufinent l'organisation logistique des soirées de match, pour que la première réception de la saison se déroule sans accroc.",
-    ],
-    media: {
-      kind: "video",
-      poster: {
-        src: "/images/velodrome/facade-orange-velodrome.jpg",
-        alt: "Façade de l'Orange Vélodrome et son parvis, en plein jour",
-        credit: "Bernard Ddd / Wikimedia Commons, CC BY-SA 2.0",
-      },
-      caption: "Vidéo à intégrer : la tournée des coulisses du stade avant match.",
+    cover: {
+      src: "/images/marseille/vieux-port.jpg",
+      alt: "Vue panoramique du Vieux-Port de Marseille",
+      credit: "Ingo Mehling / Wikimedia Commons, CC BY-SA 3.0",
     },
-    tags: ["vélodrome", "coulisses", "logistique"],
+    points: [
+      "Chaque matin, le marché aux poissons anime encore les quais.",
+      "Yachts, pointus et ferries se partagent le même bassin.",
+      "Le vrai centre de gravité de la ville, à toute heure.",
+    ],
+    more:
+      "Du marché aux poissons matinal aux terrasses animées le soir, le Vieux-Port concentre à lui seul plusieurs vies de la ville.",
+  },
+  {
+    slug: "bonnes-meres-mucem",
+    title: "Bonnes Mères s'expose au Mucem",
+    category: "culture",
+    publishedAt: "2026-08-08",
+    cover: {
+      src: "/images/marseille/mucem.jpg",
+      alt: "Façade du Mucem, sur le front de mer de Marseille",
+      credit: "Houss 2020 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+    points: [
+      "Une exposition consacrée à la maternité en Méditerranée.",
+      "Près de 350 œuvres, de l'Antiquité à aujourd'hui.",
+      "À voir jusqu'au 31 août, au J4 et au fort Saint-Jean.",
+    ],
+    more:
+      "Objets rituels, peintures, photographies et affiches militantes composent ce parcours consacré à l'expérience de la maternité.",
+  },
+  {
+    slug: "bonne-mere-veille",
+    title: "La Bonne Mère veille sur la ville",
+    category: "culture",
+    publishedAt: "2026-08-02",
+    cover: {
+      src: "/images/marseille/notre-dame-de-la-garde.jpg",
+      alt: "La basilique Notre-Dame de la Garde et sa Vierge dorée",
+      credit: "Kallerna / Wikimedia Commons, CC BY-SA 4.0",
+    },
+    points: [
+      "Perchée à 154 mètres, la basilique domine tout Marseille.",
+      "Sa Vierge dorée culmine à plus de 11 mètres de haut.",
+      "Un repère visible depuis presque tous les quartiers.",
+    ],
+    more:
+      "Lieu de pèlerinage autant que belvédère touristique, Notre-Dame de la Garde reste l'un des symboles les plus reconnaissables de la ville.",
+  },
+  {
+    slug: "calanques-reservation-obligatoire",
+    title: "Calanques : réservation obligatoire",
+    category: "mer",
+    publishedAt: "2026-08-06",
+    cover: {
+      src: "/images/marseille/calanques.jpg",
+      alt: "Une calanque aux eaux turquoise près de Marseille",
+      credit: "Georges Seguin / Wikimedia Commons, CC BY-SA 3.0",
+    },
+    points: [
+      "Réservation gratuite obligatoire tous les jours jusqu'au 30 août.",
+      "Quota fixé à 400 visiteurs par jour sur les sites les plus prisés.",
+      "Objectif affiché : préserver des massifs fragilisés par leur succès.",
+    ],
+    more: "Le dispositif s'applique en particulier aux calanques les plus fréquentées, comme Sugiton, pour limiter la surfréquentation estivale.",
+  },
+  {
+    slug: "calanques-code-couleur-incendie",
+    title: "Le code couleur des calanques",
+    category: "mer",
+    publishedAt: "2026-08-04",
+    cover: {
+      src: "/images/marseille/calanques.jpg",
+      alt: "Une calanque aux eaux turquoise près de Marseille",
+      credit: "Georges Seguin / Wikimedia Commons, CC BY-SA 3.0",
+    },
+    points: [
+      "Quatre niveaux de risque incendie : vert, jaune, orange, rouge.",
+      "En orange, les sentiers ferment mais la mer reste accessible.",
+      "En rouge, tout accès est interdit — même en bateau.",
+    ],
+    more:
+      "Le massif des Calanques peut être fermé du jour au lendemain selon les conditions météo, indépendamment du système de réservation.",
   },
 ];
 
-export function getArticle(slug: string): Article | undefined {
-  return articles.find((a) => a.slug === slug);
+export function getStory(slug: string): Story | undefined {
+  return stories.find((s) => s.slug === slug);
 }
 
-export function getArticlesByWeek(weekId: string): Article[] {
-  return articles
-    .filter((a) => weekIdOf(a) === weekId)
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
+export function getAllStoriesDesc(): Story[] {
+  return [...stories].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
 }
 
-export function getAllWeeksDesc(): string[] {
-  const set = new Set(articles.map((a) => weekIdOf(a)));
-  return Array.from(set).sort().reverse();
+export function getStoriesByCategory(category: Category): Story[] {
+  return getAllStoriesDesc().filter((s) => s.category === category);
 }
 
-/** Most recent edition with published content — the "current" issue, whether or not it lines up with today's calendar week. */
-export function getLatestWeekId(): string {
-  return getAllWeeksDesc()[0];
-}
-
-export function getFeatured(weekId: string): Article {
-  const weekArticles = getArticlesByWeek(weekId);
-  return weekArticles.find((a) => a.featured) ?? weekArticles[0] ?? articles[0];
-}
-
-export function getArticlesByCategory(category: Category, excludeSlug?: string, limit?: number): Article[] {
-  const list = articles
-    .filter((a) => a.category === category && a.slug !== excludeSlug)
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
-  return limit ? list.slice(0, limit) : list;
-}
-
-export function getRelated(article: Article, limit = 3): Article[] {
-  return articles
-    .filter((a) => a.slug !== article.slug && a.category === article.category)
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1))
-    .slice(0, limit);
-}
-
-export function getLatestArticles(limit = 6): Article[] {
-  return [...articles].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1)).slice(0, limit);
-}
-
-export function getAllTags(): string[] {
-  const set = new Set(articles.flatMap((a) => a.tags));
-  return Array.from(set).sort((a, b) => a.localeCompare(b, "fr"));
-}
-
-export function getArticlesByTag(tag: string): Article[] {
-  return articles
-    .filter((a) => a.tags.includes(tag))
-    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1));
+export function getAdjacentStories(story: Story): { prev?: Story; next?: Story } {
+  const all = getAllStoriesDesc();
+  const i = all.findIndex((s) => s.slug === story.slug);
+  return { prev: all[i + 1], next: all[i - 1] };
 }

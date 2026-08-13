@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
-import { Anton, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { BreakingTicker } from "@/components/BreakingTicker";
-import { getLatestArticles } from "@/lib/content";
-import { SITE_URL } from "@/lib/site";
+import { SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
-const display = Anton({
+const display = Plus_Jakarta_Sans({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: "400",
+  weight: ["600", "700"],
 });
 
 const body = Inter({
@@ -21,22 +19,17 @@ const body = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Actu OM en 3 points",
-    template: "%s — Actu OM en 3 points",
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
   },
-  description:
-    "L'actualité de l'Olympique de Marseille résumée en 3 points, chaque semaine : mercato, match et coulisses en vidéo, illustration et image.",
-  alternates: {
-    types: { "application/rss+xml": "/rss.xml" },
-  },
+  description: SITE_TAGLINE,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="fr" className={`${display.variable} ${body.variable} h-full`}>
-      <body className="min-h-full flex flex-col bg-ink text-mist antialiased">
+      <body className="min-h-full flex flex-col bg-bg text-ink antialiased">
         <SiteHeader />
-        <BreakingTicker articles={getLatestArticles(6)} />
         <main className="flex-1">{children}</main>
         <SiteFooter />
       </body>
