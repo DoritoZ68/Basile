@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  --om-ink: #05070d;
+  --om-panel: #0d1a2b;
+  --om-panel-2: #12213c;
+  --om-line: rgba(255, 255, 255, 0.09);
+  --om-sky: #3fc1ff;
+  --om-sky-strong: #0ea5e9;
+  --om-gold: #ffb703;
+  --om-white: #f5f7fa;
+  --om-mist: #a9b8d1;
+  --om-mist-dim: #6d7d99;
+  --om-violet: #9c8bff;
+  --om-teal: #35d6b0;
+}
+
+@theme inline {
+  --color-ink: var(--om-ink);
+  --color-panel: var(--om-panel);
+  --color-panel-2: var(--om-panel-2);
+  --color-line: var(--om-line);
+  --color-sky: var(--om-sky);
+  --color-sky-strong: var(--om-sky-strong);
+  --color-gold: var(--om-gold);
+  --color-white: var(--om-white);
+  --color-mist: var(--om-mist);
+  --color-mist-dim: var(--om-mist-dim);
+  --color-violet: var(--om-violet);
+  --color-teal: var(--om-teal);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--om-ink);
+  background-image:
+    radial-gradient(1100px 520px at 12% -10%, rgba(63, 193, 255, 0.14), transparent 60%),
+    radial-gradient(900px 480px at 100% 0%, rgba(255, 183, 3, 0.08), transparent 55%);
+  color: var(--om-mist);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), "Arial Narrow", sans-serif;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--om-sky);
+  color: var(--om-ink);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
