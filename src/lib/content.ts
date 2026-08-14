@@ -174,8 +174,8 @@ export const stories: Story[] = [
     publishedAt: "2026-08-05",
     cover: {
       src: "/images/marseille/vieux-port.jpg",
-      alt: "Le Vieux-Port de Marseille de nuit, fort Saint-Jean illuminé",
-      credit: "Benh Lieu Song / Wikimedia Commons, CC BY-SA 3.0",
+      alt: "Vue d'ensemble du bassin du Vieux-Port de Marseille, rempli de bateaux",
+      credit: "Fischer1961 / Wikimedia Commons, CC BY-SA 4.0",
     },
     points: [
       "Chaque matin, le marché aux poissons anime encore les quais.",
