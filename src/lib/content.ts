@@ -1,10 +1,49 @@
 export type Category = "om" | "ville" | "culture" | "mer";
 
-export const CATEGORIES: Record<Category, { label: string; accent: "blue" | "violet" | "coral" | "teal" }> = {
-  om: { label: "OM", accent: "blue" },
-  ville: { label: "Ville", accent: "violet" },
-  culture: { label: "Culture", accent: "coral" },
-  mer: { label: "Mer & nature", accent: "teal" },
+export const CATEGORIES: Record<
+  Category,
+  { label: string; accent: "blue" | "violet" | "coral" | "teal"; description: string; cover: Media }
+> = {
+  om: {
+    label: "OM",
+    accent: "blue",
+    description: "Mercato, vestiaire, calendrier : tout le club, sans le blabla.",
+    cover: {
+      src: "/images/velodrome/interieur-marseille.jpg",
+      alt: "Intérieur de l'Orange Vélodrome, tribunes avec l'inscription MARSEILLE",
+      credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+  },
+  ville: {
+    label: "Ville",
+    accent: "violet",
+    description: "Transports, chantiers, quartiers : ce qui change à Marseille.",
+    cover: {
+      src: "/images/marseille/tramway.jpg",
+      alt: "Station de tramway sur la Canebière, un jour d'été",
+      credit: "Chabe01 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+  },
+  culture: {
+    label: "Culture",
+    accent: "coral",
+    description: "Expos, patrimoine, sorties : la Marseille qui se visite.",
+    cover: {
+      src: "/images/marseille/mucem.jpg",
+      alt: "Façade du Mucem, sur le front de mer de Marseille",
+      credit: "Houss 2020 / Wikimedia Commons, CC BY-SA 4.0",
+    },
+  },
+  mer: {
+    label: "Mer & nature",
+    accent: "teal",
+    description: "Calanques, plages, littoral : la nature aux portes de la ville.",
+    cover: {
+      src: "/images/marseille/calanques.jpg",
+      alt: "Une calanque aux eaux turquoise près de Marseille",
+      credit: "Georges Seguin / Wikimedia Commons, CC BY-SA 3.0",
+    },
+  },
 };
 
 export type Media = { src: string; alt: string; credit?: string };
@@ -28,9 +67,9 @@ export const stories: Story[] = [
     category: "om",
     publishedAt: "2026-08-12",
     cover: {
-      src: "/images/velodrome/interieur-marseille.jpg",
-      alt: "Intérieur de l'Orange Vélodrome, tribunes avec l'inscription MARSEILLE",
-      credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
+      src: "/images/velodrome/tifo-om-psg.jpg",
+      alt: "Tifo du virage Sud lors d'un OM-PSG au Vélodrome",
+      credit: "Hombrey / Wikimedia Commons, CC BY-SA 4.0",
     },
     points: [
       "Seul club de Ligue 1 sans la moindre recrue depuis l'ouverture du mercato.",
@@ -82,9 +121,9 @@ export const stories: Story[] = [
     category: "om",
     publishedAt: "2026-08-13",
     cover: {
-      src: "/images/velodrome/interieur-marseille.jpg",
-      alt: "Intérieur de l'Orange Vélodrome, tribunes avec l'inscription MARSEILLE",
-      credit: "Randy110912 / Wikimedia Commons, CC BY-SA 4.0",
+      src: "/images/velodrome/aerien-cite.jpg",
+      alt: "Vue aérienne du Vélodrome niché dans la ville de Marseille",
+      credit: "Ladislaus Hoffner / Wikimedia Commons, CC BY-SA 4.0",
     },
     points: [
       "La Ligue de Football Professionnel a dévoilé le calendrier 2026-2027.",
@@ -135,8 +174,8 @@ export const stories: Story[] = [
     publishedAt: "2026-08-05",
     cover: {
       src: "/images/marseille/vieux-port.jpg",
-      alt: "Vue panoramique du Vieux-Port de Marseille",
-      credit: "Ingo Mehling / Wikimedia Commons, CC BY-SA 3.0",
+      alt: "Le Vieux-Port de Marseille de nuit, fort Saint-Jean illuminé",
+      credit: "Benh Lieu Song / Wikimedia Commons, CC BY-SA 3.0",
     },
     points: [
       "Chaque matin, le marché aux poissons anime encore les quais.",

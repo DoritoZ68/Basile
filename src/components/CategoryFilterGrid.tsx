@@ -27,7 +27,7 @@ export function CategoryFilterGrid({ stories }: { stories: Story[] }) {
                 isActive
                   ? accent
                     ? `${accent.bg} border-transparent text-white`
-                    : "border-transparent bg-ink text-white"
+                    : "border-transparent bg-ink text-bg"
                   : "border-line bg-bg text-ink-soft hover:border-ink-faint"
               }`}
             >

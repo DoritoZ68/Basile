@@ -21,6 +21,59 @@
 
   --teal: #1f9c96;
   --teal-tint: #e8f7f6;
+
+  /* Fixed (theme-independent) dark scrim for overlays like the story viewer. */
+  --scrim: #0b1220;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1420;
+    --surface: #171d2c;
+    --surface-strong: #1f273a;
+    --line: #2a3348;
+    --ink: #eef1f6;
+    --ink-soft: #a8b2c4;
+    --ink-faint: #6b768c;
+
+    --blue: #5aa8d8;
+    --blue-strong: #7fbde3;
+    --blue-tint: rgba(90, 168, 216, 0.14);
+
+    --violet: #a79bf2;
+    --violet-tint: rgba(167, 155, 242, 0.14);
+
+    --coral: #ef8b5c;
+    --coral-tint: rgba(239, 139, 92, 0.14);
+
+    --teal: #3fc2ba;
+    --teal-tint: rgba(63, 194, 186, 0.14);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1420;
+  --surface: #171d2c;
+  --surface-strong: #1f273a;
+  --line: #2a3348;
+  --ink: #eef1f6;
+  --ink-soft: #a8b2c4;
+  --ink-faint: #6b768c;
+
+  --blue: #5aa8d8;
+  --blue-strong: #7fbde3;
+  --blue-tint: rgba(90, 168, 216, 0.14);
+
+  --violet: #a79bf2;
+  --violet-tint: rgba(167, 155, 242, 0.14);
+
+  --coral: #ef8b5c;
+  --coral-tint: rgba(239, 139, 92, 0.14);
+
+  --teal: #3fc2ba;
+  --teal-tint: rgba(63, 194, 186, 0.14);
 }
 
 @theme inline {
@@ -31,6 +84,7 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
+  --color-scrim: var(--scrim);
 
   --color-blue: var(--blue);
   --color-blue-strong: var(--blue-strong);

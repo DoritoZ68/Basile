@@ -33,10 +33,10 @@ export default function AboutPage() {
         <h2 className="font-display text-lg text-ink">Crédits photo</h2>
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           Les photographies proviennent de Wikimedia Commons, sous licence Creative Commons
-          Attribution-ShareAlike : Randy110912, Bernard Ddd, Rémi Mathis (Orange Vélodrome) ;
-          Chabe01 (tramway) ; Ingo Mehling (Vieux-Port) ; Houss 2020 (Mucem) ; Kallerna
-          (Notre-Dame de la Garde) ; Georges Seguin (calanques). Détail des licences sur chaque
-          fichier.
+          Attribution-ShareAlike : Randy110912, Bernard Ddd, Rémi Mathis, Hombrey, Ladislaus
+          Hoffner (Orange Vélodrome) ; Chabe01 (tramway) ; Benh Lieu Song (Vieux-Port) ; Houss
+          2020 (Mucem) ; Kallerna (Notre-Dame de la Garde) ; Georges Seguin (calanques). Détail
+          des licences sur chaque fichier.
         </p>
       </div>
 

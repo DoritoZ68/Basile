@@ -36,13 +36,31 @@ Sur `/histoire/[slug]`, ces 3 points se parcourent comme des stories
 défilement automatique, et un enchaînement direct vers l'histoire suivante en
 fin de parcours.
 
+## Pages
+
+- `/` — bande de stories, agenda du moment, grille filtrable par catégorie
+- `/histoire/[slug]` — le lecteur de stories
+- `/rubrique/[om|ville|culture|mer]` — page dédiée par catégorie (avec le
+  prochain match OM sur `/rubrique/om`)
+- `/agenda` — les dates à cocher (matchs, expos, deadlines) + les rendez-vous
+  récurrents
+- `/favoris` — les histoires enregistrées (❤ sur une carte ou dans le
+  lecteur), stockées en local (`localStorage`), sans compte
+- `/a-propos` — mission, indépendance éditoriale, crédits photo
+
+Thème clair/sombre au choix (icône lune/soleil dans le header), basé sur des
+variables CSS dans `globals.css` — aucune dépendance externe.
+
 ## Structure
 
 ```
-src/app/                accueil, page story ([slug]), à propos
+src/app/                pages ci-dessus
 src/components/         StoryViewer (le lecteur), StoryBubbles, StoryCard,
-                         CategoryFilterGrid, recherche, header/footer
+                         CategoryFilterGrid, FavoriteButton, ThemeToggle,
+                         recherche, header/footer
 src/lib/content.ts      les histoires + catégories
+src/lib/agenda.ts       les dates de l'agenda
+src/lib/favorites-context.tsx  état des favoris (partagé via Context)
 src/lib/accent.ts       couleurs d'accent par catégorie
 src/lib/date.ts         formatage de dates (aucune dépendance externe)
 ```

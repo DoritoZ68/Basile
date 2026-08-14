@@ -61,7 +61,7 @@ export function SearchOverlay() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-ink/30 px-4 pt-24 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-scrim/30 px-4 pt-24 backdrop-blur-sm">
           <button type="button" aria-label="Fermer la recherche" onClick={close} className="absolute inset-0" />
           <div className="relative w-full max-w-lg rounded-2xl border border-line bg-bg shadow-xl">
             <div className="flex items-center gap-3 border-b border-line px-4 py-3">

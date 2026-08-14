@@ -8,6 +8,7 @@ import type { Story } from "@/lib/content";
 import { CATEGORIES } from "@/lib/content";
 import { ACCENT, type Accent } from "@/lib/accent";
 import { relativeDate } from "@/lib/date";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 const SLIDE_MS = 5000;
 const END_CARD = 3;
@@ -88,8 +89,8 @@ export function StoryViewer({ stories, initialSlug }: { stories: Story[]; initia
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-ink/90 sm:p-6">
-      <div className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-ink shadow-2xl sm:h-[calc(100vh-3rem)] sm:max-h-[880px] sm:rounded-[28px]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-scrim/90 sm:p-6">
+      <div className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-scrim shadow-2xl sm:h-[calc(100vh-3rem)] sm:max-h-[880px] sm:rounded-[28px]">
         <div className="absolute inset-x-0 top-0 z-20 flex gap-1.5 p-3">
           {[0, 1, 2].map((i) => {
             const status =
@@ -124,16 +125,19 @@ export function StoryViewer({ stories, initialSlug }: { stories: Story[]; initia
             <span className="text-xs font-semibold text-white">{CATEGORIES[story.category].label}</span>
             <span className="text-xs text-white/60">· {relativeDate(story.publishedAt)}</span>
           </div>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Fermer"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M4 4L20 20M20 4L4 20" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <FavoriteButton slug={story.slug} />
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Fermer"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-black/25 text-white"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M4 4L20 20M20 4L4 20" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div

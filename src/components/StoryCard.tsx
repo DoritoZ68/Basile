@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { Story } from "@/lib/content";
 import { CATEGORIES } from "@/lib/content";
 import { ACCENT } from "@/lib/accent";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 export function StoryCard({ story, big = false }: { story: Story; big?: boolean }) {
   const accent = ACCENT[CATEGORIES[story.category].accent];
@@ -21,6 +22,9 @@ export function StoryCard({ story, big = false }: { story: Story; big?: boolean 
           className="object-cover transition duration-500 group-hover:scale-105"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
+        <div className="absolute right-3 top-3">
+          <FavoriteButton slug={story.slug} />
+        </div>
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-4">
           <span className={`w-fit rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${accent.bg}`}>
             {CATEGORIES[story.category].label}

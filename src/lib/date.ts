@@ -3,11 +3,24 @@ const MONTHS_FR = [
   "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
 
+const WEEKDAYS_FR = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function formatFullDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00Z`);
   return `${d.getUTCDate()} ${MONTHS_FR[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/** e.g. "dimanche 16 août" */
+export function formatDayDate(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  return `${WEEKDAYS_FR[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_FR[d.getUTCMonth()]}`;
+}
+
+export function daysUntilDate(dateStr: string, from: Date = new Date()): number {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  return Math.ceil((d.getTime() - from.getTime()) / DAY_MS);
 }
 
 /** Short, human relative label — falls back to a full date past a week. */
