@@ -1,8 +1,8 @@
 export const nextFixture = {
   home: "OM",
-  away: "Rennes",
-  /** ISO datetime, UTC. */
-  kickoff: "2026-08-16T19:00:00Z",
+  away: "Strasbourg",
+  /** Ligue 1 2026-2027, journée 1. ISO datetime, UTC (20h45 heure de Paris). */
+  kickoff: "2026-08-21T18:45:00Z",
 };
 
 export function daysUntil(iso: string, from: Date = new Date()): number {

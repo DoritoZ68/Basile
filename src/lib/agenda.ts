@@ -21,9 +21,9 @@ export const agendaItems: AgendaItem[] = [
     relatedSlug: "vieux-port-coeur-de-ville",
   },
   {
-    title: "OM - Stade Rennais",
+    title: "OM - RC Strasbourg",
     recurring: false,
-    date: "2026-08-16",
+    date: "2026-08-21",
     place: "Orange Vélodrome",
     category: "om",
   },
