@@ -1,0 +1,545 @@
+<title>LFBO Toulouse-Blagnac 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0e151b;
+    --panel: rgba(14, 21, 27, 0.86);
+    --panel-solid: #121b22;
+    --line: #26333e;
+    --text: #d6e0e7;
+    --muted: #8595a3;
+    --accent: #f2b233;
+    --accent-ink: #14100a;
+    --sign-red: #c8102e;
+    --sign-black: #0b0b0b;
+    --stand: #9fd4f5;
+    --focus: #f2b233;
+    --ui: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  html, body { height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+    font-size: 15px;
+    overflow: hidden;
+  }
+  #stage { position: fixed; inset: 0; }
+  #stage canvas { display: block; }
+  #labels { position: fixed; inset: 0; pointer-events: none; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  #card {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    left: 16px;
+    width: min(300px, calc(100vw - 32px));
+    padding: 14px 16px 12px;
+    display: grid;
+    gap: 10px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ident { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ident h1 {
+    margin: 0;
+    font-size: 34px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .ident span { font-size: 17px; font-weight: 600; color: var(--text); }
+  dl.facts {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 14px;
+    row-gap: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; }
+
+  #hud {
+    position: fixed;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    right: 16px;
+    padding: 8px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    display: grid;
+    gap: 2px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  #hud b { font-weight: 500; color: var(--accent); font-size: 18px; }
+  #hud .mode { color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; font-family: var(--ui); font-weight: 600; font-size: 11px; }
+
+  #bar {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .group {
+    pointer-events: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px;
+    align-items: center;
+  }
+  .group .lab {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 6px 0 4px;
+  }
+  button, select {
+    font: 600 14px/1 var(--ui);
+    color: var(--text);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 8px 11px;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+  }
+  select {
+    background: var(--panel-solid);
+    border-color: var(--line);
+    padding-right: 8px;
+  }
+  button:hover, select:hover { background: rgba(255, 255, 255, 0.06); }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  button.on { background: var(--accent); color: var(--accent-ink); }
+  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  button[aria-pressed="true"]:hover { background: rgba(242, 178, 51, 0.12); }
+
+  #foot {
+    pointer-events: auto;
+    display: grid;
+    gap: 4px;
+    justify-items: end;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: right;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  }
+  #foot a { color: var(--muted); }
+  #foot a:hover { color: var(--text); }
+
+  /* Étiquettes : codes couleur de la signalisation OACI */
+  .lbl {
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 11px;
+    line-height: 1;
+    padding: 3px 4px;
+    border-radius: 2px;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .lbl-twy { background: var(--accent); color: var(--sign-black); }
+  .lbl-rwy { background: var(--sign-red); color: #fff; font-size: 12px; padding: 4px 5px; }
+  .lbl-stand { color: var(--stand); background: rgba(8, 14, 20, 0.72); }
+  .lbl-bld { color: var(--text); background: rgba(8, 14, 20, 0.8); font-family: var(--ui); font-weight: 600; font-size: 13px; letter-spacing: 0.04em; }
+
+  #msg {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    pointer-events: none;
+    padding-inline: 16px;
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    #card { padding: 10px 12px; gap: 6px; }
+    .ident h1 { font-size: 26px; }
+    dl.facts .rw { display: none; }
+    #hud { top: auto; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+    #foot .hint { display: none; }
+    button, select { padding: 8px 9px; }
+  }
+</style>
+
+<div id="stage" aria-label="Vue 3D de l'aéroport de Toulouse-Blagnac"></div>
+<div id="labels"></div>
+<div id="msg">Chargement du modèle LFBO…</div>
+
+<section id="card" class="panel" aria-label="Aérodrome">
+  <div class="eyebrow">IVAO · plateforme Aurora · modèle 3D</div>
+  <div class="ident"><h1>LFBO</h1><span>Toulouse-Blagnac</span></div>
+  <dl class="facts" id="facts">
+    <dt>ALT</dt><dd>499 ft</dd>
+  </dl>
+</section>
+
+<div id="hud" class="panel" aria-live="polite">
+  <span class="mode" id="mode">Vue d'ensemble</span>
+  <span>CAP <b id="hdg">---</b>°</span>
+</div>
+
+<div id="bar">
+  <div class="group panel" role="group" aria-label="Vues">
+    <span class="lab">Vue</span>
+    <button type="button" id="v-twr" data-view="twr">Vigie</button>
+    <button type="button" id="v-all" data-view="all" class="on">Ensemble</button>
+    <button type="button" id="v-term" data-view="term">Aérogares</button>
+    <label class="lab" for="v-final">Finale</label>
+    <select id="v-final">
+      <option value="">—</option>
+    </select>
+  </div>
+  <div class="group panel" role="group" aria-label="Affichage">
+    <span class="lab">Afficher</span>
+    <button type="button" id="t-stand" aria-pressed="true">Postes</button>
+    <button type="button" id="t-twy" aria-pressed="true">Taxiways</button>
+    <button type="button" id="t-night" aria-pressed="false">Nuit</button>
+  </div>
+  <div id="foot">
+    <span class="hint" id="hint">Glisser : tourner · clic droit : déplacer · molette : zoom</span>
+    <span>Données © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">contributeurs OpenStreetMap</a> (ODbL) · simulation uniquement</span>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const $ = (id) => document.getElementById(id);
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const stage = $('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+stage.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer({ element: $('labels') });
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.5, 60000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.minDistance = 20;
+controls.maxDistance = 12000;
+controls.screenSpacePanning = false;
+
+const hemi = new THREE.HemisphereLight(0xdfeaf2, 0x46503c, 1.1);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
+sun.position.set(-1800, 2600, 1400);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -2800, right: 2800, top: 2800, bottom: -2800, near: 100, far: 9000 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.6;
+scene.add(sun, sun.target);
+
+const outer = new THREE.Mesh(
+  new THREE.PlaneGeometry(60000, 60000),
+  new THREE.MeshStandardMaterial({ color: 0x6f7d5c, roughness: 1 })
+);
+outer.rotation.x = -Math.PI / 2;
+outer.position.y = -0.4;
+outer.receiveShadow = true;
+scene.add(outer);
+
+const SKY = { day: new THREE.Color(0xb9ccd9), night: new THREE.Color(0x060a10) };
+scene.background = SKY.day.clone();
+scene.fog = new THREE.Fog(SKY.day.clone(), 6000, 26000);
+
+const state = { stands: true, twy: true, night: false, tower: false };
+const labels = [];
+let meta = null;
+let lightPoints = [];
+let glowMats = [];
+
+function b64ToBuffer(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+new GLTFLoader().parse(
+  b64ToBuffer($('glb').textContent.trim()), '',
+  (gltf) => {
+    const root = gltf.scene;
+    meta = root.userData;
+    root.traverse((o) => {
+      if (o.isMesh) {
+        const solid = ['buildings', 'hangars', 'terminals', 'tower', 'tower_glass'].includes(o.name);
+        o.castShadow = solid;
+        o.receiveShadow = true;
+        if (o.name === 'terminals' || o.name === 'tower_glass') glowMats.push(o.material);
+      }
+      if (o.isPoints) {
+        const c = o.material.color.clone();
+        o.material = new THREE.PointsMaterial({
+          color: c, size: 4, sizeAttenuation: false, transparent: true,
+          blending: THREE.AdditiveBlending, depthWrite: false,
+        });
+        o.visible = false;
+        lightPoints.push(o);
+      }
+    });
+    scene.add(root);
+    buildFacts();
+    buildLabels();
+    buildFinals();
+    setView('all', true);
+    $('msg').hidden = true;
+  },
+  (err) => {
+    $('msg').textContent = 'Le modèle 3D n’a pas pu être lu : ' + (err && err.message ? err.message : err);
+  }
+);
+
+function buildFacts() {
+  const dl = $('facts');
+  const add = (k, v, cls) => {
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v;
+    if (cls) { dt.className = cls; dd.className = cls; }
+    dl.append(dt, dd);
+  };
+  add('VAR', `${meta.magvar.toFixed(1)}° E`);
+  for (const r of meta.runways) {
+    add(r.ref, `${r.length_m} × ${r.width_m} m · QFU ${String(r.qfu[0]).padStart(3, '0')}/${String(r.qfu[1]).padStart(3, '0')}`, 'rw');
+  }
+}
+
+function buildLabels() {
+  for (const l of meta.labels) {
+    const div = document.createElement('div');
+    div.className = `lbl lbl-${l.k}`;
+    div.textContent = l.t;
+    const obj = new CSS2DObject(div);
+    obj.position.set(l.x, l.y, l.z);
+    obj.userData.kind = l.k;
+    scene.add(obj);
+    labels.push(obj);
+  }
+}
+
+function runwayEnds() {
+  const ends = [];
+  for (const r of meta.runways) {
+    const [d1, d2] = r.ref.split('/');
+    const a = new THREE.Vector3(...r.a), b = new THREE.Vector3(...r.b);
+    const u = b.clone().sub(a).normalize();
+    ends.push({ id: d1, thr: a, dir: u });
+    ends.push({ id: d2, thr: b, dir: u.clone().negate() });
+  }
+  return ends.sort((x, y) => x.id.localeCompare(y.id, 'fr', { numeric: true }));
+}
+
+function buildFinals() {
+  const sel = $('v-final');
+  for (const e of runwayEnds()) {
+    const o = document.createElement('option');
+    o.value = e.id; o.textContent = e.id;
+    sel.append(o);
+  }
+  sel.addEventListener('change', () => { if (sel.value) setView('final:' + sel.value); });
+}
+
+// ---------- Vues ----------
+let flight = null;
+function flyTo(pos, target, instant) {
+  if (instant || reduceMotion) {
+    camera.position.copy(pos); controls.target.copy(target); controls.update(); flight = null; return;
+  }
+  flight = { t0: performance.now(), dur: 1400, p0: camera.position.clone(), p1: pos, q0: controls.target.clone(), q1: target };
+}
+
+function airportCenter() {
+  const c = new THREE.Vector3();
+  let n = 0;
+  for (const r of meta.runways) { c.add(new THREE.Vector3(...r.a)).add(new THREE.Vector3(...r.b)); n += 2; }
+  return c.divideScalar(n);
+}
+
+function setTowerMode(on) {
+  state.tower = on;
+  controls.enableZoom = !on;
+  controls.enablePan = !on;
+  controls.minDistance = on ? 0 : 20;
+  controls.rotateSpeed = on ? -0.35 : 1;
+  controls.maxPolarAngle = on ? Math.PI * 0.62 : Math.PI * 0.495;
+  if (!on) { camera.fov = 50; camera.updateProjectionMatrix(); }
+  $('hint').textContent = on
+    ? 'Glisser : regarder autour · molette : jumelles'
+    : 'Glisser : tourner · clic droit : déplacer · molette : zoom';
+}
+
+function setView(v, instant) {
+  const center = airportCenter();
+  document.querySelectorAll('[data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+  if (!v.startsWith('final:')) $('v-final').value = '';
+  if (v === 'twr' && meta.tower_eye) {
+    const eye = new THREE.Vector3(...meta.tower_eye);
+    const dir = center.clone().setY(0).sub(eye.clone().setY(0)).normalize();
+    dir.y = -0.06;
+    dir.normalize();
+    setTowerMode(true);
+    camera.fov = 45; camera.updateProjectionMatrix();
+    flyTo(eye, eye.clone().add(dir.multiplyScalar(0.5)), instant);
+    $('mode').textContent = 'Vigie · œil ≈ ' + Math.round(meta.tower_eye[1]) + ' m sol';
+    return;
+  }
+  setTowerMode(false);
+  if (v === 'all') {
+    flyTo(center.clone().add(new THREE.Vector3(-2600, 2300, 2300)), center, instant);
+    $('mode').textContent = 'Vue d’ensemble';
+  } else if (v === 'term') {
+    const halls = meta.labels.filter((l) => l.k === 'bld' && l.t.startsWith('Hall'));
+    const t = new THREE.Vector3();
+    halls.forEach((h) => t.add(new THREE.Vector3(h.x, 0, h.z)));
+    if (halls.length) t.divideScalar(halls.length);
+    const away = center.clone().sub(t).setY(0).normalize();
+    flyTo(t.clone().add(away.multiplyScalar(650)).setY(260), t, instant);
+    $('mode').textContent = 'Aérogares · Halls A à D';
+  } else if (v.startsWith('final:')) {
+    const e = runwayEnds().find((x) => x.id === v.slice(6));
+    if (!e) return;
+    const dist = 1800;
+    const eye = e.thr.clone().sub(e.dir.clone().multiplyScalar(dist));
+    eye.y = dist * Math.tan(THREE.MathUtils.degToRad(3)) + 15;
+    flyTo(eye, e.thr.clone().add(e.dir.clone().multiplyScalar(700)), instant);
+    $('mode').textContent = `Finale ${e.id} · 1,8 km · plan 3°`;
+  }
+}
+
+document.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
+
+renderer.domElement.addEventListener('wheel', (ev) => {
+  if (!state.tower) return;
+  ev.preventDefault();
+  camera.fov = THREE.MathUtils.clamp(camera.fov * (ev.deltaY > 0 ? 1.08 : 0.92), 6, 70);
+  camera.updateProjectionMatrix();
+}, { passive: false });
+
+// ---------- Affichage ----------
+function toggle(id, key, after) {
+  const b = $(id);
+  b.addEventListener('click', () => {
+    state[key] = !state[key];
+    b.setAttribute('aria-pressed', String(state[key]));
+    if (after) after();
+  });
+}
+toggle('t-stand', 'stands');
+toggle('t-twy', 'twy');
+toggle('t-night', 'night', applyLighting);
+
+function applyLighting() {
+  const n = state.night;
+  hemi.intensity = n ? 0.16 : 1.1;
+  sun.intensity = n ? 0.18 : 2.4;
+  sun.color.set(n ? 0x8fa6ff : 0xfff1dc);
+  renderer.toneMappingExposure = n ? 1.35 : 1.0;
+  scene.background.copy(n ? SKY.night : SKY.day);
+  scene.fog.color.copy(n ? SKY.night : SKY.day);
+  lightPoints.forEach((p) => { p.visible = n; });
+  for (const m of glowMats) {
+    if (m.name === 'terminals') { m.emissive.set(n ? 0x5a4020 : 0x000000); }
+    else { m.emissiveIntensity = n ? 3 : 1; }
+  }
+}
+
+// ---------- Boucle ----------
+const tmp = new THREE.Vector3();
+function updateLabels() {
+  const dmax = { stand: 1100, twy: 1500, rwy: 9000, bld: 7000 };
+  for (const o of labels) {
+    const k = o.userData.kind;
+    const on = (k !== 'stand' || state.stands) && (k !== 'twy' || state.twy);
+    o.visible = on && camera.position.distanceTo(o.position) < dmax[k] * (state.tower ? 45 / camera.fov : 1);
+  }
+}
+
+function updateHud() {
+  camera.getWorldDirection(tmp);
+  const hdg = (THREE.MathUtils.radToDeg(Math.atan2(tmp.x, -tmp.z)) + 360) % 360;
+  $('hdg').textContent = String(Math.round(hdg) % 360).padStart(3, '0');
+}
+
+function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+function frame(now) {
+  if (flight) {
+    const t = Math.min(1, (now - flight.t0) / flight.dur);
+    const k = ease(t);
+    camera.position.lerpVectors(flight.p0, flight.p1, k);
+    controls.target.lerpVectors(flight.q0, flight.q1, k);
+    if (t >= 1) flight = null;
+  }
+  controls.update();
+  sun.target.position.copy(controls.target).setY(0);
+  sun.position.copy(sun.target.position).add(new THREE.Vector3(-1800, 2600, 1400));
+  if (meta) { updateLabels(); updateHud(); }
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+<script type="application/octet-stream" id="glb">__GLB_BASE64__</script>

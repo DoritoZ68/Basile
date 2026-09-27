@@ -1,0 +1,24 @@
+//////////////////////////////////////////////////////////////
+// LFBO Toulouse Blagnac - Secteur de test autonome
+// Genere le 2026-09-27 par tools/generate_lfbo.py
+// Donnees (c) contributeurs OpenStreetMap - licence ODbL 1.0
+// Usage simulation uniquement (IVAO) - ne pas utiliser pour la navigation reelle
+//////////////////////////////////////////////////////////////
+
+[INFO]
+N043.38.06.000
+E001.22.04.000
+60
+43.4
+1.9
+LFBO
+
+[AIRPORT]
+F;LFBO.apt
+
+[RUNWAY]
+F;LFBO.rw
+
+[GEO]
+F;LFBO.geo
+
