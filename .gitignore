@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ivao/LFBO : cache OpenStreetMap du générateur
+ivao/LFBO/tools/.osm-cache/
+__pycache__/

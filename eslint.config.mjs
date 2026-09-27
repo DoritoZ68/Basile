@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Fichiers IVAO (three.js minifié embarqué, pas du code du site)
+    "ivao/**",
   ]),
 ]);
 

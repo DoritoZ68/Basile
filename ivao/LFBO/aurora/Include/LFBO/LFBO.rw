@@ -1,0 +1,10 @@
+//////////////////////////////////////////////////////////////
+// LFBO Toulouse Blagnac - Pistes
+// Genere le 2026-09-27 par tools/generate_lfbo.py
+// Donnees (c) contributeurs OpenStreetMap - licence ODbL 1.0
+// Usage simulation uniquement (IVAO) - ne pas utiliser pour la navigation reelle
+//////////////////////////////////////////////////////////////
+
+
+LFBO;14L;32R;499;499;141;321;N043.38.14.556;E001.21.27.397;N043.36.56.279;E001.22.48.892;
+LFBO;14R;32L;499;499;141;321;N043.38.38.835;E001.20.45.351;N043.37.08.330;E001.22.19.582;

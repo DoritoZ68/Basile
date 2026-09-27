@@ -1,0 +1,8 @@
+//////////////////////////////////////////////////////////////
+// LFBO Toulouse Blagnac - Aerodrome
+// Genere le 2026-09-27 par tools/generate_lfbo.py
+// Donnees (c) contributeurs OpenStreetMap - licence ODbL 1.0
+// Usage simulation uniquement (IVAO) - ne pas utiliser pour la navigation reelle
+//////////////////////////////////////////////////////////////
+
+LFBO;499;5000;N043.38.06.000;E001.22.04.000;Toulouse Blagnac;
