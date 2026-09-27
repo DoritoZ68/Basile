@@ -12,7 +12,8 @@ Génère, à partir des données OpenStreetMap :
   - aurora/Include/LFBO/LFBO.apt       ligne [AIRPORT]
   - aurora/Include/LFBO/LFBO.rw        ligne [RUNWAY]
   - 3d/LFBO.glb                        modèle 3D (sol + bâtiments extrudés + balisage)
-  - 3d/LFBO-3D.html                    visionneuse 3D autonome (le .glb y est embarqué)
+  - 3d/LFBO-3D.html                    visionneuse 3D autonome, s'ouvre hors ligne
+                                       (modèle, three.js et polices embarqués)
 
 Usage :
   pip install -r requirements.txt
@@ -916,18 +917,41 @@ def build_3d(F, out_dir):
     return size, extras
 
 
+FONTS = [
+    ("Barlow Semi Condensed", 500, "barlow-semi-condensed-500.woff2"),
+    ("Barlow Semi Condensed", 600, "barlow-semi-condensed-600.woff2"),
+    ("Barlow Semi Condensed", 700, "barlow-semi-condensed-700.woff2"),
+    ("IBM Plex Mono", 400, "ibm-plex-mono-400.woff2"),
+    ("IBM Plex Mono", 500, "ibm-plex-mono-500.woff2"),
+]
+
+
 def build_viewer(out_dir):
-    tpl = os.path.join(HERE, "viewer_template.html")
-    with open(tpl, encoding="utf-8") as f:
+    """Visionneuse autonome : modèle, three.js et polices embarqués, aucune ressource réseau."""
+    vendor = os.path.join(HERE, "vendor")
+    with open(os.path.join(HERE, "viewer_template.html"), encoding="utf-8") as f:
         html = f.read()
     with open(os.path.join(out_dir, f"{ICAO}.glb"), "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("ascii")
-    html = html.replace("__GLB_BASE64__", b64)
+        glb = base64.b64encode(f.read()).decode("ascii")
+    faces = []
+    for family, weight, fn in FONTS:
+        with open(os.path.join(vendor, "fonts", fn), "rb") as f:
+            data = base64.b64encode(f.read()).decode("ascii")
+        faces.append(f'@font-face{{font-family:"{family}";font-style:normal;font-weight:{weight};'
+                     f'font-display:swap;src:url(data:font/woff2;base64,{data}) format("woff2")}}')
+    with open(os.path.join(vendor, "three-lfbo.min.js"), encoding="utf-8") as f:
+        bundle = f.read()
+    if "</script" in bundle.lower():
+        sys.exit("three-lfbo.min.js contient « </script » : impossible de l'embarquer tel quel.")
+    html = html.replace("__GLB_BASE64__", glb)
+    html = html.replace("/*__FONT_FACES__*/", "\n".join(faces))
+    html = html.replace("/*__THREE_BUNDLE__*/", bundle)
     page = ('<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
             + html + "</html>\n")
     with open(os.path.join(out_dir, f"{ICAO}-3D.html"), "w", encoding="utf-8") as f:
         f.write(page)
+    return len(page.encode("utf-8"))
 
 
 # --------------------------------------------------------------------------
@@ -950,7 +974,7 @@ def main():
     write_aurora(F, os.path.join(args.out, "aurora"))
     print("Construction du modèle 3D…")
     size, extras = build_3d(F, os.path.join(args.out, "3d"))
-    build_viewer(os.path.join(args.out, "3d"))
+    page_size = build_viewer(os.path.join(args.out, "3d"))
 
     print(f"\n{ICAO} {NAME}")
     for rw in F["runways"]:
@@ -964,7 +988,7 @@ def main():
         x, y, h = F["tower_eye"]
         la, lo = to_ll(x, y)
         print(f"  Œil tour : {fmt_ll(la, lo)} {h:.0f} m sol ({h * 3.28084 + ELEV_FT:.0f} ft AMSL)")
-    print(f"  Modèle 3D : {size / 1e6:.2f} Mo")
+    print(f"  Modèle 3D : {size / 1e6:.2f} Mo, visionneuse autonome : {page_size / 1e6:.2f} Mo")
 
 
 if __name__ == "__main__":

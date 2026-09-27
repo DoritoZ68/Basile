@@ -21,8 +21,9 @@ Plateforme sol complète de l'aéroport de Toulouse-Blagnac pour **Aurora**, le 
 | `aurora/Include/LFBO/LFBO.apt` | Ligne `[AIRPORT]` (499 ft, TA 5000 ft) |
 | `aurora/Include/LFBO/LFBO.rw` | Ligne `[RUNWAY]` des deux pistes |
 | `3d/LFBO.glb` | Modèle 3D : sol, marquages, 379 bâtiments extrudés, tour de contrôle, balisage lumineux |
-| `3d/LFBO-3D.html` | Visionneuse 3D autonome (le modèle est embarqué dans la page) |
+| `3d/LFBO-3D.html` | Visionneuse 3D en un seul fichier (2,2 Mo) : s'ouvre par double-clic, sans connexion |
 | `tools/generate_lfbo.py` | Générateur de tous les fichiers ci-dessus |
+| `tools/vendor/` | three.js et polices intégrés à la visionneuse (licences dans `tools/vendor/README.md`) |
 
 Ce qui est modélisé :
 
@@ -53,7 +54,7 @@ Les couches polygones portent les filtres Aurora `APRON`, `TAXIWAY`, `RUNWAY` et
 
 ## Modèle 3D
 
-- **Visionneuse** : ouvrir `3d/LFBO-3D.html` dans un navigateur (connexion internet nécessaire pour charger three.js). Vues : vigie (œil de la tour, regard libre et « jumelles » à la molette), vue d'ensemble, aérogares, finales des 4 QFU sur un plan à 3°. Mode nuit avec balisage lumineux.
+- **Visionneuse** : double-cliquer sur `3d/LFBO-3D.html` (Chrome, Edge, Firefox ou Safari). Le modèle, three.js et les polices sont dans le fichier : aucune connexion n'est nécessaire. Vues : vigie (œil de la tour, regard libre et « jumelles » à la molette), vue d'ensemble, aérogares, finales des 4 QFU sur un plan à 3°. Mode nuit avec balisage lumineux.
 - **Blender** : Fichier › Importer › glTF 2.0, puis choisir `3d/LFBO.glb`. Axes glTF : X = Est, Y = haut, −Z = Nord, origine au point 43°38'06"N 001°22'04"E, unités en mètres.
 - **Vue tour dans un simulateur** : œil de la vigie d'après OSM, environ N43°38'06.6" E001°22'04.3", 37 m sol, soit environ 619 ft AMSL.
 
