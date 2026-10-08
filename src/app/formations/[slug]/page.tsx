@@ -17,6 +17,8 @@ import { CourseCover } from "@/components/CourseCover";
 import { CourseCard } from "@/components/CourseCard";
 import { AddToCartButton } from "@/components/AddToCartButton";
 import { CheckIcon } from "@/components/Icon";
+import { JsonLd } from "@/components/JsonLd";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export function generateStaticParams() {
   return courses.map((c) => ({ slug: c.slug }));
@@ -26,7 +28,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const course = getCourse(slug);
   if (!course) return {};
-  return { title: course.title, description: course.subtitle };
+  const description = `${course.subtitle} ${course.level}, ${lessonCount(course)} leçons, projet concret, accès à vie.`;
+  return {
+    title: `Formation ${course.title}`,
+    description,
+    alternates: { canonical: `/formations/${course.slug}` },
+    openGraph: { type: "website", title: course.title, description, url: `/formations/${course.slug}` },
+  };
 }
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -54,9 +62,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
       <CourseCover icon={course.icon} category={course.category} size="lg" className="aspect-[16/9]" />
       <div className="p-6">
         <p className="font-display text-3xl text-ink">{formatPrice(course.price)}</p>
-        {course.price >= 150 && (
-          <p className="mt-1 text-sm text-ink-faint">ou 3 × {formatPrice(Math.ceil(course.price / 3))} sans frais</p>
-        )}
+        <p className="mt-1 text-sm text-ink-faint">Paiement unique · accès immédiat</p>
         <AddToCartButton id={course.slug} size="lg" className="mt-5" />
         <ul className="mt-5 space-y-2 text-sm text-ink-soft">
           {[
@@ -86,8 +92,45 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
     </div>
   );
 
+  const url = `${SITE_URL}/formations/${course.slug}`;
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Course",
+      name: course.title,
+      description: course.description,
+      url,
+      inLanguage: "fr",
+      educationalLevel: course.level,
+      teaches: course.outcomes,
+      provider: { "@type": "Organization", name: SITE_NAME, sameAs: SITE_URL },
+      offers: {
+        "@type": "Offer",
+        category: "Paid",
+        price: course.price,
+        priceCurrency: "EUR",
+        availability: "https://schema.org/InStock",
+        url,
+      },
+      hasCourseInstance: {
+        "@type": "CourseInstance",
+        courseMode: "Online",
+        courseWorkload: `PT${Math.floor(minutes / 60)}H${minutes % 60}M`,
+      },
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Formations", item: `${SITE_URL}/formations` },
+        { "@type": "ListItem", position: 2, name: course.title, item: url },
+      ],
+    },
+  ];
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       <div className="mx-auto grid max-w-6xl gap-10 px-4 py-10 sm:px-6 md:py-14 lg:grid-cols-[1fr_360px]">
         <div className="min-w-0 space-y-12">
           <header>

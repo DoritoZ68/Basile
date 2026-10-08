@@ -4,7 +4,7 @@ import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { CartProvider } from "@/lib/cart-context";
-import { SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
 const display = Plus_Jakarta_Sans({
   variable: "--font-display",
@@ -23,8 +23,37 @@ export const metadata: Metadata = {
     default: `${SITE_NAME} — ${SITE_TAGLINE}`,
     template: `%s — ${SITE_NAME}`,
   },
-  description:
-    "IA générative, agents et automatisation, freelance, e-commerce, copywriting, vidéo courte, SEO, data : les formations en ligne les plus utiles du moment.",
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "formation en ligne",
+    "formation IA",
+    "formation ChatGPT",
+    "agents IA",
+    "formation n8n",
+    "formation freelance",
+    "formation Shopify",
+    "formation copywriting",
+    "formation LinkedIn",
+    "formation SEO",
+    "formation Power BI",
+    "formation Figma",
+  ],
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    locale: "fr_FR",
+    siteName: SITE_NAME,
+    url: "/",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: { card: "summary_large_image" },
+  robots: { index: true, follow: true },
+  // Code fourni par Google Search Console (méthode « balise HTML »).
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION }
+    : undefined,
 };
 
 const THEME_INIT_SCRIPT = `

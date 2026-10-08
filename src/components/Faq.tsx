@@ -43,11 +43,11 @@ export const GENERAL_FAQ: FaqItem[] = [
     a: "Oui. Chaque fiche indique la date de la dernière mise à jour. Les formations IA et marketing, qui évoluent vite, sont revues plusieurs fois par an.",
   },
   {
-    q: "Puis-je payer en plusieurs fois ?",
-    a: "Oui, le paiement en 3 fois sans frais est proposé au moment du règlement pour toute commande à partir de 150 €.",
+    q: "Le paiement est-il sécurisé ?",
+    a: "Oui. Le paiement est assuré par Stripe, leader mondial du paiement en ligne : carte bancaire, Apple Pay ou Google Pay. Nous n'avons jamais accès à vos coordonnées bancaires.",
   },
   {
     q: "Je suis une entreprise, puis-je obtenir une facture ?",
-    a: "Une facture est générée automatiquement à chaque commande. Pour former une équipe, contactez-nous pour un devis et des licences multiples.",
+    a: "Un reçu vous est envoyé par email à chaque commande, et une facture peut être fournie sur simple demande. Pour former une équipe, contactez-nous pour un devis et des licences multiples.",
   },
 ];

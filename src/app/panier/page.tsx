@@ -3,7 +3,7 @@ import { CartView } from "@/components/CartView";
 
 export const metadata: Metadata = {
   title: "Panier",
-  robots: { index: false },
+  robots: { index: false, follow: false },
 };
 
 export default function CartPage() {
