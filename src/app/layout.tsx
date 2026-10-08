@@ -3,13 +3,13 @@ import { Plus_Jakarta_Sans, Inter } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { FavoritesProvider } from "@/lib/favorites-context";
+import { CartProvider } from "@/lib/cart-context";
 import { SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 
 const display = Plus_Jakarta_Sans({
   variable: "--font-display",
   subsets: ["latin"],
-  weight: ["600", "700"],
+  weight: ["600", "700", "800"],
 });
 
 const body = Inter({
@@ -23,13 +23,14 @@ export const metadata: Metadata = {
     default: `${SITE_NAME} — ${SITE_TAGLINE}`,
     template: `%s — ${SITE_NAME}`,
   },
-  description: SITE_TAGLINE,
+  description:
+    "IA générative, agents et automatisation, freelance, e-commerce, copywriting, vidéo courte, SEO, data : les formations en ligne les plus utiles du moment.",
 };
 
 const THEME_INIT_SCRIPT = `
 (function () {
   try {
-    var stored = localStorage.getItem("3points:theme");
+    var stored = localStorage.getItem("elan:theme");
     if (stored === "light" || stored === "dark") {
       document.documentElement.setAttribute("data-theme", stored);
     }
@@ -44,11 +45,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-bg text-ink antialiased" suppressHydrationWarning>
-        <FavoritesProvider>
+        <CartProvider>
           <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />
-        </FavoritesProvider>
+        </CartProvider>
       </body>
     </html>
   );
