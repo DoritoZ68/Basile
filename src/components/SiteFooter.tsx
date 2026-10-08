@@ -52,12 +52,22 @@ export function SiteFooter() {
                 Panier
               </Link>
             </li>
+            <li>
+              <Link href="/cgv" className="text-ink-soft transition hover:text-ink">
+                Conditions générales de vente
+              </Link>
+            </li>
+            <li>
+              <Link href="/mentions-legales" className="text-ink-soft transition hover:text-ink">
+                Mentions légales et confidentialité
+              </Link>
+            </li>
           </ul>
         </div>
       </div>
       <div className="border-t border-line">
         <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-ink-faint sm:px-6">
-          © {new Date().getFullYear()} Élan Académie · Satisfait ou remboursé 30 jours · Paiement sécurisé
+          © {new Date().getFullYear()} Élan Académie · Satisfait ou remboursé 30 jours · Paiement sécurisé par Stripe
         </p>
       </div>
     </footer>

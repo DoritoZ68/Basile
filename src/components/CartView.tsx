@@ -7,16 +7,13 @@ import { useCart } from "@/lib/cart-context";
 import { formatPrice } from "@/lib/format";
 import { CourseCover } from "@/components/CourseCover";
 import { CheckIcon } from "@/components/Icon";
+import { CONTACT_EMAIL } from "@/lib/site";
 
-type Order = { number: string; email: string; total: number; titles: string[] };
-
-function newOrderNumber() {
-  return `EL-${Date.now().toString(36).toUpperCase()}`;
-}
+type Status = "idle" | "loading" | "disabled" | "error";
 
 export function CartView() {
-  const { items, remove, clear } = useCart();
-  const [order, setOrder] = useState<Order | null>(null);
+  const { items, remove } = useCart();
+  const [status, setStatus] = useState<Status>("idle");
 
   const products = items.map((id) => getProduct(id)).filter((p): p is Product => Boolean(p));
   const total = products.reduce((sum, p) => sum + p.price, 0);
@@ -30,47 +27,22 @@ export function CartView() {
     return packsInCart.find((pack) => pack.slug === "pass-integral");
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
-    setOrder({
-      number: newOrderNumber(),
-      email: String(data.get("email")),
-      total,
-      titles: products.map((p) => p.title),
-    });
-    clear();
-  }
-
-  if (order) {
-    return (
-      <div className="mx-auto max-w-xl rounded-2xl border border-line bg-bg p-8 text-center">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green-tint text-green">
-          <CheckIcon className="h-7 w-7" />
-        </span>
-        <h2 className="mt-5 font-display text-2xl text-ink">Merci pour votre commande !</h2>
-        <p className="mt-2 text-ink-soft">
-          Commande <span className="font-semibold text-ink">{order.number}</span> —{" "}
-          {formatPrice(order.total)}. Les accès seront envoyés à{" "}
-          <span className="font-semibold text-ink">{order.email}</span>.
-        </p>
-        <ul className="mt-5 space-y-1 text-sm text-ink-soft">
-          {order.titles.map((t) => (
-            <li key={t}>{t}</li>
-          ))}
-        </ul>
-        <p className="mt-6 rounded-xl bg-amber-tint px-4 py-3 text-xs text-amber">
-          Mode démonstration : aucun paiement n&apos;a été encaissé. Le paiement en ligne (Stripe) reste à
-          connecter.
-        </p>
-        <Link
-          href="/formations"
-          className="mt-6 inline-flex h-11 items-center rounded-xl bg-ink px-5 text-sm font-semibold text-bg"
-        >
-          Continuer à explorer
-        </Link>
-      </div>
-    );
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      if (res.status === 503) return setStatus("disabled");
+      const data = (await res.json()) as { url?: string };
+      if (!res.ok || !data.url) return setStatus("error");
+      window.location.assign(data.url);
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (products.length === 0) {
@@ -150,41 +122,44 @@ export function CartView() {
             <dt>Total TTC</dt>
             <dd>{formatPrice(total)}</dd>
           </div>
-          {total >= 150 && (
-            <p className="text-xs text-ink-faint">ou 3 × {formatPrice(Math.ceil(total / 3))} sans frais</p>
-          )}
         </dl>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-3">
-          <label className="block">
-            <span className="text-sm font-medium text-ink">Prénom</span>
-            <input
-              name="name"
-              required
-              autoComplete="given-name"
-              className="mt-1 h-11 w-full rounded-xl border border-line bg-bg px-3 text-sm text-ink focus:border-brand focus:outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-ink">Email (pour recevoir vos accès)</span>
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="mt-1 h-11 w-full rounded-xl border border-line bg-bg px-3 text-sm text-ink focus:border-brand focus:outline-none"
-            />
-          </label>
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <label className="flex gap-2 text-xs text-ink-soft">
             <input type="checkbox" required className="mt-0.5 accent-[var(--brand)]" />
-            J&apos;accepte les conditions générales de vente et je demande l&apos;accès immédiat au contenu.
+            <span>
+              J&apos;accepte les{" "}
+              <Link href="/cgv" className="font-semibold text-ink underline" target="_blank">
+                conditions générales de vente
+              </Link>{" "}
+              et je demande l&apos;accès immédiat au contenu, en renonçant à mon droit légal de rétractation
+              de 14 jours (la garantie satisfait ou remboursé de 30 jours reste acquise).
+            </span>
           </label>
           <button
             type="submit"
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-brand text-base font-semibold text-on-brand transition hover:bg-brand-strong"
+            disabled={status === "loading"}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-base font-semibold text-on-brand transition hover:bg-brand-strong disabled:opacity-60"
           >
-            Valider la commande
+            {status === "loading" ? "Redirection vers le paiement…" : `Payer ${formatPrice(total)}`}
           </button>
+          <p className="text-center text-xs text-ink-faint">
+            Paiement sécurisé par Stripe : carte bancaire, Apple Pay, Google Pay.
+          </p>
+          {status === "disabled" && (
+            <p className="rounded-xl bg-amber-tint px-4 py-3 text-xs text-amber">
+              Le paiement en ligne n&apos;est pas encore activé sur ce site. Écrivez-nous à{" "}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="font-semibold underline">
+                {CONTACT_EMAIL}
+              </a>{" "}
+              pour commander.
+            </p>
+          )}
+          {status === "error" && (
+            <p className="rounded-xl bg-coral-tint px-4 py-3 text-xs text-coral">
+              Le paiement n&apos;a pas pu démarrer. Réessayez dans un instant.
+            </p>
+          )}
         </form>
 
         <ul className="mt-5 space-y-1.5 text-xs text-ink-soft">
@@ -195,7 +170,7 @@ export function CartView() {
             <CheckIcon className="h-4 w-4 shrink-0 text-green" /> Accès à vie et mises à jour incluses
           </li>
           <li className="flex gap-2">
-            <CheckIcon className="h-4 w-4 shrink-0 text-green" /> Facture disponible immédiatement
+            <CheckIcon className="h-4 w-4 shrink-0 text-green" /> Reçu envoyé par email
           </li>
         </ul>
       </aside>

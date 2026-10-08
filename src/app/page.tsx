@@ -16,6 +16,8 @@ import { CourseCover } from "@/components/CourseCover";
 import { PackCard } from "@/components/PackCard";
 import { Faq, GENERAL_FAQ } from "@/components/Faq";
 import { CheckIcon, Icon } from "@/components/Icon";
+import { JsonLd } from "@/components/JsonLd";
+import { CONTACT_EMAIL, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 const TOTAL_HOURS = Math.round(courses.reduce((sum, c) => sum + totalMinutes(c), 0) / 60);
 const TOTAL_LESSONS = courses.reduce((sum, c) => sum + lessonCount(c), 0);
@@ -49,8 +51,37 @@ export default function HomePage() {
   const featuredPacks = packs.filter((p) => p.slug !== "pass-integral");
   const bestSaving = Math.max(...featuredPacks.map((p) => Math.round((1 - p.price / packValue(p)) * 100)));
 
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: SITE_URL,
+      logo: `${SITE_URL}/icon.svg`,
+      email: CONTACT_EMAIL,
+      description: SITE_DESCRIPTION,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: SITE_NAME,
+      url: SITE_URL,
+      inLanguage: "fr",
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: GENERAL_FAQ.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
+  ];
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       {/* Hero */}
       <section className="relative overflow-hidden bg-night text-white">
         <div

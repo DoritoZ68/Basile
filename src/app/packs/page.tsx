@@ -6,6 +6,7 @@ import { Faq } from "@/components/Faq";
 export const metadata: Metadata = {
   title: "Packs & Pass intégral",
   description: "Des parcours complets à prix réduit : IA, entrepreneuriat, création de contenu, ou tout le catalogue.",
+  alternates: { canonical: "/packs" },
 };
 
 export default function PacksPage() {

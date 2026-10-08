@@ -5,6 +5,7 @@ import { CatalogBrowser } from "@/components/CatalogBrowser";
 export const metadata: Metadata = {
   title: "Toutes les formations",
   description: "Le catalogue complet : IA, automatisation, business en ligne, marketing, data, cybersécurité et design.",
+  alternates: { canonical: "/formations" },
 };
 
 export default async function FormationsPage({

@@ -7,6 +7,7 @@ import type { IconName } from "@/lib/catalog";
 export const metadata: Metadata = {
   title: "Notre méthode",
   description: "Comment nous choisissons les sujets et construisons des formations qui donnent des résultats.",
+  alternates: { canonical: "/a-propos" },
 };
 
 const PRINCIPLES: { icon: IconName; title: string; text: string }[] = [
