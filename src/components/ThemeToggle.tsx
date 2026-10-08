@@ -35,7 +35,7 @@ export function ThemeToggle() {
   function toggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);
-    window.localStorage.setItem("3points:theme", next);
+    window.localStorage.setItem("elan:theme", next);
     listeners.forEach((l) => l());
   }
 

@@ -2,78 +2,104 @@
 
 :root {
   --bg: #ffffff;
-  --surface: #f6f8fb;
-  --surface-strong: #eef2f7;
-  --line: #e5eaf1;
-  --ink: #16233d;
-  --ink-soft: #5b6b84;
-  --ink-faint: #94a1b8;
+  --surface: #f6f7fb;
+  --surface-strong: #eceef6;
+  --line: #e4e7f0;
+  --ink: #14162b;
+  --ink-soft: #565b78;
+  --ink-faint: #8f94ad;
 
-  --blue: #2f7bae;
-  --blue-strong: #235e86;
-  --blue-tint: #eaf4fb;
+  --brand: #4f46e5;
+  --brand-strong: #3f37c9;
+  --brand-tint: #eef0ff;
+  --on-brand: #ffffff;
 
-  --violet: #7c6fe0;
-  --violet-tint: #f1effc;
+  --amber: #b7791f;
+  --amber-tint: #fdf4e3;
 
-  --coral: #e2703a;
+  --green: #15803d;
+  --green-tint: #e8f6ed;
+
+  /* Category accents */
+  --violet: #7c5ce0;
+  --violet-tint: #f2eefd;
+  --coral: #dc6a35;
   --coral-tint: #fcefe7;
+  --blue: #2f7bae;
+  --blue-tint: #eaf4fb;
+  --teal: #1a8f89;
+  --teal-tint: #e6f6f5;
 
-  --teal: #1f9c96;
-  --teal-tint: #e8f7f6;
-
-  /* Fixed (theme-independent) dark scrim for overlays like the story viewer. */
-  --scrim: #0b1220;
+  /* Fixed dark surface for hero blocks and covers (theme-independent). */
+  --night: #111327;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0f1420;
-    --surface: #171d2c;
-    --surface-strong: #1f273a;
-    --line: #2a3348;
-    --ink: #eef1f6;
-    --ink-soft: #a8b2c4;
-    --ink-faint: #6b768c;
+    --bg: #0d0f1c;
+    --surface: #151829;
+    --surface-strong: #1d2136;
+    --line: #272c45;
+    --ink: #eef0f8;
+    --ink-soft: #a7acc6;
+    --ink-faint: #6c7190;
 
-    --blue: #5aa8d8;
-    --blue-strong: #7fbde3;
-    --blue-tint: rgba(90, 168, 216, 0.14);
+    --brand: #8b85ff;
+    --brand-strong: #a6a1ff;
+    --brand-tint: rgba(139, 133, 255, 0.14);
+  --on-brand: #0d0f1c;
 
-    --violet: #a79bf2;
-    --violet-tint: rgba(167, 155, 242, 0.14);
+    --amber: #f2b84b;
+    --amber-tint: rgba(242, 184, 75, 0.14);
 
+    --green: #4ade80;
+    --green-tint: rgba(74, 222, 128, 0.12);
+
+    --violet: #a990f5;
+    --violet-tint: rgba(169, 144, 245, 0.14);
     --coral: #ef8b5c;
     --coral-tint: rgba(239, 139, 92, 0.14);
-
+    --blue: #5aa8d8;
+    --blue-tint: rgba(90, 168, 216, 0.14);
     --teal: #3fc2ba;
     --teal-tint: rgba(63, 194, 186, 0.14);
+
+    --night: #080a16;
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0f1420;
-  --surface: #171d2c;
-  --surface-strong: #1f273a;
-  --line: #2a3348;
-  --ink: #eef1f6;
-  --ink-soft: #a8b2c4;
-  --ink-faint: #6b768c;
+  --bg: #0d0f1c;
+  --surface: #151829;
+  --surface-strong: #1d2136;
+  --line: #272c45;
+  --ink: #eef0f8;
+  --ink-soft: #a7acc6;
+  --ink-faint: #6c7190;
 
-  --blue: #5aa8d8;
-  --blue-strong: #7fbde3;
-  --blue-tint: rgba(90, 168, 216, 0.14);
+  --brand: #8b85ff;
+  --brand-strong: #a6a1ff;
+  --brand-tint: rgba(139, 133, 255, 0.14);
+  --on-brand: #0d0f1c;
 
-  --violet: #a79bf2;
-  --violet-tint: rgba(167, 155, 242, 0.14);
+  --amber: #f2b84b;
+  --amber-tint: rgba(242, 184, 75, 0.14);
 
+  --green: #4ade80;
+  --green-tint: rgba(74, 222, 128, 0.12);
+
+  --violet: #a990f5;
+  --violet-tint: rgba(169, 144, 245, 0.14);
   --coral: #ef8b5c;
   --coral-tint: rgba(239, 139, 92, 0.14);
-
+  --blue: #5aa8d8;
+  --blue-tint: rgba(90, 168, 216, 0.14);
   --teal: #3fc2ba;
   --teal-tint: rgba(63, 194, 186, 0.14);
+
+  --night: #080a16;
 }
 
 @theme inline {
@@ -84,18 +110,25 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-ink-faint: var(--ink-faint);
-  --color-scrim: var(--scrim);
+  --color-night: var(--night);
 
-  --color-blue: var(--blue);
-  --color-blue-strong: var(--blue-strong);
-  --color-blue-tint: var(--blue-tint);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-tint: var(--brand-tint);
+  --color-on-brand: var(--on-brand);
+
+  --color-amber: var(--amber);
+  --color-amber-tint: var(--amber-tint);
+
+  --color-green: var(--green);
+  --color-green-tint: var(--green-tint);
 
   --color-violet: var(--violet);
   --color-violet-tint: var(--violet-tint);
-
   --color-coral: var(--coral);
   --color-coral-tint: var(--coral-tint);
-
+  --color-blue: var(--blue);
+  --color-blue-tint: var(--blue-tint);
   --color-teal: var(--teal);
   --color-teal-tint: var(--teal-tint);
 
@@ -115,6 +148,7 @@ body {
 
 .font-display {
   font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .text-balance {
@@ -122,7 +156,7 @@ body {
 }
 
 ::selection {
-  background: var(--blue);
+  background: var(--brand);
   color: white;
 }
 
@@ -133,11 +167,13 @@ body {
   display: none;
 }
 
-@keyframes story-progress {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
+/* FAQ disclosure chevron */
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details[open] .faq-chevron {
+  transform: rotate(180deg);
 }
