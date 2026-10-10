@@ -19,9 +19,10 @@ const API_KEY = Platform.select({
 
 /**
  * Sans clé RevenueCat (web, ou avant la configuration), les achats sont simulés en
- * développement pour pouvoir tester l'écran Pro ; en production ils sont indisponibles.
+ * développement et dans l'aperçu web (EXPO_PUBLIC_PREVIEW=1) ; en production ils sont indisponibles.
  */
-const SIMULATED = !API_KEY && __DEV__;
+export const PURCHASES_SIMULATED = !API_KEY && (__DEV__ || process.env.EXPO_PUBLIC_PREVIEW === '1');
+const SIMULATED = PURCHASES_SIMULATED;
 
 export type PurchaseResult = 'success' | 'cancelled' | 'error';
 

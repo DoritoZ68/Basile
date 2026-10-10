@@ -73,6 +73,12 @@ et l'écran d'achat dans `src/components/paywall.tsx`.
 
 Pour un aperçu rapide dans le navigateur : `npx expo start --web`.
 
+### Aperçu interactif à partager
+
+`node preview/build-preview.cjs` construit `dist-preview/bucheur-apercu.html` : une seule page qui contient
+toute l'app web dans un cadre de téléphone, avec un panneau pour charger des données de démo, terminer une
+séance sans attendre et réinitialiser. L'achat de Bûcheur Pro y est simulé (`EXPO_PUBLIC_PREVIEW=1`).
+
 ## Vérifications
 
 ```bash

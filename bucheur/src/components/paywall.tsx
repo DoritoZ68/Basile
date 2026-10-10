@@ -7,7 +7,7 @@ import { TreeRings } from '@/components/tree-rings';
 import { Button, Group, Row } from '@/components/ui';
 import { Display, Spacing, SubjectColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { FREE_LIMITS, usePro } from '@/lib/pro';
+import { FREE_LIMITS, PURCHASES_SIMULATED, usePro } from '@/lib/pro';
 
 const PERKS = [
   { label: 'Matières illimitées', detail: `La version gratuite en compte ${FREE_LIMITS.subjects}` },
@@ -99,9 +99,11 @@ export function Paywall() {
                 onPress={onPurchase}
               />
               <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-                {available
-                  ? 'Paiement unique avec ton identifiant Apple. Pas d’abonnement.'
-                  : 'La boutique n’est pas disponible pour le moment.'}
+                {PURCHASES_SIMULATED
+                  ? 'Aperçu : l’achat est simulé, aucun paiement n’est effectué.'
+                  : available
+                    ? 'Paiement unique avec ton identifiant Apple. Pas d’abonnement.'
+                    : 'La boutique n’est pas disponible pour le moment.'}
               </ThemedText>
               <Button
                 label="Restaurer mes achats"

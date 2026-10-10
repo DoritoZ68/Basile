@@ -1,0 +1,447 @@
+<title>Bûcheur</title>
+<style>/*EXPO_RESET*/</style>
+<style>/*GLOBAL_CSS*/</style>
+<style id="expo-generated-fonts">/*FONTS*/</style>
+<style>
+  /* Mise en page : le téléphone à gauche, le panneau d'aperçu à droite ; sur téléphone, l'app en plein écran. */
+  :root {
+    --paper: #efebe3;
+    --surface: #ffffff;
+    --ink: #1f2328;
+    --muted: #6e6a64;
+    --line: #e4e1db;
+    --sage: #3e6b5a;
+    --on-sage: #ffffff;
+    --danger: #b4483a;
+    --bezel: #1a1c1e;
+    --display: 'Fraunces_600SemiBold', 'Iowan Old Style', Georgia, serif;
+    --italic: 'Fraunces_400Regular_Italic', 'Iowan Old Style', Georgia, serif;
+    --text: Inter, 'SF Pro Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --paper: #0c0e0d;
+      --surface: #1a1d1c;
+      --ink: #ecebe7;
+      --muted: #97958f;
+      --line: #2b2f2e;
+      --sage: #8fbfa8;
+      --on-sage: #0e1a15;
+      --danger: #e08a7e;
+      --bezel: #2a2d2c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --paper: #0c0e0d;
+    --surface: #1a1d1c;
+    --ink: #ecebe7;
+    --muted: #97958f;
+    --line: #2b2f2e;
+    --sage: #8fbfa8;
+    --on-sage: #0e1a15;
+    --danger: #e08a7e;
+    --bezel: #2a2d2c;
+    color-scheme: dark;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--text);
+    overflow: auto;
+  }
+  .stage {
+    min-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    padding-block: 32px;
+    padding-inline: 24px;
+    box-sizing: border-box;
+  }
+  .device {
+    flex: none;
+    width: 390px;
+    height: min(844px, calc(100vh - 64px));
+    min-height: 560px;
+    padding: 11px;
+    border-radius: 54px;
+    background: var(--bezel);
+    box-shadow: 0 40px 80px rgba(20, 30, 25, 0.22);
+    box-sizing: border-box;
+  }
+  .device #root {
+    height: 100%;
+    border-radius: 44px;
+    overflow: hidden;
+    background: var(--paper);
+  }
+
+  .panel {
+    width: 340px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .eyebrow {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .panel h1 {
+    margin: 4px 0 0;
+    font-family: var(--display);
+    font-weight: normal;
+    font-size: 44px;
+    line-height: 1.05;
+    text-wrap: balance;
+  }
+  .lead {
+    margin: 10px 0 0;
+    font-family: var(--italic);
+    font-size: 18px;
+    line-height: 1.45;
+    color: var(--muted);
+  }
+  .group {
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 6px 0;
+  }
+  .group h2 {
+    margin: 0;
+    padding: 10px 16px 4px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .action {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 10px 16px;
+    border: 0;
+    border-top: 1px solid var(--line);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .group h2 + .action {
+    border-top: 0;
+  }
+  .action strong {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--sage);
+  }
+  .action span {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--muted);
+  }
+  .action:hover strong {
+    text-decoration: underline;
+  }
+  .action:focus-visible,
+  .tools-toggle:focus-visible,
+  .close:focus-visible {
+    outline: 2px solid var(--sage);
+    outline-offset: 2px;
+  }
+  .action.confirm strong {
+    color: var(--danger);
+  }
+  .status {
+    min-height: 20px;
+    margin: 0;
+    font-size: 14px;
+    color: var(--sage);
+  }
+  .notes {
+    margin: 0;
+    padding: 0 0 0 18px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .tools-toggle,
+  .close {
+    display: none;
+  }
+
+  /* Téléphone : l'app occupe tout l'écran, le panneau s'ouvre en feuille depuis le bas. */
+  @media (max-width: 820px) {
+    body {
+      overflow: hidden;
+    }
+    .stage {
+      display: block;
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+    }
+    .device {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      padding: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .device #root {
+      border-radius: 0;
+    }
+    .tools-toggle {
+      display: block;
+      position: fixed;
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      z-index: 10;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--paper);
+      font: 600 14px var(--text);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+    }
+    .panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 20;
+      width: auto;
+      max-height: 85%;
+      overflow-y: auto;
+      padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+      border-radius: 24px 24px 0 0;
+      background: var(--paper);
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
+      box-sizing: border-box;
+    }
+    .panel h1 {
+      font-size: 34px;
+    }
+    .close {
+      display: block;
+      align-self: flex-end;
+      margin-bottom: -16px;
+      border: 0;
+      background: none;
+      color: var(--sage);
+      font: 500 15px var(--text);
+      cursor: pointer;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
+
+<div class="stage">
+  <div class="device"><div id="root"></div></div>
+
+  <button class="tools-toggle" id="tools-toggle" type="button" aria-controls="panel">Outils d’aperçu</button>
+  <aside class="panel" id="panel" aria-label="Outils d’aperçu">
+    <button class="close" id="panel-close" type="button">Fermer</button>
+    <div>
+      <p class="eyebrow">Aperçu interactif</p>
+      <h1>Bûcheur</h1>
+      <p class="lead">La vraie app, dans ton navigateur. Lance une séance, ajoute tes examens, essaie Bûcheur Pro.</p>
+    </div>
+
+    <div class="group">
+      <h2>Pour tester vite</h2>
+      <button class="action" id="demo" type="button">
+        <strong>Remplir avec une semaine de révisions</strong>
+        <span>Cinq matières, des séances sur dix jours et trois examens à venir.</span>
+      </button>
+      <button class="action" id="finish" type="button">
+        <strong>Terminer la séance en cours</strong>
+        <span>Inutile d’attendre 25 minutes : la séance se termine et son cerne s’ajoute.</span>
+      </button>
+      <button class="action" id="reset" type="button">
+        <strong>Repartir de zéro</strong>
+        <span>Efface tout et revient à l’app telle qu’elle s’ouvre la première fois.</span>
+      </button>
+    </div>
+
+    <div class="group">
+      <h2>Bûcheur Pro</h2>
+      <button class="action" id="pro" type="button">
+        <strong id="pro-label">Essayer Bûcheur Pro</strong>
+        <span id="pro-detail">Ici, l’achat est simulé : aucun paiement n’est effectué.</span>
+      </button>
+    </div>
+
+    <p class="status" id="status" role="status"></p>
+
+    <ul class="notes">
+      <li>Tes essais restent dans ce navigateur.</li>
+      <li>Sur iPhone, la barre d’onglets est en bas de l’écran et les notifications de fin de séance fonctionnent.</li>
+    </ul>
+  </aside>
+</div>
+
+<script>
+  // L'app lit l'adresse de la page pour choisir son écran : on la ramène à l'accueil.
+  window.__BUCHEUR_HREF__ = location.href;
+  try {
+    history.replaceState(null, '', '/');
+  } catch (e) {}
+</script>
+<script>/*APP_BUNDLE*/</script>
+<script>
+  (function () {
+    var KEY = 'bucheur:v1';
+    var PRO = 'bucheur:pro';
+    var status = document.getElementById('status');
+
+    function read(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        return null;
+      }
+    }
+    function write(key, value) {
+      try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        status.textContent = 'Ce navigateur bloque l’enregistrement : l’app fonctionne, mais ces raccourcis non.';
+        return false;
+      }
+    }
+    // L'app ne relit ses données qu'au démarrage : on la relance après chaque raccourci.
+    function restart() {
+      location.replace(window.__BUCHEUR_HREF__);
+    }
+
+    function demoData() {
+      var day = 86400000;
+      var now = Date.now();
+      var midnight = new Date(new Date().setHours(0, 0, 0, 0));
+      var at = function (daysAgo, hour) {
+        return new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() - daysAgo, hour).getTime();
+      };
+      var dateIn = function (days) {
+        var d = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + days);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      };
+      var plan = [
+        [0, 9, 'anglais', 25], [1, 9, 'francais', 45], [1, 14, 'histoire', 25], [1, 16, 'maths', 25],
+        [2, 17, 'maths', 45], [2, 18, 'physique', 25], [3, 17, 'francais', 25], [3, 18, 'anglais', 25],
+        [3, 19, 'maths', 45], [4, 18, 'histoire', 45], [5, 10, 'physique', 25], [5, 14, 'maths', 60],
+        [6, 15, 'anglais', 25], [7, 10, 'francais', 45], [8, 18, 'maths', 25], [9, 17, 'histoire', 25],
+      ];
+      return {
+        subjects: [
+          { id: 'maths', name: 'Maths', color: '#5B7FA6', weeklyGoalMin: 240 },
+          { id: 'francais', name: 'Français', color: '#C07A4F', weeklyGoalMin: 180 },
+          { id: 'anglais', name: 'Anglais', color: '#6E9A78', weeklyGoalMin: 120 },
+          { id: 'histoire', name: 'Histoire-géo', color: '#9A7BB0', weeklyGoalMin: 150 },
+          { id: 'physique', name: 'Physique-chimie', color: '#C9A24D', weeklyGoalMin: 180 },
+        ],
+        sessions: plan
+          .filter(function (p) { return at(p[0], p[1]) < now; })
+          .map(function (p, i) {
+            return { id: 'demo' + i, subjectId: p[2], startedAt: at(p[0], p[1]), durationMin: p[3] };
+          }),
+        exams: [
+          { id: 'e1', name: 'Bac de français', date: dateIn(12) },
+          { id: 'e2', name: 'Partiel de maths', date: dateIn(30) },
+          { id: 'e3', name: 'Oral d’anglais', date: dateIn(41) },
+        ],
+        activeTimer: null,
+        settings: { dailyGoalMin: 120, focusMin: 25 },
+      };
+    }
+
+    function refreshPro() {
+      var isPro = read(PRO) === '1';
+      document.getElementById('pro-label').textContent = isPro ? 'Désactiver Pro' : 'Essayer Bûcheur Pro';
+      document.getElementById('pro-detail').textContent = isPro
+        ? 'Pro est activé. Désactive-le pour refaire l’achat simulé.'
+        : 'Dans l’app, touche la durée « 90 · Pro » ou une autre fonction Pro. L’achat est simulé ici : aucun paiement.';
+    }
+
+    document.getElementById('demo').addEventListener('click', function () {
+      if (write(KEY, JSON.stringify(demoData()))) restart();
+    });
+
+    document.getElementById('finish').addEventListener('click', function () {
+      var data;
+      try {
+        data = JSON.parse(read(KEY) || 'null');
+      } catch (e) {
+        data = null;
+      }
+      if (!data || !data.activeTimer) {
+        status.textContent = 'Aucune séance en cours. Lance-en une avec « Commencer » sur l’écran Focus.';
+        return;
+      }
+      var t = data.activeTimer;
+      t.startedAt = Date.now() - t.durationMin * 60000 - 1000;
+      delete t.notificationId;
+      if (write(KEY, JSON.stringify(data))) restart();
+    });
+
+    var reset = document.getElementById('reset');
+    reset.addEventListener('click', function () {
+      if (!reset.classList.contains('confirm')) {
+        reset.classList.add('confirm');
+        reset.querySelector('strong').textContent = 'Confirmer : tout effacer';
+        return;
+      }
+      if (write(KEY, null) && write(PRO, null)) restart();
+    });
+
+    document.getElementById('pro').addEventListener('click', function () {
+      if (read(PRO) === '1') {
+        if (write(PRO, '0')) restart();
+      } else {
+        status.textContent = 'Dans l’app, touche « 90 · Pro » sur l’écran Focus pour ouvrir l’offre.';
+      }
+    });
+
+    var panel = document.getElementById('panel');
+    var toggle = document.getElementById('tools-toggle');
+    var small = window.matchMedia('(max-width: 820px)');
+    function setOpen(open) {
+      panel.hidden = small.matches && !open;
+      toggle.hidden = small.matches && open;
+      toggle.setAttribute('aria-expanded', String(open));
+    }
+    toggle.addEventListener('click', function () { setOpen(true); });
+    document.getElementById('panel-close').addEventListener('click', function () { setOpen(false); });
+    small.addEventListener('change', function () { setOpen(false); });
+    setOpen(false);
+
+    refreshPro();
+    setInterval(refreshPro, 2000);
+  })();
+</script>
