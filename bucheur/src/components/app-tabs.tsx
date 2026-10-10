@@ -1,0 +1,37 @@
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useColorScheme } from 'react-native';
+
+import { Colors } from '@/constants/theme';
+
+export default function AppTabs() {
+  const scheme = useColorScheme();
+  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
+
+  return (
+    <NativeTabs
+      backgroundColor={colors.background}
+      indicatorColor={colors.backgroundSelected}
+      tintColor={colors.accent}
+      labelStyle={{ selected: { color: colors.accent } }}>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Focus</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="timer" md="timer" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="matieres">
+        <NativeTabs.Trigger.Label>Matières</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="books.vertical.fill" md="menu_book" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="examens">
+        <NativeTabs.Trigger.Label>Examens</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="calendar" md="event" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="stats">
+        <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="chart.bar.fill" md="bar_chart" />
+      </NativeTabs.Trigger>
+    </NativeTabs>
+  );
+}
