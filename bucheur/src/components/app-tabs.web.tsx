@@ -7,6 +7,7 @@ import {
   TabListProps,
 } from 'expo-router/ui';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { Glass } from './glass';
@@ -69,9 +70,16 @@ export function TabButton({
 }
 
 export function CustomTabList(props: TabListProps) {
+  // Ajoutée à l'écran d'accueil de l'iPhone, l'app passe sous la barre de geste : on la laisse libre.
+  const { bottom } = useSafeAreaInsets();
   return (
-    <View {...props} style={styles.container} pointerEvents="box-none">
-      <Glass style={styles.bar}>{props.children}</Glass>
+    <View
+      {...props}
+      style={[styles.container, { paddingBottom: 16 + bottom }]}
+      pointerEvents="box-none">
+      <Glass variant="strong" style={styles.bar}>
+        {props.children}
+      </Glass>
     </View>
   );
 }
@@ -134,7 +142,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     paddingHorizontal: 16,
-    paddingBottom: 16,
     alignItems: 'center',
   },
   bar: {

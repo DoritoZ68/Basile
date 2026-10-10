@@ -20,6 +20,7 @@ export const Colors = {
     danger: '#B4483A',
     wood: '#EFE7D8',
     glass: 'rgba(255,255,255,0.52)',
+    glassStrong: 'rgba(250,249,246,0.86)',
     glassEdge: 'rgba(255,255,255,0.85)',
   },
   dark: {
@@ -34,6 +35,7 @@ export const Colors = {
     danger: '#E08A7E',
     wood: '#22211D',
     glass: 'rgba(48,53,51,0.42)',
+    glassStrong: 'rgba(30,33,32,0.86)',
     glassEdge: 'rgba(255,255,255,0.16)',
   },
 } as const;

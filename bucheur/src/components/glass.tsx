@@ -13,8 +13,11 @@ type Props = {
   tint?: ColorValue;
   /** Réagit au toucher (reflet natif d'iOS 26). */
   interactive?: boolean;
-  /** `clear` : verre plus transparent, pour les éléments posés sur un contenu riche. */
-  variant?: 'regular' | 'clear';
+  /**
+   * `clear` : verre plus transparent. `strong` : verre plus couvrant, pour les barres posées
+   * au-dessus du texte (sur iOS 26, c'est le verre « regular » natif).
+   */
+  variant?: 'regular' | 'clear' | 'strong';
 };
 
 /**
@@ -30,7 +33,7 @@ export function Glass({ children, style, tint, interactive, variant = 'regular' 
   if (LIQUID_GLASS) {
     return (
       <GlassView
-        glassEffectStyle={variant}
+        glassEffectStyle={variant === 'strong' ? 'regular' : variant}
         tintColor={tint}
         isInteractive={interactive}
         style={style}>
@@ -43,7 +46,7 @@ export function Glass({ children, style, tint, interactive, variant = 'regular' 
     <View
       style={[
         {
-          backgroundColor: tint ?? theme.glass,
+          backgroundColor: tint ?? (variant === 'strong' ? theme.glassStrong : theme.glass),
           borderColor: tint ? 'rgba(255,255,255,0.28)' : theme.glassEdge,
           borderWidth: 1,
           boxShadow: '0 8px 24px rgba(20, 30, 25, 0.10)',
@@ -57,4 +60,8 @@ export function Glass({ children, style, tint, interactive, variant = 'regular' 
 }
 
 // `backdropFilter` n'existe que sur le web : on le passe tel quel à react-native-web.
-const webBlur = { backdropFilter: 'blur(22px) saturate(170%)' } as unknown as ViewStyle;
+// Safari (iPhone) a besoin de la version préfixée.
+const webBlur = {
+  backdropFilter: 'blur(22px) saturate(170%)',
+  WebkitBackdropFilter: 'blur(22px) saturate(170%)',
+} as unknown as ViewStyle;

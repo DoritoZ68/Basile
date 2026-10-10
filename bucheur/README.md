@@ -64,7 +64,25 @@ et l'écran d'achat dans `src/components/paywall.tsx`.
   (`npx eas-cli@latest build --profile development --platform ios`) et un testeur *Sandbox*
   créé dans App Store Connect › Utilisateurs et accès.
 
-## Tester sur ton iPhone (gratuit, depuis Linux)
+## Tester sur ton iPhone sans Expo Go (Safari)
+
+Aucun compte n'est nécessaire : l'ordinateur sert l'app et l'iPhone l'ouvre dans Safari, sur le même Wi-Fi.
+
+```bash
+cd bucheur
+npm install
+npm run iphone
+```
+
+1. Note l'adresse IP de l'ordinateur avec `hostname -I` (par exemple `192.168.1.12`).
+2. Sur Linux Mint, autorise le port une fois : `sudo ufw allow 3000/tcp`.
+3. Sur l'iPhone, ouvre Safari à l'adresse `http://192.168.1.12:3000`.
+4. Touche **Partager › Sur l'écran d'accueil** : Bûcheur s'ouvre ensuite en plein écran, avec son icône.
+
+C'est la version web : le verre est une imitation (pas le Liquid Glass natif), et il n'y a ni notification de fin
+de séance ni vibration. L'achat de Bûcheur Pro y est simulé.
+
+## Tester sur ton iPhone (gratuit, depuis Linux) avec Expo Go
 
 1. Installe **Expo Go** depuis l'App Store sur ton iPhone.
 2. Sur l'ordinateur :
