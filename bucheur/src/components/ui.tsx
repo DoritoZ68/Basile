@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Ambient } from '@/components/ambient';
+import { Glass } from '@/components/glass';
 import { ThemedText } from '@/components/themed-text';
 import { BottomTabInset, Display, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,9 +23,9 @@ type ScreenProps = {
 };
 
 export function Screen({ title, subtitle, children }: ScreenProps) {
-  const theme = useTheme();
   return (
-    <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={styles.screen}>
+      <Ambient />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -46,19 +48,19 @@ export function Screen({ title, subtitle, children }: ScreenProps) {
   );
 }
 
-/** Liste groupée façon iOS : un fond discret et un séparateur fin entre les lignes. */
+/** Liste groupée façon iOS, sur une plaque de verre, avec un séparateur fin entre les lignes. */
 export function Group({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   const items = Children.toArray(children);
   return (
-    <View style={[styles.group, { backgroundColor: theme.backgroundElement }, style]}>
+    <Glass style={[styles.group, style]}>
       {items.map((child, i) => (
         <Fragment key={i}>
           {i > 0 && <View style={[styles.separator, { backgroundColor: theme.border }]} />}
           {child}
         </Fragment>
       ))}
-    </View>
+    </Glass>
   );
 }
 
@@ -108,30 +110,64 @@ export function Row({ label, value, detail, color, onPress, valueColor }: RowPro
 type ButtonProps = {
   label: string;
   onPress: () => void;
-  /** `plain` et `danger` sont des boutons texte, sans fond. */
-  variant?: 'primary' | 'plain' | 'danger';
+  /**
+   * `primary` : verre teinté de l'accent. `glass` : capsule de verre neutre.
+   * `plain` et `danger` : boutons texte, sans fond.
+   */
+  variant?: 'primary' | 'glass' | 'plain' | 'danger';
+  /** Couleur du texte d'un bouton `glass` (accent par défaut). */
+  color?: string;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Button({ label, onPress, variant = 'primary', disabled, style }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  color,
+  disabled,
+  style,
+}: ButtonProps) {
   const theme = useTheme();
-  const filled = variant === 'primary';
-  const color = filled ? theme.accentText : variant === 'danger' ? theme.danger : theme.accent;
+
+  if (variant === 'primary' || variant === 'glass') {
+    const primary = variant === 'primary' && !disabled;
+    const textColor = primary
+      ? theme.accentText
+      : disabled
+        ? theme.textSecondary
+        : (color ?? theme.accent);
+    // Pas d'opacité sur le verre (il disparaîtrait) : on réduit légèrement le bouton au toucher.
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        onPress={onPress}
+        disabled={disabled}
+        style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }, style]}>
+        <Glass
+          interactive
+          tint={primary ? theme.accent : undefined}
+          style={[styles.button, variant === 'glass' && styles.glassButton]}>
+          <ThemedText style={[styles.buttonLabel, { color: textColor }]}>{label}</ThemedText>
+        </Glass>
+      </Pressable>
+    );
+  }
+
+  const textColor = variant === 'danger' ? theme.danger : theme.accent;
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
-        filled ? styles.button : styles.textButton,
-        filled && { backgroundColor: theme.accent },
-        { opacity: disabled ? 0.35 : pressed ? 0.7 : 1 },
+        styles.textButton,
+        { opacity: disabled ? 0.35 : pressed ? 0.6 : 1 },
         style,
       ]}>
-      <ThemedText style={[filled ? styles.buttonLabel : styles.textButtonLabel, { color }]}>
-        {label}
-      </ThemedText>
+      <ThemedText style={[styles.textButtonLabel, { color: textColor }]}>{label}</ThemedText>
     </Pressable>
   );
 }
@@ -145,25 +181,22 @@ type ChipProps = {
 
 export function Chip({ label, selected, color, onPress }: ChipProps) {
   const theme = useTheme();
+  // Sélectionnée : verre teinté de la couleur de la matière (ou de l'accent), texte blanc.
+  const tint = selected ? (color ?? theme.accent) : undefined;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        {
-          backgroundColor: selected ? theme.backgroundElement : 'transparent',
-          borderColor: selected ? (color ?? theme.text) : theme.border,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}>
-      {color && <View style={[styles.dot, { backgroundColor: color }]} />}
-      <ThemedText
-        type={selected ? 'smallBold' : 'small'}
-        themeColor={selected ? 'text' : 'textSecondary'}>
-        {label}
-      </ThemedText>
+      style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.96 : 1 }] })}>
+      <Glass interactive tint={tint} style={styles.chip}>
+        {color && !selected && <View style={[styles.dot, { backgroundColor: color }]} />}
+        <ThemedText
+          type={selected ? 'smallBold' : 'small'}
+          style={{ color: selected ? '#FFFFFF' : theme.text }}>
+          {label}
+        </ThemedText>
+      </Glass>
     </Pressable>
   );
 }
@@ -181,7 +214,7 @@ export function Segmented<T extends string | number>({
 }: SegmentedProps<T>) {
   const theme = useTheme();
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.backgroundSelected }]}>
+    <Glass style={styles.segmented}>
       {options.map((o) => {
         const selected = o.value === value;
         return (
@@ -199,7 +232,7 @@ export function Segmented<T extends string | number>({
           </Pressable>
         );
       })}
-    </View>
+    </Glass>
   );
 }
 
@@ -263,8 +296,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    // Sur le web, la barre d'onglets est en haut de l'écran.
-    paddingTop: Platform.OS === 'web' ? 88 : Spacing.three,
+    paddingTop: Platform.OS === 'web' ? Spacing.five : Spacing.three,
     paddingBottom: BottomTabInset + Spacing.six,
     alignItems: 'center',
   },
@@ -285,7 +317,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   group: {
-    borderRadius: 16,
+    borderRadius: 26,
     overflow: 'hidden',
   },
   separator: {
@@ -322,11 +354,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   button: {
-    minHeight: 52,
-    borderRadius: 14,
+    minHeight: 54,
+    borderRadius: 999,
     paddingHorizontal: Spacing.four,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  glassButton: {
+    minHeight: 48,
+    paddingHorizontal: 22,
   },
   buttonLabel: {
     fontSize: 17,
@@ -346,21 +383,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    overflow: 'hidden',
   },
   segmented: {
     flexDirection: 'row',
-    borderRadius: 10,
-    padding: 3,
+    borderRadius: 999,
+    padding: 4,
+    overflow: 'hidden',
   },
   segment: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 999,
   },
   track: {
     height: 4,
@@ -374,7 +412,7 @@ const styles = StyleSheet.create({
   stepperControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 999,
   },
   stepperValue: {
     minWidth: 64,

@@ -20,6 +20,10 @@ l'objectif quotidien, et pendant une séance on voit le nouveau cerne se dessine
 - **Examens** : liste des examens à venir et passés.
 - **Stats** : « ta semaine en rondelles » (un tronc par jour), répartition par matière, record, historique.
 
+**Design iOS 26.** Barre d'onglets, boutons, puces, sélecteurs et cartes en Liquid Glass
+(`expo-glass-effect`) sur un fond d'ambiance aux couleurs de l'essence choisie. Sur les iOS plus anciens,
+Android et le web, `src/components/glass.tsx` affiche un verre dépoli équivalent.
+
 Toutes les données restent sur le téléphone (AsyncStorage) : aucun serveur, aucun coût d'hébergement.
 
 ## Bûcheur Pro (4,99 €, achat unique)

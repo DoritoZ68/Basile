@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Ambient } from '@/components/ambient';
 import { ThemedText } from '@/components/themed-text';
 import { TreeRings } from '@/components/tree-rings';
 import { Button, Group, Row } from '@/components/ui';
@@ -61,9 +62,10 @@ export function Paywall() {
       animationType="slide"
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
       onRequestClose={close}>
-      <SafeAreaView style={[styles.screen, { backgroundColor: theme.background }]}>
+      <SafeAreaView style={styles.screen}>
+        <Ambient />
         <View style={styles.topBar}>
-          <Button label={isPro ? 'Fermer' : 'Plus tard'} variant="plain" onPress={close} />
+          <Button label={isPro ? 'Fermer' : 'Plus tard'} variant="glass" onPress={close} />
         </View>
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.hero}>

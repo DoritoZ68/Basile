@@ -19,6 +19,8 @@ export const Colors = {
     accentText: '#FFFFFF',
     danger: '#B4483A',
     wood: '#EFE7D8',
+    glass: 'rgba(255,255,255,0.52)',
+    glassEdge: 'rgba(255,255,255,0.85)',
   },
   dark: {
     text: '#ECEBE7',
@@ -31,6 +33,8 @@ export const Colors = {
     accentText: '#0E1A15',
     danger: '#E08A7E',
     wood: '#22211D',
+    glass: 'rgba(48,53,51,0.42)',
+    glassEdge: 'rgba(255,255,255,0.16)',
   },
 } as const;
 
@@ -97,5 +101,6 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+// Sur le web, la barre d'onglets flotte en bas de l'écran comme sur iOS 26.
+export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 96 }) ?? 0;
 export const MaxContentWidth = 800;

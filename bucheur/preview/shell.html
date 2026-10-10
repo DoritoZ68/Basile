@@ -14,6 +14,8 @@
     --on-sage: #ffffff;
     --danger: #b4483a;
     --bezel: #1a1c1e;
+    --glass: rgba(255, 255, 255, 0.55);
+    --glass-edge: rgba(255, 255, 255, 0.85);
     --display: 'Fraunces_600SemiBold', 'Iowan Old Style', Georgia, serif;
     --italic: 'Fraunces_400Regular_Italic', 'Iowan Old Style', Georgia, serif;
     --text: Inter, 'SF Pro Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -29,6 +31,8 @@
       --on-sage: #0e1a15;
       --danger: #e08a7e;
       --bezel: #2a2d2c;
+      --glass: rgba(48, 53, 51, 0.5);
+      --glass-edge: rgba(255, 255, 255, 0.16);
       color-scheme: dark;
     }
   }
@@ -42,6 +46,8 @@
     --on-sage: #0e1a15;
     --danger: #e08a7e;
     --bezel: #2a2d2c;
+    --glass: rgba(48, 53, 51, 0.5);
+    --glass-edge: rgba(255, 255, 255, 0.16);
     color-scheme: dark;
   }
 
@@ -213,15 +219,17 @@
       display: block;
       position: fixed;
       right: 16px;
-      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      top: calc(12px + env(safe-area-inset-top, 0px));
       z-index: 10;
-      padding: 10px 16px;
-      border: 0;
+      padding: 8px 14px;
+      border: 1px solid var(--glass-edge);
       border-radius: 999px;
-      background: var(--ink);
-      color: var(--paper);
-      font: 600 14px var(--text);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      background: var(--glass);
+      -webkit-backdrop-filter: blur(20px) saturate(170%);
+      backdrop-filter: blur(20px) saturate(170%);
+      color: var(--ink);
+      font: 600 13px var(--text);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
       cursor: pointer;
     }
     .panel {
@@ -263,7 +271,7 @@
 <div class="stage">
   <div class="device"><div id="root"></div></div>
 
-  <button class="tools-toggle" id="tools-toggle" type="button" aria-controls="panel">Outils d’aperçu</button>
+  <button class="tools-toggle" id="tools-toggle" type="button" aria-controls="panel">Outils</button>
   <aside class="panel" id="panel" aria-label="Outils d’aperçu">
     <button class="close" id="panel-close" type="button">Fermer</button>
     <div>

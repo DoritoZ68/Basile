@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Glass } from '@/components/glass';
 import { ThemedText } from '@/components/themed-text';
 import { TreeRings } from '@/components/tree-rings';
 import { Chip, Group, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
@@ -64,7 +65,7 @@ export default function StatsScreen() {
 
   return (
     <Screen title="Statistiques">
-      <View style={[styles.summary, { backgroundColor: theme.backgroundElement }]}>
+      <Glass style={styles.summary}>
         <Stat
           value={formatDuration(weekTotal)}
           label={weekOffset === 0 ? 'Cette semaine' : 'Cette semaine-là'}
@@ -73,7 +74,7 @@ export default function StatsScreen() {
         <Stat value={`${streak} j`} label="Série" />
         <View style={[styles.vSeparator, { backgroundColor: theme.border }]} />
         <Stat value={`${best} j`} label="Record" />
-      </View>
+      </Glass>
 
       <View style={styles.weekNav}>
         <SectionTitle>{weekLabel}</SectionTitle>
@@ -91,7 +92,7 @@ export default function StatsScreen() {
           />
         </View>
       </View>
-      <View style={[styles.chartBox, { backgroundColor: theme.backgroundElement }]}>
+      <Glass style={styles.chartBox}>
         <View style={styles.week} onLayout={(e) => setWeekWidth(e.nativeEvent.layout.width)}>
           {cell > 0 &&
             bars.map((b) => (
@@ -119,7 +120,7 @@ export default function StatsScreen() {
         <ThemedText type="small" themeColor="textSecondary">
           Un cerne par séance. Pointillés : ton objectif de {formatDuration(settings.dailyGoalMin)}.
         </ThemedText>
-      </View>
+      </Glass>
 
       {bySubject.length > 0 && (
         <>
@@ -254,7 +255,8 @@ function Stat({ value, label }: { value: string; label: string }) {
 const styles = StyleSheet.create({
   summary: {
     flexDirection: 'row',
-    borderRadius: 16,
+    borderRadius: 26,
+    overflow: 'hidden',
     paddingVertical: Spacing.three,
   },
   vSeparator: {
@@ -275,7 +277,8 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.three,
   },
   chartBox: {
-    borderRadius: 16,
+    borderRadius: 26,
+    overflow: 'hidden',
     padding: Spacing.three,
     gap: Spacing.three,
   },

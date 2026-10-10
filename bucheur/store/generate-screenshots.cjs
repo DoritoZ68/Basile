@@ -5,8 +5,8 @@
  *   node store/generate-screenshots.cjs
  *
  * Nécessite Playwright (`npm install -g playwright && npx playwright install chromium`).
- * La barre d'état et la barre d'onglets iOS sont redessinées : la version web n'affiche pas
- * celles de l'iPhone.
+ * La barre d'état iOS est redessinée ; la barre d'onglets est celle de la version web, une
+ * capsule de verre flottante comme celle d'iOS 26.
  */
 const fs = require('node:fs');
 const http = require('node:http');
@@ -29,7 +29,7 @@ const PORT = 8765;
 const W = 1290;
 const H = 2796;
 const SCREEN = { width: 430, height: 932 }; // points iOS de l'iPhone 6,9"
-const WEB_TAB_OFFSET = 13; // décale le contenu web pour retrouver la marge iOS sous la barre d'état
+const STATUS_BAR = 54; // hauteur de la barre d'état, en points
 
 const SHOTS = [
   {
@@ -152,7 +152,7 @@ function serve() {
 
 async function captureScreen(browser, shot) {
   const ctx = await browser.newContext({
-    viewport: { width: SCREEN.width, height: SCREEN.height + WEB_TAB_OFFSET },
+    viewport: { width: SCREEN.width, height: SCREEN.height - STATUS_BAR },
     deviceScaleFactor: 3,
     colorScheme: shot.scheme,
     locale: 'fr-FR',
@@ -190,23 +190,10 @@ async function captureScreen(browser, shot) {
     await page.getByText(TABS[shot.tab], { exact: true }).first().click();
     await page.waitForTimeout(800);
   }
-  const png = await page.screenshot({
-    clip: { x: 0, y: WEB_TAB_OFFSET, width: SCREEN.width, height: SCREEN.height },
-  });
+  const png = await page.screenshot();
   await ctx.close();
   return png;
 }
-
-const ICONS = [
-  // Minuteur
-  '<circle cx="12" cy="13.5" r="7.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 13.5V9.5M9.5 3h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-  // Livres
-  '<rect x="4" y="4" width="4.5" height="16" rx="1" fill="currentColor"/><rect x="10" y="4" width="4.5" height="16" rx="1" fill="currentColor"/><rect x="15.5" y="5" width="4.5" height="15.5" rx="1" fill="currentColor" transform="rotate(-12 17.75 12.75)"/>',
-  // Calendrier
-  '<rect x="3.5" y="5" width="17" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
-  // Graphique
-  '<rect x="4" y="12" width="4" height="8" rx="1" fill="currentColor"/><rect x="10" y="7" width="4" height="13" rx="1" fill="currentColor"/><rect x="16" y="4" width="4" height="16" rx="1" fill="currentColor"/>',
-];
 
 function frameHtml(shot, screenPng) {
   const dark = shot.scheme === 'dark';
@@ -214,9 +201,6 @@ function frameHtml(shot, screenPng) {
     ? { bg: '#111312', text: '#ECEBE7', sub: '#97958F', screenBg: '#111312', bar: 'rgba(36,40,39,0.86)', accent: '#8FBFA8', inactive: '#97958F', status: '#ECEBE7' }
     : { bg: '#EFEBE3', text: '#1F2328', sub: '#6E6A64', screenBg: '#F7F6F3', bar: 'rgba(255,255,255,0.88)', accent: '#3E6B5A', inactive: '#77736C', status: '#1F2328' };
   const font = (f) => `url("data:font/ttf;base64,${fs.readFileSync(path.join(ROOT, 'node_modules/@expo-google-fonts/fraunces', f)).toString('base64')}")`;
-  const tabs = TABS.map(
-    (label, i) => `<div class="tab ${i === shot.tab ? 'on' : ''}"><svg viewBox="0 0 24 24" width="66" height="66">${ICONS[i]}</svg><span>${label}</span></div>`,
-  ).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @font-face { font-family: Fraunces; font-weight: 600; src: ${font('600SemiBold/Fraunces_600SemiBold.ttf')}; }
     @font-face { font-family: Fraunces; font-style: italic; src: ${font('400Regular_Italic/Fraunces_400Regular_Italic.ttf')}; }
@@ -228,32 +212,35 @@ function frameHtml(shot, screenPng) {
     .phone { position: absolute; left: 50%; top: 620px; width: 1010px; height: 2170px; transform: translateX(-50%);
       background: #1A1C1E; border-radius: 150px; padding: 22px; box-shadow: 0 60px 120px rgba(0,0,0,${dark ? 0.5 : 0.18}); }
     .screen { position: relative; width: 966px; height: 2094px; border-radius: 128px; overflow: hidden; background: ${c.screenBg}; }
-    .screen img { position: absolute; inset: 0; width: 100%; height: 100%; }
-    .status { position: absolute; top: 0; left: 0; right: 0; height: 120px; background: ${c.screenBg};
+    .screen img { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: calc(100% - ${STATUS_BAR * 2.247}px); }
+    .status-bg { position: absolute; top: 0; left: 0; width: 100%; height: ${STATUS_BAR * 2.247 + 1}px; }
+    .status { position: absolute; top: 0; left: 0; right: 0; height: 120px;
       display: flex; align-items: center; justify-content: space-between; padding: 22px 92px 0 112px; color: ${c.status}; font-weight: 600; font-size: 38px; }
     .island { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); width: 280px; height: 82px; background: #000; border-radius: 41px; }
     .icons { display: flex; gap: 14px; align-items: center; }
-    .fade { position: absolute; left: 0; right: 0; bottom: 0; height: 330px;
-      background: linear-gradient(to bottom, transparent, ${c.screenBg} 55%); }
-    .tabbar { position: absolute; left: 44px; right: 44px; bottom: 58px; height: 150px; border-radius: 75px; background: ${c.bar};
-      backdrop-filter: blur(30px); box-shadow: 0 10px 40px rgba(0,0,0,0.12); display: flex; align-items: center; justify-content: space-around; padding: 0 16px; }
-    .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; color: ${c.inactive}; font-size: 25px; font-weight: 500; width: 200px; padding: 14px 0; border-radius: 60px; }
-    .tab.on { color: ${c.accent}; background: ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
     .home { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 320px; height: 12px; border-radius: 6px; background: ${c.status}; opacity: 0.9; }
   </style></head><body>
     <div class="head"><h1>${shot.title}</h1><p>${shot.subtitle}</p></div>
     <div class="phone"><div class="screen">
-      <img src="data:image/png;base64,${screenPng.toString('base64')}">
+      <img id="shot" src="data:image/png;base64,${screenPng.toString('base64')}">
+      <canvas class="status-bg" id="status-bg" width="966" height="${Math.round(STATUS_BAR * 2.247) + 1}"></canvas>
       <div class="status"><span>9:41</span><div class="icons">
         <svg width="52" height="32" viewBox="0 0 52 32"><g fill="${c.status}"><rect x="0" y="20" width="9" height="12" rx="2"/><rect x="14" y="14" width="9" height="18" rx="2"/><rect x="28" y="7" width="9" height="25" rx="2"/><rect x="42" y="0" width="9" height="32" rx="2"/></g></svg>
         <svg width="46" height="34" viewBox="0 0 24 18"><path d="M12 17.5 15.2 13.6a4.8 4.8 0 0 0-6.4 0Zm-6-7.2 1.9 2.3a6.4 6.4 0 0 1 8.2 0l1.9-2.3a9.4 9.4 0 0 0-12 0ZM1.9 5.4l1.9 2.3a12.8 12.8 0 0 1 16.4 0l1.9-2.3a15.8 15.8 0 0 0-20.2 0Z" fill="${c.status}"/></svg>
         <svg width="74" height="34" viewBox="0 0 74 34"><rect x="1.5" y="1.5" width="62" height="31" rx="9" fill="none" stroke="${c.status}" stroke-opacity="0.4" stroke-width="3"/><rect x="7" y="7" width="45" height="20" rx="5" fill="${c.status}"/><rect x="67" y="11" width="5" height="12" rx="2.5" fill="${c.status}" fill-opacity="0.4"/></svg>
       </div></div>
       <div class="island"></div>
-      <div class="fade"></div>
-      <div class="tabbar">${tabs}</div>
       <div class="home"></div>
     </div></div>
+    <script>
+      // Prolonge la première ligne de l'écran sous la barre d'état, pour un fond continu.
+      const img = document.getElementById('shot');
+      const draw = () => {
+        const c = document.getElementById('status-bg');
+        c.getContext('2d').drawImage(img, 0, 0, img.naturalWidth, 1, 0, 0, c.width, c.height);
+      };
+      img.complete ? draw() : img.addEventListener('load', draw);
+    </script>
   </body></html>`;
 }
 

@@ -1,4 +1,5 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { Platform } from 'react-native';
 
 import { useTheme } from '@/hooks/use-theme';
 
@@ -6,8 +7,10 @@ export default function AppTabs() {
   const colors = useTheme();
 
   return (
+    // Sur iOS 26, pas de couleur de fond : la barre reste en Liquid Glass et se réduit au défilement.
     <NativeTabs
-      backgroundColor={colors.background}
+      backgroundColor={Platform.OS === 'android' ? colors.background : undefined}
+      minimizeBehavior="onScrollDown"
       indicatorColor={colors.backgroundSelected}
       tintColor={colors.accent}
       labelStyle={{ selected: { color: colors.accent } }}>

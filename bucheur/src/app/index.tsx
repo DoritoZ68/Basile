@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Ambient } from '@/components/ambient';
 import { ThemedText } from '@/components/themed-text';
 import { TreeRings, type RingSession } from '@/components/tree-rings';
 import { Button, Chip, Group, Row, Screen, Segmented, SectionTitle } from '@/components/ui';
@@ -176,7 +177,8 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
     : FOCUS_LINES[Math.floor(timer.startedAt / 1000) % FOCUS_LINES.length];
 
   return (
-    <SafeAreaView style={[styles.immersive, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={styles.immersive}>
+      <Ambient />
       {Platform.OS !== 'web' && <KeepAwake />}
       <View style={styles.immersiveTop}>
         {!isBreak && subject && <View style={[styles.dot, { backgroundColor: subject.color }]} />}
@@ -209,15 +211,16 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
 
       <View style={styles.actions}>
         {isBreak ? (
-          <Button label="Passer la pause" variant="plain" onPress={() => stopTimer(false)} />
+          <Button label="Passer la pause" variant="glass" onPress={() => stopTimer(false)} />
         ) : (
           <>
             <Button
-              label={confirmAbandon ? 'Vraiment abandonner ?' : 'Abandonner'}
-              variant="danger"
+              label={confirmAbandon ? 'Vraiment ?' : 'Abandonner'}
+              variant="glass"
+              color={theme.danger}
               onPress={() => (confirmAbandon ? stopTimer(false) : setConfirmAbandon(true))}
             />
-            <Button label="Terminer" variant="plain" onPress={() => stopTimer(true)} />
+            <Button label="Terminer" variant="glass" onPress={() => stopTimer(true)} />
           </>
         )}
       </View>
@@ -226,7 +229,6 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
 }
 
 function Completed() {
-  const theme = useTheme();
   const { data, justCompleted, dismissCompleted, startBreak } = useStore();
   const now = useNow(60_000);
   if (!justCompleted) return null;
@@ -236,7 +238,8 @@ function Completed() {
   const left = data.settings.dailyGoalMin - today;
 
   return (
-    <SafeAreaView style={[styles.immersive, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={styles.immersive}>
+      <Ambient />
       <TreeRings
         size={220}
         sessions={todayRings(data, now)}
@@ -257,7 +260,7 @@ function Completed() {
       </View>
       <View style={styles.completedActions}>
         <Button label={`Pause de ${BREAK_MIN} min`} onPress={() => startBreak(BREAK_MIN)} />
-        <Button label="Continuer sans pause" variant="plain" onPress={dismissCompleted} />
+        <Button label="Continuer sans pause" variant="glass" onPress={dismissCompleted} />
       </View>
     </SafeAreaView>
   );
@@ -324,7 +327,7 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    gap: Spacing.four,
+    gap: Spacing.three,
   },
   completed: {
     alignItems: 'center',
