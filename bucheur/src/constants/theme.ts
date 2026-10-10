@@ -18,6 +18,7 @@ export const Colors = {
     accent: '#3E6B5A',
     accentText: '#FFFFFF',
     danger: '#B4483A',
+    wood: '#EFE7D8',
   },
   dark: {
     text: '#ECEBE7',
@@ -29,6 +30,7 @@ export const Colors = {
     accent: '#8FBFA8',
     accentText: '#0E1A15',
     danger: '#E08A7E',
+    wood: '#22211D',
   },
 } as const;
 
@@ -70,6 +72,12 @@ export const Fonts = Platform.select({
     mono: 'var(--font-mono)',
   },
 });
+
+/** Police des titres : Fraunces, chargée dans `app/_layout.tsx`. */
+export const Display = {
+  title: 'Fraunces_600SemiBold',
+  italic: 'Fraunces_400Regular_Italic',
+} as const;
 
 export const Spacing = {
   half: 2,

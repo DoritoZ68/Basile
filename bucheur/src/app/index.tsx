@@ -1,18 +1,18 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ProgressRing } from '@/components/progress-ring';
 import { ThemedText } from '@/components/themed-text';
+import { TreeRings, type RingSession } from '@/components/tree-rings';
 import { Button, Chip, Group, Row, Screen, Segmented, SectionTitle } from '@/components/ui';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, Display, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import { currentStreak, daysUntil, formatClock, formatDuration, minutesOn } from '@/lib/stats';
+import { currentStreak, dayKey, daysUntil, formatClock, formatDuration, minutesOn } from '@/lib/stats';
 import { useStore } from '@/lib/store';
-import type { ActiveTimer } from '@/lib/types';
+import type { ActiveTimer, AppData } from '@/lib/types';
 
 const DURATIONS = [15, 25, 45, 60].map((d) => ({ value: d, label: `${d} min` }));
 const BREAK_MIN = 5;
@@ -26,6 +26,19 @@ const FOCUS_LINES = [
   'Ton téléphone peut se reposer. Toi, tu avances.',
 ];
 
+/** Les séances du jour, dans l'ordre, sous forme de cernes. */
+function todayRings({ sessions, subjects }: AppData, now: number): RingSession[] {
+  const today = dayKey(now);
+  return sessions
+    .filter((s) => dayKey(s.startedAt) === today)
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .map((s) => ({
+      key: s.id,
+      minutes: s.durationMin,
+      color: subjects.find((sub) => sub.id === s.subjectId)?.color ?? '#9A968F',
+    }));
+}
+
 export default function FocusScreen() {
   const { data, justCompleted } = useStore();
   const timer = data.activeTimer;
@@ -37,7 +50,6 @@ export default function FocusScreen() {
 
 function Idle() {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
   const { data, startTimer, updateSettings } = useStore();
   const { subjects, sessions, exams, settings } = data;
   const now = useNow(60_000);
@@ -45,6 +57,7 @@ function Idle() {
   const selected = subjects.find((s) => s.id === pickedId) ?? subjects[0];
 
   const today = minutesOn(sessions, now);
+  const rings = todayRings(data, now);
   const streak = currentStreak(sessions, now);
   const nextExam = exams
     .map((e) => ({ ...e, days: daysUntil(e.date, now) }))
@@ -71,17 +84,21 @@ function Idle() {
   return (
     <Screen subtitle={dateLabel} title="Prêt à réviser ?">
       <View style={styles.ringWrap}>
-        <ProgressRing
-          size={ringSize(width, 260, 120)}
-          strokeWidth={6}
-          progress={0}
-          color={theme.accent}
-          trackColor={theme.backgroundSelected}>
-          <ThemedText style={styles.clock}>{formatClock(settings.focusMin * 60)}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {selected?.name}
+        <TreeRings
+          size={240}
+          sessions={rings}
+          goalMinutes={settings.dailyGoalMin}
+        />
+        <View style={styles.trunkCaption}>
+          <ThemedText style={styles.trunkValue}>
+            {rings.length === 0 ? 'Ton premier cerne t’attend.' : formatDuration(today)}
           </ThemedText>
-        </ProgressRing>
+          <ThemedText type="small" themeColor="textSecondary">
+            {rings.length === 0
+              ? `Objectif du jour : ${formatDuration(settings.dailyGoalMin)}`
+              : `sur ${formatDuration(settings.dailyGoalMin)} · ${rings.length} cerne${rings.length > 1 ? 's' : ''} aujourd’hui`}
+          </ThemedText>
+        </View>
       </View>
 
       <View style={styles.chips}>
@@ -103,18 +120,13 @@ function Idle() {
       />
 
       <Button
-        label="Commencer"
+        label={`Commencer · ${settings.focusMin} min`}
         disabled={!selected}
         onPress={() => selected && startTimer(selected.id, settings.focusMin)}
       />
 
-      <SectionTitle>Aujourd&apos;hui</SectionTitle>
+      <SectionTitle>En ce moment</SectionTitle>
       <Group>
-        <Row
-          label="Temps de révision"
-          value={`${formatDuration(today)} / ${formatDuration(settings.dailyGoalMin)}`}
-          valueColor={today >= settings.dailyGoalMin ? theme.accent : undefined}
-        />
         <Row
           label="Série"
           value={streak === 0 ? 'à lancer' : `${streak} jour${streak > 1 ? 's' : ''}`}
@@ -132,11 +144,6 @@ function Idle() {
   );
 }
 
-/** Taille de l'anneau ; la largeur vaut 0 pendant le pré-rendu web. */
-function ringSize(width: number, max: number, margin: number) {
-  return Math.max(200, Math.min(max, width - margin));
-}
-
 /** Garde l'écran allumé pendant une séance (sans effet sur le web). */
 function KeepAwake() {
   useKeepAwake();
@@ -145,7 +152,6 @@ function KeepAwake() {
 
 function ActiveSession({ timer }: { timer: ActiveTimer }) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
   const { data, stopTimer } = useStore();
   const now = useNow(1000);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
@@ -168,14 +174,23 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
         </ThemedText>
       </View>
 
-      <ProgressRing
-        size={ringSize(width, 300, 64)}
-        strokeWidth={4}
-        progress={(now - timer.startedAt) / totalMs}
-        color={isBreak ? theme.textSecondary : (subject?.color ?? theme.accent)}
-        trackColor={theme.backgroundSelected}>
+      <View style={styles.sessionCenter}>
+        <TreeRings
+          size={260}
+          sessions={todayRings(data, now)}
+          goalMinutes={data.settings.dailyGoalMin}
+          growing={
+            isBreak
+              ? undefined
+              : {
+                  color: subject?.color ?? theme.accent,
+                  minutes: timer.durationMin,
+                  progress: (now - timer.startedAt) / totalMs,
+                }
+          }
+        />
         <ThemedText style={styles.bigClock}>{formatClock(remaining)}</ThemedText>
-      </ProgressRing>
+      </View>
 
       <ThemedText themeColor="textSecondary" style={styles.line}>
         {line}
@@ -211,11 +226,16 @@ function Completed() {
 
   return (
     <SafeAreaView style={[styles.immersive, { backgroundColor: theme.background }]}>
+      <TreeRings
+        size={220}
+        sessions={todayRings(data, now)}
+        goalMinutes={data.settings.dailyGoalMin}
+      />
       <View style={styles.completed}>
         <ThemedText type="small" themeColor="textSecondary" style={styles.caps}>
           Séance terminée
         </ThemedText>
-        <ThemedText style={styles.completedTitle}>Bien joué.</ThemedText>
+        <ThemedText style={styles.completedTitle}>Un cerne de plus.</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.line}>
           {formatDuration(justCompleted.durationMin)} de {subject?.name ?? 'révision'} en plus.{'\n'}
           {left > 0
@@ -234,13 +254,22 @@ function Completed() {
 const styles = StyleSheet.create({
   ringWrap: {
     alignItems: 'center',
-    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+    paddingBottom: Spacing.two,
   },
-  clock: {
-    fontSize: 52,
-    lineHeight: 60,
-    fontWeight: 200,
-    fontVariant: ['tabular-nums'],
+  trunkCaption: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  trunkValue: {
+    fontFamily: Display.italic,
+    fontWeight: 'normal',
+    fontSize: 24,
+    lineHeight: 32,
+  },
+  sessionCenter: {
+    alignItems: 'center',
+    gap: Spacing.three,
   },
   chips: {
     flexDirection: 'row',
@@ -272,8 +301,8 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   bigClock: {
-    fontSize: 68,
-    lineHeight: 78,
+    fontSize: 64,
+    lineHeight: 74,
     fontWeight: 200,
     fontVariant: ['tabular-nums'],
   },
@@ -290,10 +319,10 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   completedTitle: {
-    fontSize: 40,
+    fontFamily: Display.italic,
+    fontWeight: 'normal',
+    fontSize: 38,
     lineHeight: 48,
-    fontWeight: 300,
-    letterSpacing: -0.5,
   },
   completedActions: {
     width: '100%',

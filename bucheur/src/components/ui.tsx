@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, Display, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type ScreenProps = {
@@ -270,10 +270,12 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   screenTitle: {
-    fontSize: 32,
-    lineHeight: 38,
-    fontWeight: 700,
-    letterSpacing: -0.5,
+    fontFamily: Display.title,
+    // Avec une police personnalisée, un fontWeight explicite peut faire retomber sur la police système.
+    fontWeight: 'normal',
+    fontSize: 34,
+    lineHeight: 42,
+    letterSpacing: -0.3,
   },
   group: {
     borderRadius: 16,

@@ -5,6 +5,10 @@ Développée avec [Expo](https://expo.dev) (React Native), elle se construit et 
 
 ## Fonctionnalités
 
+**La signature : les cernes.** Chaque séance terminée ajoute un cerne au tronc du jour, dans la couleur
+de la matière ; son épaisseur dépend de la durée. Le tronc grandit jusqu'au cercle en pointillés de
+l'objectif quotidien, et pendant une séance on voit le nouveau cerne se dessiner.
+
 - **Focus** : minuteur de révision (15, 25, 45 ou 60 min) par matière, avec un anneau de progression.
   Pendant la séance, l'écran passe en mode immersif (rien d'autre à l'écran, écran maintenu allumé).
   La séance est enregistrée automatiquement à la fin, même si l'app a été fermée, et une notification
@@ -14,7 +18,7 @@ Développée avec [Expo](https://expo.dev) (React Native), elle se construit et 
 - **Objectif du jour** et **compte à rebours** jusqu'au prochain examen (J-12…).
 - **Matières** : couleur et objectif hebdomadaire, avec la progression de la semaine.
 - **Examens** : liste des examens à venir et passés.
-- **Stats** : graphique de la semaine, répartition par matière, meilleure série, historique.
+- **Stats** : « ta semaine en rondelles » (un tronc par jour), répartition par matière, record, historique.
 
 Toutes les données restent sur le téléphone (AsyncStorage) : aucun serveur, aucun coût d'hébergement.
 
@@ -44,15 +48,14 @@ npx expo-doctor
 1. Inscris-toi à l'**Apple Developer Program** (99 €/an), puis crée un compte gratuit sur [expo.dev](https://expo.dev).
 2. Vérifie que l'identifiant `ios.bundleIdentifier` dans `app.json` (`com.bucheur.app`) est libre ;
    sinon remplace-le, par exemple par `com.tonnom.bucheur`.
-3. Remplace l'icône (`assets/expo.icon`, `assets/images/icon.png`) et l'image de lancement par celles de l'app.
-4. Compile et envoie l'app avec EAS (offre gratuite) :
+3. Compile et envoie l'app avec EAS (offre gratuite) :
    ```bash
    npx eas-cli@latest login
    npx eas-cli@latest build:configure
    npx eas-cli@latest build --platform ios --profile production
    npx eas-cli@latest submit --platform ios
    ```
-5. Dans [App Store Connect](https://appstoreconnect.apple.com), ajoute les captures d'écran, la description,
+4. Dans [App Store Connect](https://appstoreconnect.apple.com), ajoute les captures d'écran, la description,
    une URL de politique de confidentialité (« aucune donnée collectée ») et envoie l'app en vérification.
 
 ## Structure
@@ -62,4 +65,6 @@ src/app/            écrans (un fichier = un onglet) : index (Focus), matieres, 
 src/components/     composants d'interface (ui.tsx) et barre d'onglets
 src/lib/store.tsx   état de l'app et sauvegarde locale
 src/lib/stats.ts    calculs : séries, semaines, comptes à rebours, formats
+src/lib/rings.ts    tracé des cernes (partagé par l'app et l'icône)
+assets/icon/        sources SVG de l'icône et de l'écran de lancement
 ```

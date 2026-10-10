@@ -1,3 +1,6 @@
+import { Fraunces_400Regular_Italic } from '@expo-google-fonts/fraunces/400Regular_Italic';
+import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -10,20 +13,21 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [fontsLoaded, fontError] = useFonts({ Fraunces_600SemiBold, Fraunces_400Regular_Italic });
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StoreProvider>
-        <HideSplashWhenLoaded />
+        <HideSplashWhenReady ready={fontsLoaded || fontError !== null} />
         <AppTabs />
       </StoreProvider>
     </ThemeProvider>
   );
 }
 
-function HideSplashWhenLoaded() {
+function HideSplashWhenReady({ ready }: { ready: boolean }) {
   const { loaded } = useStore();
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync().catch(() => {});
-  }, [loaded]);
+    if (loaded && ready) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded, ready]);
   return null;
 }
