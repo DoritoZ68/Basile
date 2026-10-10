@@ -85,11 +85,8 @@ Une clé fonctionne sur 5 appareils au maximum, et un achat remboursé désactiv
    - l'**adresse de la page**, du type `https://ton-pseudo.gumroad.com/l/bucheur` (bouton *Share*).
 
 ### 2. Configurer l'app
-```bash
-cd bucheur
-cp .env.example .env.local
-nano .env.local      # colle l'ID du produit et l'adresse de la page Gumroad
-```
+L'ID du produit et l'adresse de la page sont dans `bucheur/.env.production` (déjà rempli pour
+`basilef.gumroad.com/l/osvyuf`). Ces valeurs sont publiques : elles peuvent rester dans le dépôt.
 
 ### 3. Construire et mettre en ligne (gratuit)
 ```bash
