@@ -93,8 +93,14 @@ npx expo-doctor
    npx eas-cli@latest build --platform ios --profile production
    npx eas-cli@latest submit --platform ios
    ```
-4. Dans [App Store Connect](https://appstoreconnect.apple.com), ajoute les captures d'écran, la description,
-   une URL de politique de confidentialité (« aucune donnée collectée ») et envoie l'app en vérification.
+4. Dans [App Store Connect](https://appstoreconnect.apple.com), remplis la fiche avec le contenu du dossier
+   `store/` et envoie l'app en vérification :
+   - `store/fiche-app-store.md` : nom, sous-titre, description, mots-clés, achat intégré, confidentialité,
+     notes pour la vérification et liste de vérification finale ;
+   - `store/screenshots/` : captures iPhone 6,9" (1290 × 2796) et capture de l'achat intégré ;
+   - `store/politique-de-confidentialite.md` : à publier en ligne (GitHub Pages, Notion…) pour obtenir l'URL demandée.
+
+   Pour refaire les captures après une modification : `npx expo export --platform web && node store/generate-screenshots.cjs`.
 
 ## Structure
 
