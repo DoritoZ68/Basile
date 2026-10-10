@@ -76,12 +76,13 @@ Une clé fonctionne sur 5 appareils au maximum, et un achat remboursé désactiv
    bancaire dans *Settings › Payments*.
 2. *Products › New product* › **Digital product**, nom « Bûcheur Pro », prix **4,99 €**
    (choisis l'euro comme devise).
-3. Dans le produit, active **« Generate a unique license key per sale »**.
-4. Dans le contenu du produit, écris par exemple : « Ouvre Bûcheur › Réglages › Bûcheur Pro et colle
-   ta clé de licence. »
+3. Dans l'onglet **Content** du produit, clique sur **Insert › License key** : chaque acheteur
+   recevra une clé unique.
+4. Sous ce bloc, écris par exemple : « Ouvre Bûcheur › Réglages › Bûcheur Pro et colle ta clé de
+   licence. »
 5. Publie le produit, puis note :
-   - l'**ID du produit** (affiché dans la section *License key* du produit) ;
-   - l'**adresse de la page**, du type `https://ton-pseudo.gumroad.com/l/bucheur`.
+   - l'**ID du produit**, affiché dans le bloc *License key* pendant que tu modifies le contenu ;
+   - l'**adresse de la page**, du type `https://ton-pseudo.gumroad.com/l/bucheur` (bouton *Share*).
 
 ### 2. Configurer l'app
 ```bash
