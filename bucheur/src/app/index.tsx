@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -12,19 +13,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ambient } from '@/components/ambient';
+import { ProgressGauge } from '@/components/progress-gauge';
 import { FREE_MAX_FOCUS, SettingsButton } from '@/components/settings-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { TreeRings, type RingSession } from '@/components/tree-rings';
-import {
-  Button,
-  Chip,
-  Group,
-  Row,
-  Screen,
-  Segmented,
-  SectionTitle,
-  Stepper,
-} from '@/components/ui';
+import { Button, Chip, Group, Row, Screen, Segmented, SectionTitle } from '@/components/ui';
 import { BottomTabInset, Display, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
@@ -41,6 +34,8 @@ import { timerElapsed, timerEndsAt, useStore } from '@/lib/store';
 import type { ActiveTimer, AppData } from '@/lib/types';
 
 const PRESETS = [15, 25, 45, 60];
+/** Bleu clair de la jauge pendant une pause. */
+const BREAK_COLOR = '#7FB2D9';
 /** Valeur du segment « Perso » dans le choix de durée. */
 const CUSTOM = -1;
 
@@ -127,11 +122,11 @@ function Idle() {
         <TreeRings size={240} sessions={rings} goalMinutes={settings.dailyGoalMin} />
         <View style={styles.trunkCaption}>
           <ThemedText style={styles.trunkValue}>
-            {rings.length === 0 ? 'Ton premier cerne t’attend.' : formatDuration(today)}
+            {rings.length === 0 ? 'Chaque minute compte.' : formatDuration(today)}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {rings.length === 0
-              ? `Objectif du jour : ${formatDuration(settings.dailyGoalMin)}`
+              ? `Objectif du jour : ${formatDuration(settings.dailyGoalMin)} · lance ta première séance`
               : `sur ${formatDuration(settings.dailyGoalMin)} · ${rings.length} cerne${rings.length > 1 ? 's' : ''} aujourd’hui`}
           </ThemedText>
         </View>
@@ -159,15 +154,11 @@ function Idle() {
       />
       {custom && (
         <Group>
-          <Stepper
-            label="Durée personnalisée"
-            value={formatDuration(settings.focusMin)}
-            onMinus={() => updateSettings({ focusMin: Math.max(5, settings.focusMin - 5) })}
-            onPlus={() => {
-              const next = Math.min(120, settings.focusMin + 5);
-              if (next > FREE_MAX_FOCUS && !isPro) openPaywall();
-              else updateSettings({ focusMin: next });
-            }}
+          <DurationInput
+            minutes={settings.focusMin}
+            max={isPro ? 120 : FREE_MAX_FOCUS}
+            onChange={(focusMin) => updateSettings({ focusMin })}
+            onOverLimit={openPaywall}
           />
         </Group>
       )}
@@ -184,16 +175,91 @@ function Idle() {
           label="Série"
           value={streak === 0 ? 'à lancer' : `${streak} jour${streak > 1 ? 's' : ''}`}
         />
-        {nextExam && (
+        {nextExam ? (
           <Row
             label={nextExam.name}
             detail="Prochain examen"
             value={nextExam.days === 0 ? 'Aujourd’hui' : `J-${nextExam.days}`}
             valueColor={theme.accent}
           />
+        ) : (
+          <Row
+            label="Aucun examen programmé"
+            detail="Ajoute-en un pour suivre le compte à rebours."
+            value="Ajouter ›"
+            valueColor={theme.accent}
+            onPress={() => router.navigate('/examens')}
+          />
         )}
       </Group>
     </Screen>
+  );
+}
+
+type DurationInputProps = {
+  minutes: number;
+  /** Durée maximale autorisée (60 min sans Bûcheur Pro, 2 h avec). */
+  max: number;
+  onChange: (minutes: number) => void;
+  /** Appelé quand l'utilisateur dépasse la limite gratuite. */
+  onOverLimit: () => void;
+};
+
+/** Durée personnalisée : champ en minutes, avec − et + par pas de 5. */
+function DurationInput({ minutes, max, onChange, onOverLimit }: DurationInputProps) {
+  const theme = useTheme();
+  const [text, setText] = useState(String(minutes));
+  const apply = (value: number) => {
+    if (Number.isNaN(value)) return setText(String(minutes));
+    if (value > max) {
+      if (max < 120) onOverLimit();
+      value = max;
+    }
+    const clamped = Math.max(5, Math.round(value));
+    onChange(clamped);
+    setText(String(clamped));
+  };
+  const step = (delta: number) => apply(minutes + delta);
+
+  return (
+    <View style={styles.durationRow}>
+      <ThemedText style={styles.flex}>Durée en minutes</ThemedText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Diminuer"
+        onPress={() => step(-5)}
+        style={({ pressed }) => [
+          styles.stepButton,
+          { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
+        ]}>
+        <ThemedText style={styles.stepLabel}>−</ThemedText>
+      </Pressable>
+      <TextInput
+        value={text}
+        onChangeText={(t) => setText(t.replace(/[^0-9]/g, '').slice(0, 3))}
+        onEndEditing={() => apply(parseInt(text, 10))}
+        onBlur={() => apply(parseInt(text, 10))}
+        onSubmitEditing={() => apply(parseInt(text, 10))}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+        accessibilityLabel="Durée de la séance en minutes"
+        style={[
+          styles.durationInput,
+          { color: theme.text, backgroundColor: theme.backgroundSelected },
+        ]}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Augmenter"
+        onPress={() => step(5)}
+        style={({ pressed }) => [
+          styles.stepButton,
+          { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
+        ]}>
+        <ThemedText style={styles.stepLabel}>+</ThemedText>
+      </Pressable>
+    </View>
   );
 }
 
@@ -223,70 +289,79 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
         : null;
 
   return (
-    <SafeAreaView style={styles.immersive}>
+    <SafeAreaView style={styles.flex}>
       <Ambient />
       {Platform.OS !== 'web' && settings.keepAwake && <KeepAwake />}
-      <View style={styles.immersiveTop}>
-        {!isBreak && subject && <View style={[styles.dot, { backgroundColor: subject.color }]} />}
-        <ThemedText type="small" themeColor="textSecondary" style={styles.caps}>
-          {isBreak ? 'Pause' : (subject?.name ?? 'Révision')}
-        </ThemedText>
-      </View>
-
-      <View style={styles.sessionCenter}>
-        <TreeRings
-          size={260}
-          sessions={todayRings(data, now)}
-          goalMinutes={settings.dailyGoalMin}
-          growing={
-            isBreak
-              ? undefined
-              : {
-                  color: subject?.color ?? theme.accent,
-                  minutes: timer.durationMin,
-                  progress: timerElapsed(timer, now) / totalMs,
-                }
-          }
-        />
-        <ThemedText
-          themeColor={paused ? 'textSecondary' : 'text'}
-          style={styles.bigClock}
-          accessibilityLabel={`${formatClock(remaining)} restantes${paused ? ', en pause' : ''}`}>
-          {formatClock(remaining)}
-        </ThemedText>
-      </View>
-
-      {line && (
-        <ThemedText themeColor="textSecondary" style={styles.line}>
-          {line}
-        </ThemedText>
-      )}
-
-      <View style={styles.controls}>
-        <View style={styles.actions}>
-          <Button
-            label={paused ? 'Reprendre' : 'Pause'}
-            variant={paused ? 'primary' : 'glass'}
-            onPress={() => (paused ? resumeTimer() : pauseTimer())}
-          />
-          <Button label="+5 min" variant="glass" onPress={() => extendTimer(5)} />
+      <ScrollView contentContainerStyle={styles.immersive} showsVerticalScrollIndicator={false}>
+        <View style={styles.immersiveTop}>
+          {!isBreak && subject && <View style={[styles.dot, { backgroundColor: subject.color }]} />}
+          <ThemedText type="small" themeColor="textSecondary" style={styles.caps}>
+            {isBreak ? 'Pause' : (subject?.name ?? 'Révision')}
+          </ThemedText>
         </View>
-        <View style={styles.actions}>
-          {isBreak ? (
-            <Button label="Passer la pause" variant="glass" onPress={() => stopTimer(false)} />
-          ) : (
-            <>
-              <Button
-                label={confirmAbandon ? 'Vraiment ?' : 'Abandonner'}
-                variant="glass"
-                color={theme.danger}
-                onPress={() => (confirmAbandon ? stopTimer(false) : setConfirmAbandon(true))}
-              />
-              <Button label="Terminer" variant="glass" onPress={() => stopTimer(true)} />
-            </>
-          )}
+
+        <View style={styles.sessionCenter}>
+          <View style={styles.gaugeWrap}>
+            <ProgressGauge
+              size={240}
+              progress={timerElapsed(timer, now) / totalMs}
+              color={isBreak ? BREAK_COLOR : (subject?.color ?? theme.accent)}
+            />
+            <TreeRings
+              size={186}
+              sessions={todayRings(data, now)}
+              goalMinutes={settings.dailyGoalMin}
+              growing={
+                isBreak
+                  ? undefined
+                  : {
+                      color: subject?.color ?? theme.accent,
+                      minutes: timer.durationMin,
+                      progress: timerElapsed(timer, now) / totalMs,
+                    }
+              }
+            />
+          </View>
+          <ThemedText
+            themeColor={paused ? 'textSecondary' : 'text'}
+            style={styles.bigClock}
+            accessibilityLabel={`${formatClock(remaining)} restantes${paused ? ', en pause' : ''}`}>
+            {formatClock(remaining)}
+          </ThemedText>
         </View>
-      </View>
+
+        {line && (
+          <ThemedText themeColor="textSecondary" style={styles.line}>
+            {line}
+          </ThemedText>
+        )}
+
+        <View style={styles.controls}>
+          <View style={styles.actions}>
+            <Button
+              label={paused ? 'Reprendre' : 'Pause'}
+              variant={paused ? 'primary' : 'glass'}
+              onPress={() => (paused ? resumeTimer() : pauseTimer())}
+            />
+            <Button label="+5 min" variant="glass" onPress={() => extendTimer(5)} />
+          </View>
+          <View style={styles.actions}>
+            {isBreak ? (
+              <Button label="Passer la pause" variant="glass" onPress={() => stopTimer(false)} />
+            ) : (
+              <>
+                <Button
+                  label={confirmAbandon ? 'Vraiment ?' : 'Abandonner'}
+                  variant="glass"
+                  color={theme.danger}
+                  onPress={() => (confirmAbandon ? stopTimer(false) : setConfirmAbandon(true))}
+                />
+                <Button label="Terminer" variant="glass" onPress={() => stopTimer(true)} />
+              </>
+            )}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -391,6 +466,39 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 32,
   },
+  gaugeWrap: {
+    width: 240,
+    height: 240,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 52,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+  },
+  stepLabel: {
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  durationInput: {
+    width: 64,
+    fontSize: 20,
+    fontWeight: 600,
+    textAlign: 'center',
+    borderRadius: 12,
+    paddingVertical: 6,
+  },
+  stepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sessionCenter: {
     alignItems: 'center',
     gap: Spacing.three,
@@ -412,12 +520,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   immersive: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.five,
+    gap: Spacing.three,
     paddingHorizontal: Spacing.four,
-    paddingBottom: BottomTabInset,
+    paddingTop: Spacing.three,
+    paddingBottom: BottomTabInset + Spacing.four,
   },
   immersiveTop: {
     flexDirection: 'row',
@@ -425,8 +534,8 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   bigClock: {
-    fontSize: 64,
-    lineHeight: 74,
+    fontSize: 54,
+    lineHeight: 60,
     fontWeight: 200,
     fontVariant: ['tabular-nums'],
   },

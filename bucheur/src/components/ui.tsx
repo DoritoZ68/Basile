@@ -1,4 +1,5 @@
-import { Children, Fragment, type ReactNode } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { Children, Fragment, useCallback, type ReactNode } from 'react';
 import {
   Platform,
   Pressable,
@@ -9,6 +10,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ambient } from '@/components/ambient';
@@ -26,6 +33,21 @@ type ScreenProps = {
 };
 
 export function Screen({ title, subtitle, action, children }: ScreenProps) {
+  // Sur le web, l'écran apparaît en fondu léger quand on change d'onglet. Sur iPhone, la barre
+  // d'onglets native gère déjà la transition (et l'opacité perturberait le Liquid Glass).
+  const enter = useSharedValue(1);
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'web') return;
+      enter.set(0);
+      enter.set(withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }));
+    }, [enter]),
+  );
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: 0.4 + 0.6 * enter.get(),
+    transform: [{ translateY: (1 - enter.get()) * 10 }],
+  }));
+
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <Ambient />
@@ -33,7 +55,7 @@ export function Screen({ title, subtitle, action, children }: ScreenProps) {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag">
-        <View style={styles.inner}>
+        <Animated.View style={[styles.inner, enterStyle]}>
           {(title || subtitle) && (
             <View style={styles.header}>
               <View style={styles.headerText}>
@@ -48,7 +70,7 @@ export function Screen({ title, subtitle, action, children }: ScreenProps) {
             </View>
           )}
           {children}
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );

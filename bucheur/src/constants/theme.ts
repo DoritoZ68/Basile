@@ -13,7 +13,8 @@ export const Colors = {
     background: '#F7F6F3',
     backgroundElement: '#FFFFFF',
     backgroundSelected: '#EEECE7',
-    textSecondary: '#77736C',
+    // Contraste ≥ 5:1 sur le fond et les cartes (WCAG AA).
+    textSecondary: '#635F58',
     border: '#E4E1DB',
     accent: '#3E6B5A',
     accentText: '#FFFFFF',
@@ -28,7 +29,7 @@ export const Colors = {
     background: '#111312',
     backgroundElement: '#1A1D1C',
     backgroundSelected: '#262A29',
-    textSecondary: '#97958F',
+    textSecondary: '#B9B6AF',
     border: '#2B2F2E',
     accent: '#8FBFA8',
     accentText: '#0E1A15',

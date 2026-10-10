@@ -20,6 +20,9 @@ const SHIFTS = [
   { label: '+30', days: 30 },
 ];
 
+/** Un nom d'examen doit être explicite (« Bac blanc de maths » plutôt que « fdf »). */
+const MIN_NAME = 3;
+
 /** Décale une date (YYYY-MM-DD) sans jamais passer avant aujourd'hui. */
 function shiftDate(date: string, days: number, todayKey: string) {
   const next = dayKey(addDays(parseDayKey(date), days));
@@ -48,7 +51,7 @@ export default function ExamsScreen() {
 
   const submit = () => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (trimmed.length < MIN_NAME) return;
     addExam({ name: trimmed, date, subjectId });
     setName('');
     setSubjectId(undefined);
@@ -93,7 +96,7 @@ export default function ExamsScreen() {
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Nom, ex. Bac de français"
+              placeholder="Nom, ex. Bac blanc de mathématiques"
               placeholderTextColor={theme.textSecondary}
               returnKeyType="done"
               onSubmitEditing={submit}
@@ -107,7 +110,11 @@ export default function ExamsScreen() {
             />
             <SubjectPicker value={subjectId} onChange={setSubjectId} />
           </Group>
-          <Button label="Ajouter l'examen" onPress={submit} disabled={!name.trim()} />
+          <Button
+            label="Ajouter l'examen"
+            onPress={submit}
+            disabled={name.trim().length < MIN_NAME}
+          />
         </>
       )}
 
@@ -143,7 +150,7 @@ function ExamRow({ exam: e, days, todayKey, open, onToggle }: ExamRowProps) {
   // Un nom vide n'est pas enregistré : on revient au nom actuel.
   const saveName = () => {
     const trimmed = name.trim();
-    if (trimmed) updateExam(e.id, { name: trimmed });
+    if (trimmed.length >= MIN_NAME) updateExam(e.id, { name: trimmed });
     else setName(e.name);
   };
 
