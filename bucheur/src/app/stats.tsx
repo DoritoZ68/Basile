@@ -4,10 +4,10 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Glass } from '@/components/glass';
 import { ThemedText } from '@/components/themed-text';
 import { TreeRings } from '@/components/tree-rings';
-import { Chip, Group, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
-import { Display, Essences, Spacing } from '@/constants/theme';
+import { SettingsButton } from '@/components/settings-sheet';
+import { Group, Row, Screen, SectionTitle } from '@/components/ui';
+import { Display, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   bestStreak,
@@ -21,20 +21,24 @@ import {
 } from '@/lib/stats';
 import { usePro } from '@/lib/pro';
 import { useStore } from '@/lib/store';
-import type { EssenceId } from '@/lib/types';
+
+const FOCUS_LABELS = {
+  1: 'Concentration difficile',
+  2: 'Concentration correcte',
+  3: 'Excellente concentration',
+};
 
 export default function StatsScreen() {
   const theme = useTheme();
-  const scheme = useColorScheme();
-  const { data, updateSettings, removeSession } = useStore();
-  const { sessions, subjects, settings } = data;
+  const { data, settings, removeSession } = useStore();
+  const { sessions, subjects } = data;
   const now = useNow(60_000);
   // Largeur mesurée de la rangée, partagée entre les 7 rondelles.
   const [weekWidth, setWeekWidth] = useState(0);
   const cell = Math.floor(weekWidth / 7);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const { isPro, price, openPaywall } = usePro();
+  const { isPro, openPaywall } = usePro();
   // 0 = semaine en cours ; remonter dans le temps fait partie de Bûcheur Pro.
   const [weekOffset, setWeekOffset] = useState(0);
   const shown = addDays(now, -7 * weekOffset).getTime();
@@ -64,7 +68,7 @@ export default function StatsScreen() {
   const best = bestStreak(sessions);
 
   return (
-    <Screen title="Statistiques">
+    <Screen title="Statistiques" action={<SettingsButton />}>
       <Glass style={styles.summary}>
         <Stat
           value={formatDuration(weekTotal)}
@@ -138,39 +142,6 @@ export default function StatsScreen() {
         </>
       )}
 
-      <SectionTitle>Réglages</SectionTitle>
-      <Group>
-        <Stepper
-          label="Objectif quotidien"
-          value={formatDuration(settings.dailyGoalMin)}
-          onMinus={() => updateSettings({ dailyGoalMin: Math.max(15, settings.dailyGoalMin - 15) })}
-          onPlus={() => updateSettings({ dailyGoalMin: settings.dailyGoalMin + 15 })}
-        />
-        <View style={styles.essences}>
-          <ThemedText style={styles.essenceLabel}>Essence de bois</ThemedText>
-          <View style={styles.essenceChips}>
-            {(Object.keys(Essences) as EssenceId[]).map((id) => (
-              <Chip
-                key={id}
-                label={Essences[id].name}
-                color={Essences[id][scheme === 'dark' ? 'dark' : 'light']}
-                selected={(settings.essence ?? 'sauge') === id}
-                onPress={() =>
-                  id === 'sauge' || isPro ? updateSettings({ essence: id }) : openPaywall()
-                }
-              />
-            ))}
-          </View>
-        </View>
-        <Row
-          label="Bûcheur Pro"
-          detail={isPro ? 'Merci pour ton soutien' : 'Achat unique, pas d’abonnement'}
-          value={isPro ? 'Activé' : `${price} ›`}
-          valueColor={theme.accent}
-          onPress={openPaywall}
-        />
-      </Group>
-
       <SectionTitle>Dernières séances · {formatDuration(total)} au total</SectionTitle>
       {recent.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
@@ -186,13 +157,19 @@ export default function StatsScreen() {
                   key={s.id}
                   label={subject(s.subjectId)?.name ?? 'Matière supprimée'}
                   color={subject(s.subjectId)?.color ?? theme.textSecondary}
-                  detail={new Date(s.startedAt).toLocaleString('fr-FR', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  detail={[
+                    new Date(s.startedAt).toLocaleString('fr-FR', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    }),
+                    s.focus && FOCUS_LABELS[s.focus],
+                    s.note,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                   value={confirming ? 'Supprimer ?' : formatDuration(s.durationMin)}
                   valueColor={confirming ? theme.danger : undefined}
                   onPress={() => {
@@ -301,21 +278,6 @@ const styles = StyleSheet.create({
   arrowLabel: {
     fontSize: 24,
     lineHeight: 28,
-  },
-  essences: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 12,
-    gap: 10,
-  },
-  essenceLabel: {
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: 400,
-  },
-  essenceChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
   },
   week: {
     flexDirection: 'row',

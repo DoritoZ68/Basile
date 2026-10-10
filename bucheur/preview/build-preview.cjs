@@ -15,7 +15,7 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST = path.join(ROOT, 'dist-preview');
 const OUT = path.join(DIST, 'bucheur-apercu.html');
 
-execSync('npx expo export --platform web --output-dir dist-preview', {
+execSync('npx expo export --platform web --clear --output-dir dist-preview', {
   cwd: ROOT,
   stdio: 'inherit',
   env: { ...process.env, CI: '1', EXPO_PUBLIC_PREVIEW: '1' },

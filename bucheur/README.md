@@ -31,7 +31,7 @@ Toutes les données restent sur le téléphone (AsyncStorage) : aucun serveur, a
 | Gratuit | Pro |
 |---|---|
 | 4 matières, 2 examens à venir | Matières et examens illimités |
-| Séances de 15 à 60 min | + séances de 90 min |
+| Séances de 5 à 60 min | Séances jusqu'à 2 h |
 | Semaine en cours | Tout l'historique, semaine par semaine |
 | Essence « Sauge » | Essences Chêne, Érable, Bois de nuit |
 
@@ -128,7 +128,7 @@ npx expo-doctor
    - `store/screenshots/` : captures iPhone 6,9" (1290 × 2796) et capture de l'achat intégré ;
    - `store/politique-de-confidentialite.md` : à publier en ligne (GitHub Pages, Notion…) pour obtenir l'URL demandée.
 
-   Pour refaire les captures après une modification : `npx expo export --platform web && node store/generate-screenshots.cjs`.
+   Pour refaire les captures après une modification : `node store/generate-screenshots.cjs`.
 
 ## Structure
 

@@ -394,7 +394,7 @@
       document.getElementById('pro-label').textContent = isPro ? 'Désactiver Pro' : 'Essayer Bûcheur Pro';
       document.getElementById('pro-detail').textContent = isPro
         ? 'Pro est activé. Désactive-le pour refaire l’achat simulé.'
-        : 'Dans l’app, touche la durée « 90 · Pro » ou une autre fonction Pro. L’achat est simulé ici : aucun paiement.';
+        : 'Dans l’app, ouvre les réglages (bouton en haut à droite) puis Bûcheur Pro. L’achat est simulé ici : aucun paiement.';
     }
 
     document.getElementById('demo').addEventListener('click', function () {
@@ -432,7 +432,7 @@
       if (read(PRO) === '1') {
         if (write(PRO, '0')) restart();
       } else {
-        status.textContent = 'Dans l’app, touche « 90 · Pro » sur l’écran Focus pour ouvrir l’offre.';
+        status.textContent = 'Dans l’app, ouvre les réglages (bouton en haut à droite) puis touche Bûcheur Pro.';
       }
     });
 

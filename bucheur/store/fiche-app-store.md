@@ -36,10 +36,11 @@ Bûcheur transforme tes révisions en un tronc qui grandit.
 Chaque séance de travail ajoute un cerne, dans la couleur de ta matière. Plus tu révises longtemps, plus le cerne est épais. Ton objectif du jour est un cercle en pointillés : à toi de le remplir.
 
 UN MINUTEUR QUI T'AIDE À TE CONCENTRER
-• Choisis ta matière et une durée : 15, 25, 45 ou 60 minutes.
+• Choisis ta matière et une durée : 15, 25, 45, 60 minutes ou la tienne.
+• Mets la séance en pause, ou ajoute 5 minutes si tu es lancé.
 • Pendant la séance, il ne reste que l'essentiel à l'écran : le temps restant et ton cerne qui se dessine.
 • L'écran reste allumé et une notification te prévient à la fin, même si tu as fermé l'app.
-• À la fin, une pause de 5 minutes t'est proposée avant la séance suivante.
+• À la fin, note ce que tu as révisé et ta concentration, puis prends une pause de 5 à 20 minutes.
 
 TES PROGRÈS, D'UN COUP D'ŒIL
 • Le tronc du jour et ton objectif quotidien.
@@ -54,11 +55,12 @@ SIMPLE ET RESPECTUEUX
 • Aucun compte à créer, aucune publicité.
 • Tes révisions restent sur ton téléphone.
 • Un design calme, en mode clair ou sombre, pensé pour ne pas te distraire.
+• Des réglages pour tout adapter : pauses, notifications, vibrations, écran allumé, phrases d'encouragement.
 
 BÛCHEUR PRO : UN SEUL ACHAT, POUR TOUJOURS
 La version gratuite te permet de réviser sans limite de temps. Bûcheur Pro ajoute, pour un achat unique et sans abonnement :
 • Matières et examens illimités
-• Séances de 90 minutes
+• Séances jusqu'à 2 heures
 • Tout ton historique, semaine par semaine
 • Les essences de bois : Chêne, Érable et Bois de nuit pour changer la couleur de l'app
 
@@ -98,7 +100,7 @@ Apple réduit automatiquement les captures pour les iPhone plus petits. Ordre co
 
 Les deux premières captures sont les plus vues dans les résultats de recherche : elles portent
 l'idée du tronc et de la concentration. Pour les refaire après une modification de l'app :
-`npx expo export --platform web && node store/generate-screenshots.cjs`.
+`node store/generate-screenshots.cjs`.
 
 ---
 
@@ -113,9 +115,9 @@ App Store Connect › ton app › **Monétisation › Achats intégrés** › �
 | **Identifiant du produit** | bucheur_pro_lifetime |
 | **Prix** | 4,99 € (France), les autres pays s'ajustent automatiquement |
 | **Nom affiché** (30) | Bûcheur Pro |
-| **Description** (45) | Matières illimitées, 90 min et historique |
+| **Description** (45) | Matières illimitées, séances 2 h, historique |
 | **Capture pour la vérification** | `store/screenshots/achat-integre-verification.png` |
-| **Notes pour la vérification** | Ouvrir l'écran Focus et toucher « 90 · Pro », ou aller dans Statistiques › Réglages › Bûcheur Pro. |
+| **Notes pour la vérification** | Toucher le bouton Réglages (en haut à droite de chaque écran), puis « Bûcheur Pro ». |
 
 Important : pour la première version, l'achat intégré doit être **ajouté à la version de l'app**
 (section « Achats intégrés et abonnements » de la page de la version) et envoyé en vérification avec elle.
@@ -150,7 +152,7 @@ la configuration de ton compte RevenueCat ajouterait d'autres données.
 ```
 Bûcheur is a study timer for students. No account is required and all study data stays on the device.
 
-In-app purchase "Bûcheur Pro" (non-consumable, bucheur_pro_lifetime): open the Focus tab and tap "90 · Pro" in the duration selector, or go to Stats > Réglages > Bûcheur Pro. The purchase screen includes a "Restaurer mes achats" (Restore purchases) button.
+In-app purchase "Bûcheur Pro" (non-consumable, bucheur_pro_lifetime): tap the settings button (top right of any screen), then "Bûcheur Pro". It also opens when adding a 5th subject or choosing a custom duration over 60 minutes. The purchase screen includes a "Restaurer mes achats" (Restore purchases) button.
 
 Local notifications are only used to signal the end of a study session.
 ```

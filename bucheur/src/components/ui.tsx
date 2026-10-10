@@ -4,6 +4,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   View,
   type StyleProp,
   type ViewStyle,
@@ -19,10 +20,12 @@ import { useTheme } from '@/hooks/use-theme';
 type ScreenProps = {
   title?: string;
   subtitle?: string;
+  /** Bouton affiché à droite du titre (réglages…). */
+  action?: ReactNode;
   children: ReactNode;
 };
 
-export function Screen({ title, subtitle, children }: ScreenProps) {
+export function Screen({ title, subtitle, action, children }: ScreenProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
       <Ambient />
@@ -33,12 +36,15 @@ export function Screen({ title, subtitle, children }: ScreenProps) {
         <View style={styles.inner}>
           {(title || subtitle) && (
             <View style={styles.header}>
-              {subtitle && (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {subtitle}
-                </ThemedText>
-              )}
-              {title && <ThemedText style={styles.screenTitle}>{title}</ThemedText>}
+              <View style={styles.headerText}>
+                {subtitle && (
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {subtitle}
+                  </ThemedText>
+                )}
+                {title && <ThemedText style={styles.screenTitle}>{title}</ThemedText>}
+              </View>
+              {action}
             </View>
           )}
           {children}
@@ -282,6 +288,61 @@ function StepButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
+type ToggleRowProps = {
+  label: string;
+  detail?: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+};
+
+/** Ligne de réglage avec un interrupteur. */
+export function ToggleRow({ label, detail, value, onChange }: ToggleRowProps) {
+  const theme = useTheme();
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowText}>
+        <ThemedText style={styles.rowLabel}>{label}</ThemedText>
+        {detail && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {detail}
+          </ThemedText>
+        )}
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ true: theme.accent, false: theme.backgroundSelected }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}
+
+/** Bouton rond en verre avec une icône (réglages…). */
+export function IconButton({
+  label,
+  onPress,
+  children,
+}: {
+  label: string;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      hitSlop={6}
+      style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.92 : 1 }] })}>
+      <Glass interactive style={styles.iconButton}>
+        {children}
+      </Glass>
+    </Pressable>
+  );
+}
+
 export function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>
@@ -306,7 +367,21 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.three,
     marginBottom: Spacing.two,
+  },
+  headerText: {
+    flex: 1,
+  },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
   screenTitle: {
     fontFamily: Display.title,

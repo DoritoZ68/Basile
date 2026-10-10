@@ -23,6 +23,8 @@ const API_KEY = Platform.select({
  */
 export const PURCHASES_SIMULATED = !API_KEY && (__DEV__ || process.env.EXPO_PUBLIC_PREVIEW === '1');
 const SIMULATED = PURCHASES_SIMULATED;
+/** Captures App Store : l'écran d'achat s'affiche comme sur iPhone, boutique disponible. */
+const SCREENSHOTS = process.env.EXPO_PUBLIC_SCREENSHOTS === '1';
 
 export type PurchaseResult = 'success' | 'cancelled' | 'error';
 
@@ -88,7 +90,7 @@ export function ProProvider({ children }: { children: ReactNode }) {
   const pro: Pro = {
     isPro,
     price: pkg?.product.priceString ?? FALLBACK_PRICE,
-    available: SIMULATED || pkg !== null,
+    available: SIMULATED || SCREENSHOTS || pkg !== null,
     paywallOpen,
     openPaywall: () => setPaywallOpen(true),
     closePaywall: () => setPaywallOpen(false),

@@ -1,7 +1,6 @@
 /**
  * Génère les captures App Store (iPhone 6,9", 1290 × 2796) à partir de la version web de l'app.
  *
- *   npx expo export --platform web
  *   node store/generate-screenshots.cjs
  *
  * Nécessite Playwright (`npm install -g playwright && npx playwright install chromium`).
@@ -23,7 +22,7 @@ function loadPlaywright() {
 const { chromium } = loadPlaywright();
 
 const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist');
+const DIST = path.join(ROOT, 'dist-screenshots');
 const OUT = path.join(__dirname, 'screenshots');
 const PORT = 8765;
 const W = 1290;
@@ -164,24 +163,10 @@ async function captureScreen(browser, shot) {
   await page.goto(`http://localhost:${PORT}/`);
   await page.waitForTimeout(1500);
   if (shot === IAP_REVIEW) {
-    await page.getByText('90 · Pro').click();
+    await page.getByRole('button', { name: 'Réglages' }).click();
+    await page.waitForTimeout(700);
+    await page.getByText('Achat unique, pas d’abonnement').click();
     await page.waitForTimeout(900);
-    // Le web n'a pas de boutique : on affiche l'état « disponible », tel qu'il apparaît sur iPhone.
-    await page.evaluate(() => {
-      for (const el of document.querySelectorAll('div')) {
-        if (el.textContent === 'La boutique n’est pas disponible pour le moment.')
-          el.textContent = 'Paiement unique avec ton identifiant Apple. Pas d’abonnement.';
-      }
-      const label = [...document.querySelectorAll('div')]
-        .filter((el) => el.textContent.startsWith('Débloquer pour'))
-        .at(-1);
-      for (let el = label; el; el = el.parentElement) {
-        if (getComputedStyle(el).opacity !== '1') {
-          el.style.opacity = '1';
-          break;
-        }
-      }
-    });
     const png = await page.screenshot();
     await ctx.close();
     return png;
@@ -245,7 +230,12 @@ function frameHtml(shot, screenPng) {
 }
 
 (async () => {
-  if (!fs.existsSync(DIST)) throw new Error('Lance d’abord : npx expo export --platform web');
+  // Export dédié : l'écran d'achat s'y affiche comme sur iPhone (boutique disponible).
+  execSync('npx expo export --platform web --clear --output-dir dist-screenshots', {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env: { ...process.env, CI: '1', EXPO_PUBLIC_SCREENSHOTS: '1' },
+  });
   fs.mkdirSync(OUT, { recursive: true });
   const server = serve();
   const browser = await chromium.launch();

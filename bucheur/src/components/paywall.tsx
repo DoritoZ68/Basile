@@ -13,7 +13,7 @@ import { FREE_LIMITS, PURCHASES_SIMULATED, usePro } from '@/lib/pro';
 const PERKS = [
   { label: 'Matières illimitées', detail: `La version gratuite en compte ${FREE_LIMITS.subjects}` },
   { label: 'Examens illimités', detail: `La version gratuite en compte ${FREE_LIMITS.exams}` },
-  { label: 'Séances de 90 minutes', detail: 'Pour les longues sessions avant le jour J' },
+  { label: 'Séances jusqu’à 2 heures', detail: 'Pour les longues sessions avant le jour J' },
   { label: 'Tout ton historique', detail: 'Remonte tes semaines passées en rondelles' },
   { label: 'Essences de bois', detail: 'Chêne, érable, bois de nuit : choisis ta couleur' },
 ];

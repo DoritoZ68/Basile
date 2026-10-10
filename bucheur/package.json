@@ -47,7 +47,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "iphone": "EXPO_PUBLIC_PREVIEW=1 expo export --platform web && npx -y serve@14.2.4 dist -l 3000"
+    "iphone": "EXPO_PUBLIC_PREVIEW=1 expo export --platform web --clear && npx -y serve@14.2.4 dist -l 3000"
   },
   "private": true
 }

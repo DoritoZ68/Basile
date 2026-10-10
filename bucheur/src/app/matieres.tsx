@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { SettingsButton } from '@/components/settings-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Group, ProgressBar, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
 import { Spacing, SubjectColors } from '@/constants/theme';
@@ -34,7 +35,7 @@ export default function SubjectsScreen() {
   };
 
   return (
-    <Screen title="Matières">
+    <Screen title="Matières" action={<SettingsButton />}>
       <SectionTitle>Cette semaine</SectionTitle>
       {data.subjects.length === 0 ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
@@ -101,8 +102,16 @@ type SubjectRowProps = {
 };
 
 function SubjectRow({ subject: s, done, open, onToggle }: SubjectRowProps) {
+  const theme = useTheme();
   const { updateSubject, removeSubject } = useStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [name, setName] = useState(s.name);
+  // Un nom vide n'est pas enregistré : on revient au nom actuel.
+  const saveName = () => {
+    const trimmed = name.trim();
+    if (trimmed) updateSubject(s.id, { name: trimmed });
+    else setName(s.name);
+  };
 
   return (
     <View>
@@ -126,6 +135,23 @@ function SubjectRow({ subject: s, done, open, onToggle }: SubjectRowProps) {
 
       {open && (
         <View style={styles.editor}>
+          <View style={styles.renameRow}>
+            <ThemedText style={styles.renameLabel}>Nom</ThemedText>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              onEndEditing={saveName}
+              onBlur={saveName}
+              onSubmitEditing={saveName}
+              returnKeyType="done"
+              maxLength={30}
+              accessibilityLabel="Nom de la matière"
+              style={[
+                styles.renameInput,
+                { color: theme.text, backgroundColor: theme.backgroundSelected },
+              ]}
+            />
+          </View>
           <Stepper
             label="Objectif par semaine"
             value={formatDuration(s.weeklyGoalMin)}
@@ -195,6 +221,25 @@ const styles = StyleSheet.create({
   },
   value: {
     fontVariant: ['tabular-nums'],
+  },
+  renameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+  },
+  renameLabel: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: 400,
+  },
+  renameInput: {
+    flex: 1,
+    fontSize: 16,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   editor: {
     paddingBottom: Spacing.two,
