@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ambient } from '@/components/ambient';
@@ -8,7 +8,7 @@ import { TreeRings } from '@/components/tree-rings';
 import { Button, Group, Row } from '@/components/ui';
 import { Display, Spacing, SubjectColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { FREE_LIMITS, PURCHASES_SIMULATED, usePro } from '@/lib/pro';
+import { FREE_LIMITS, usePro } from '@/lib/pro';
 
 const PERKS = [
   { label: 'Matières illimitées', detail: `La version gratuite en compte ${FREE_LIMITS.subjects}` },
@@ -27,9 +27,21 @@ const SAMPLE_RINGS = [
 
 export function Paywall() {
   const theme = useTheme();
-  const { isPro, price, available, purchase, restore, paywallOpen, closePaywall } = usePro();
+  const {
+    isPro,
+    channel,
+    price,
+    available,
+    purchase,
+    restore,
+    activateLicense,
+    paywallOpen,
+    closePaywall,
+  } = usePro();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [key, setKey] = useState('');
+  const license = channel === 'license';
 
   const close = () => {
     setMessage(null);
@@ -42,6 +54,15 @@ export function Paywall() {
     const result = await purchase();
     setBusy(false);
     if (result === 'error') setMessage('L’achat n’a pas pu aboutir. Réessaie dans un instant.');
+  };
+
+  const onActivate = async () => {
+    setBusy(true);
+    setMessage(null);
+    const result = await activateLicense(key);
+    setBusy(false);
+    setMessage(result.message);
+    if (result.ok) setKey('');
   };
 
   const onRestore = async () => {
@@ -90,29 +111,68 @@ export function Paywall() {
 
           {isPro ? (
             <ThemedText themeColor="textSecondary" style={styles.center}>
-              Toutes les fonctions Pro sont débloquées. Tu peux choisir ton essence de bois dans
-              Statistiques › Réglages.
+              Toutes les fonctions Pro sont débloquées. Tu peux choisir ton essence de bois dans les
+              réglages.
             </ThemedText>
           ) : (
             <View style={styles.actions}>
               <Button
-                label={busy ? 'Un instant…' : `Débloquer pour ${price}`}
+                label={
+                  busy && !license
+                    ? 'Un instant…'
+                    : license
+                      ? `Acheter pour ${price}`
+                      : `Débloquer pour ${price}`
+                }
                 disabled={busy || !available}
                 onPress={onPurchase}
               />
               <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-                {PURCHASES_SIMULATED
+                {channel === 'simulated'
                   ? 'Aperçu : l’achat est simulé, aucun paiement n’est effectué.'
-                  : available
-                    ? 'Paiement unique avec ton identifiant Apple. Pas d’abonnement.'
-                    : 'La boutique n’est pas disponible pour le moment.'}
+                  : license
+                    ? 'Paiement unique et sécurisé sur Gumroad. Tu reçois ta clé de licence par e-mail.'
+                    : available
+                      ? 'Paiement unique avec ton identifiant Apple. Pas d’abonnement.'
+                      : 'La boutique n’est pas disponible pour le moment.'}
               </ThemedText>
-              <Button
-                label="Restaurer mes achats"
-                variant="plain"
-                disabled={busy}
-                onPress={onRestore}
-              />
+              {license ? (
+                <View style={styles.licenseBox}>
+                  <ThemedText type="smallBold" style={styles.center}>
+                    Tu as déjà ta clé ?
+                  </ThemedText>
+                  <Group>
+                    <TextInput
+                      value={key}
+                      onChangeText={setKey}
+                      onSubmitEditing={onActivate}
+                      placeholder="Colle ta clé de licence"
+                      placeholderTextColor={theme.textSecondary}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      accessibilityLabel="Clé de licence"
+                      style={[styles.keyInput, { color: theme.text }]}
+                    />
+                  </Group>
+                  <Button
+                    label={busy ? 'Vérification…' : 'Activer Bûcheur Pro'}
+                    variant="glass"
+                    disabled={busy || !key.trim()}
+                    onPress={onActivate}
+                  />
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+                    La même clé fonctionne sur ton téléphone et ton ordinateur.
+                  </ThemedText>
+                </View>
+              ) : (
+                <Button
+                  label="Restaurer mes achats"
+                  variant="plain"
+                  disabled={busy}
+                  onPress={onRestore}
+                />
+              )}
             </View>
           )}
 
@@ -163,6 +223,16 @@ const styles = StyleSheet.create({
   },
   actions: {
     gap: Spacing.two,
+  },
+  licenseBox: {
+    marginTop: Spacing.three,
+    gap: Spacing.two,
+  },
+  keyInput: {
+    fontSize: 16,
+    minHeight: 50,
+    paddingHorizontal: Spacing.three,
+    letterSpacing: 0.5,
   },
   center: {
     textAlign: 'center',

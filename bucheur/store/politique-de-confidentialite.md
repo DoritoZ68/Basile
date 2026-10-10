@@ -14,7 +14,7 @@ l'application, ces données sont supprimées avec elle.
 Bûcheur ne demande aucun compte, n'affiche aucune publicité et n'utilise aucun outil de mesure
 d'audience ni de suivi publicitaire.
 
-## Achat de Bûcheur Pro
+## Achat de Bûcheur Pro sur iPhone (App Store)
 
 Le paiement de Bûcheur Pro est traité par **Apple** : nous n'avons jamais accès à tes coordonnées
 bancaires. Pour vérifier ton achat et permettre sa restauration, l'application utilise le service
@@ -22,6 +22,13 @@ bancaires. Pour vérifier ton achat et permettre sa restauration, l'application 
 reçu Apple) associées à un identifiant anonyme généré par l'application. Ces informations servent
 uniquement à activer Bûcheur Pro. Voir la politique de confidentialité de RevenueCat :
 https://www.revenuecat.com/privacy
+
+## Achat de Bûcheur Pro sur le web
+
+Sur la version web, Bûcheur Pro est vendu par **Gumroad** (Gumroad, Inc.), qui traite le paiement et
+envoie la clé de licence par e-mail. Pour activer Pro, l'application envoie cette clé à Gumroad afin de
+vérifier qu'elle est valable ; aucune autre donnée n'est transmise. Voir la politique de
+confidentialité de Gumroad : https://gumroad.com/privacy
 
 ## Notifications
 

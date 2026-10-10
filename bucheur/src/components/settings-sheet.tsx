@@ -19,6 +19,7 @@ import {
 import { Display, Essences, Spacing } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTheme } from '@/hooks/use-theme';
+import { maskKey } from '@/lib/license';
 import { usePro } from '@/lib/pro';
 import { formatDuration } from '@/lib/stats';
 import { useStore } from '@/lib/store';
@@ -62,7 +63,7 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
   const theme = useTheme();
   const scheme = useColorScheme();
   const { settings, updateSettings, resetAll } = useStore();
-  const { isPro, price, openPaywall } = usePro();
+  const { isPro, price, channel, licenseKey, openPaywall } = usePro();
   const [confirmReset, setConfirmReset] = useState(false);
 
   // Le paywall s'ouvre par-dessus : on ferme d'abord les réglages.
@@ -185,16 +186,26 @@ export function SettingsSheet({ visible, onClose }: { visible: boolean; onClose:
             />
           </Group>
 
-          <SectionTitle>Bûcheur Pro</SectionTitle>
-          <Group>
-            <Row
-              label="Bûcheur Pro"
-              detail={isPro ? 'Merci pour ton soutien' : 'Achat unique, pas d’abonnement'}
-              value={isPro ? 'Activé' : `${price} ›`}
-              valueColor={theme.accent}
-              onPress={askPro}
-            />
-          </Group>
+          {channel !== 'free' && (
+            <>
+              <SectionTitle>Bûcheur Pro</SectionTitle>
+              <Group>
+                <Row
+                  label="Bûcheur Pro"
+                  detail={
+                    isPro
+                      ? licenseKey
+                        ? `Clé ${maskKey(licenseKey)} · merci pour ton soutien`
+                        : 'Merci pour ton soutien'
+                      : 'Achat unique, pas d’abonnement'
+                  }
+                  value={isPro ? 'Activé' : `${price} ›`}
+                  valueColor={theme.accent}
+                  onPress={askPro}
+                />
+              </Group>
+            </>
+          )}
 
           <SectionTitle>Données</SectionTitle>
           <Group>

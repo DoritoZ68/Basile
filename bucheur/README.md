@@ -64,6 +64,48 @@ et l'écran d'achat dans `src/components/paywall.tsx`.
   (`npx eas-cli@latest build --profile development --platform ios`) et un testeur *Sandbox*
   créé dans App Store Connect › Utilisateurs et accès.
 
+## Publier gratuitement et vendre Bûcheur Pro (sans compte Apple)
+
+La version web se publie sans rien payer, et Bûcheur Pro (4,99 €) se vend sur **Gumroad** :
+pas d'abonnement, Gumroad prend une commission sur chaque vente (10 % + 0,50 $) et gère la TVA.
+L'acheteur reçoit une **clé de licence** par e-mail et la colle dans l'app (Réglages › Bûcheur Pro).
+Une clé fonctionne sur 5 appareils au maximum, et un achat remboursé désactive Pro.
+
+### 1. Créer le produit sur Gumroad
+1. Crée un compte sur [gumroad.com](https://gumroad.com) (au nom d'un adulte) et ajoute ton compte
+   bancaire dans *Settings › Payments*.
+2. *Products › New product* › **Digital product**, nom « Bûcheur Pro », prix **4,99 €**
+   (choisis l'euro comme devise).
+3. Dans le produit, active **« Generate a unique license key per sale »**.
+4. Dans le contenu du produit, écris par exemple : « Ouvre Bûcheur › Réglages › Bûcheur Pro et colle
+   ta clé de licence. »
+5. Publie le produit, puis note :
+   - l'**ID du produit** (affiché dans la section *License key* du produit) ;
+   - l'**adresse de la page**, du type `https://ton-pseudo.gumroad.com/l/bucheur`.
+
+### 2. Configurer l'app
+```bash
+cd bucheur
+cp .env.example .env.local
+nano .env.local      # colle l'ID du produit et l'adresse de la page Gumroad
+```
+
+### 3. Construire et mettre en ligne (gratuit)
+```bash
+npm run build:web
+```
+Le dossier `bucheur/dist` contient tout le site. Pour le publier sans ligne de commande :
+1. Crée un compte gratuit sur [netlify.com](https://www.netlify.com).
+2. Ouvre [app.netlify.com/drop](https://app.netlify.com/drop) et **glisse le dossier `dist`** dans la page.
+3. Netlify donne une adresse (renomme le site, par exemple `bucheur.netlify.app`).
+
+Pour une mise à jour : relance `npm run build:web` et glisse de nouveau `dist` dans
+*Deploys* sur Netlify.
+
+Sur iPhone, les élèves ouvrent l'adresse dans Safari puis **Partager › Sur l'écran d'accueil**.
+
+À savoir : les revenus doivent être déclarés (en France, par exemple en micro-entreprise).
+
 ## Tester sur ton iPhone sans Expo Go (Safari)
 
 Aucun compte n'est nécessaire : l'ordinateur sert l'app et l'iPhone l'ouvre dans Safari, sur le même Wi-Fi.
