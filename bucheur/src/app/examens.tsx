@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, Chip, Screen, SectionTitle } from '@/components/ui';
+import { Button, Group, Row, Screen, SectionTitle } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,11 +10,11 @@ import { addDays, dayKey, daysUntil, formatDate, parseDayKey } from '@/lib/stats
 import { useStore } from '@/lib/store';
 
 const SHIFTS = [
-  { label: '−1 sem.', days: -7 },
-  { label: '−1 j', days: -1 },
-  { label: '+1 j', days: 1 },
-  { label: '+1 sem.', days: 7 },
-  { label: '+1 mois', days: 30 },
+  { label: '−7', days: -7 },
+  { label: '−1', days: -1 },
+  { label: '+1', days: 1 },
+  { label: '+7', days: 7 },
+  { label: '+30', days: 30 },
 ];
 
 export default function ExamsScreen() {
@@ -31,7 +31,8 @@ export default function ExamsScreen() {
     .map((e) => ({ ...e, days: daysUntil(e.date, now) }))
     .sort((a, b) => a.date.localeCompare(b.date));
   const upcoming = exams.filter((e) => e.days >= 0);
-  const past = exams.filter((e) => e.days < 0);
+  const past = exams.filter((e) => e.days < 0).reverse();
+  const inDays = daysUntil(date, now);
 
   const shift = (days: number) => {
     const next = dayKey(addDays(parseDayKey(date), days));
@@ -45,70 +46,83 @@ export default function ExamsScreen() {
     setName('');
   };
 
-  const renderExam = (e: (typeof exams)[number]) => (
-    <Card key={e.id} style={[styles.examRow, e.days < 0 && styles.past]}>
-      <ThemedText style={[styles.countdown, { color: e.days < 0 ? theme.textSecondary : theme.accent }]}>
-        {e.days < 0 ? '✓' : e.days === 0 ? 'J' : `J-${e.days}`}
-      </ThemedText>
-      <View style={styles.flex}>
-        <ThemedText type="smallBold">{e.name}</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {formatDate(e.date)}
-        </ThemedText>
-      </View>
-      <Button
-        label={confirmDeleteId === e.id ? 'Confirmer' : 'Retirer'}
-        variant="danger"
-        style={styles.removeButton}
+  const renderExam = (e: (typeof exams)[number]) => {
+    const confirming = confirmDeleteId === e.id;
+    return (
+      <Row
+        key={e.id}
+        label={e.name}
+        detail={formatDate(e.date)}
+        value={confirming ? 'Retirer ?' : e.days < 0 ? 'Passé' : e.days === 0 ? 'Aujourd’hui' : `J-${e.days}`}
+        valueColor={confirming ? theme.danger : e.days >= 0 ? theme.accent : undefined}
         onPress={() => {
-          if (confirmDeleteId !== e.id) return setConfirmDeleteId(e.id);
+          if (!confirming) return setConfirmDeleteId(e.id);
           removeExam(e.id);
           setConfirmDeleteId(null);
         }}
       />
-    </Card>
-  );
+    );
+  };
 
   return (
     <Screen title="Examens">
-      {upcoming.length === 0 && (
-        <ThemedText type="small" themeColor="textSecondary">
-          Ajoute tes examens pour suivre le compte à rebours depuis l&apos;écran Focus.
+      <SectionTitle>À venir</SectionTitle>
+      {upcoming.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+          Ajoute tes examens pour suivre le compte à rebours.
         </ThemedText>
+      ) : (
+        <Group>{upcoming.map(renderExam)}</Group>
       )}
-      {upcoming.map(renderExam)}
 
       <SectionTitle>Nouvel examen</SectionTitle>
-      <Card>
+      <Group>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Ex. : Bac de français"
+          placeholder="Nom, ex. Bac de français"
           placeholderTextColor={theme.textSecondary}
           returnKeyType="done"
           onSubmitEditing={submit}
           maxLength={40}
-          style={[styles.input, { color: theme.text, backgroundColor: theme.backgroundSelected }]}
+          style={[styles.input, { color: theme.text }]}
         />
         <View style={styles.dateRow}>
-          <ThemedText type="smallBold">{formatDate(date)}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            dans {daysUntil(date, now)} jour{daysUntil(date, now) > 1 ? 's' : ''}
-          </ThemedText>
+          <View style={styles.flex}>
+            <ThemedText>{formatDate(date)}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {inDays === 0 ? 'aujourd’hui' : `dans ${inDays} jour${inDays > 1 ? 's' : ''}`}
+            </ThemedText>
+          </View>
         </View>
-        <View style={styles.chips}>
+        <View style={styles.shifts}>
           {SHIFTS.map((s) => (
-            <Chip key={s.label} label={s.label} onPress={() => shift(s.days)} />
+            <Pressable
+              key={s.label}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.days > 0 ? 'Avancer' : 'Reculer'} de ${Math.abs(s.days)} jours`}
+              onPress={() => shift(s.days)}
+              style={({ pressed }) => [
+                styles.shift,
+                { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
+              ]}>
+              <ThemedText type="small">{s.label} j</ThemedText>
+            </Pressable>
           ))}
         </View>
-        <Button label="Ajouter l'examen" onPress={submit} disabled={!name.trim()} />
-      </Card>
+      </Group>
+      <Button label="Ajouter l'examen" onPress={submit} disabled={!name.trim()} />
 
       {past.length > 0 && (
         <>
           <SectionTitle>Passés</SectionTitle>
-          {past.reverse().map(renderExam)}
+          <Group>{past.map(renderExam)}</Group>
         </>
+      )}
+      {exams.length > 0 && (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+          Touche un examen deux fois pour le retirer.
+        </ThemedText>
       )}
     </Screen>
   );
@@ -118,35 +132,29 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  examRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  past: {
-    opacity: 0.6,
-  },
-  countdown: {
-    fontSize: 24,
-    lineHeight: 30,
-    fontWeight: 800,
-    minWidth: 64,
-  },
-  removeButton: {
-    minHeight: 36,
-    paddingHorizontal: Spacing.two,
+  hint: {
+    marginLeft: Spacing.three,
   },
   input: {
-    fontSize: 17,
-    borderRadius: 12,
+    fontSize: 16,
+    minHeight: 52,
+    paddingHorizontal: Spacing.three,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Spacing.three,
     paddingVertical: 12,
   },
-  dateRow: {
-    gap: 2,
-  },
-  chips: {
+  shifts: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
+    gap: 6,
+    padding: 12,
+  },
+  shift: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 });

@@ -9,39 +9,39 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#1C1917',
-    background: '#F6F4F0',
+    text: '#1F2328',
+    background: '#F7F6F3',
     backgroundElement: '#FFFFFF',
-    backgroundSelected: '#ECE8E1',
-    textSecondary: '#6B645C',
-    border: '#E7E2DA',
-    accent: '#E8590C',
+    backgroundSelected: '#EEECE7',
+    textSecondary: '#77736C',
+    border: '#E4E1DB',
+    accent: '#3E6B5A',
     accentText: '#FFFFFF',
-    danger: '#C92A2A',
+    danger: '#B4483A',
   },
   dark: {
-    text: '#F5F2EE',
-    background: '#0F0E0D',
-    backgroundElement: '#1C1A18',
-    backgroundSelected: '#2A2724',
-    textSecondary: '#A8A29E',
-    border: '#2E2A27',
-    accent: '#FF7A33',
-    accentText: '#1A0E05',
-    danger: '#FF6B6B',
+    text: '#ECEBE7',
+    background: '#111312',
+    backgroundElement: '#1A1D1C',
+    backgroundSelected: '#262A29',
+    textSecondary: '#97958F',
+    border: '#2B2F2E',
+    accent: '#8FBFA8',
+    accentText: '#0E1A15',
+    danger: '#E08A7E',
   },
 } as const;
 
-/** Couleurs proposées pour les matières. */
+/** Couleurs douces proposées pour les matières. */
 export const SubjectColors = [
-  '#E8590C',
-  '#1C7ED6',
-  '#2F9E44',
-  '#AE3EC9',
-  '#F08C00',
-  '#0CA678',
-  '#E64980',
-  '#5C7CFA',
+  '#5B7FA6',
+  '#C07A4F',
+  '#6E9A78',
+  '#9A7BB0',
+  '#C9A24D',
+  '#5E9C9A',
+  '#B9727F',
+  '#7A8794',
 ] as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;

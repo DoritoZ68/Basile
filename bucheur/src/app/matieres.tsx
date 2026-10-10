@@ -2,22 +2,22 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Card, ProgressBar, Screen, SectionTitle, Stepper } from '@/components/ui';
+import { Button, Group, ProgressBar, Screen, SectionTitle, Stepper } from '@/components/ui';
 import { Spacing, SubjectColors } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration, weekMinutesBySubject } from '@/lib/stats';
 import { useStore } from '@/lib/store';
+import type { Subject } from '@/lib/types';
 
 const GOAL_STEP = 30;
 
 export default function SubjectsScreen() {
   const theme = useTheme();
-  const { data, addSubject, updateSubject, removeSubject } = useStore();
+  const { data, addSubject } = useStore();
   const week = weekMinutesBySubject(data.sessions, useNow(60_000));
 
   const [openId, setOpenId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState<string>(SubjectColors[3]);
   const [goal, setGoal] = useState(120);
@@ -33,74 +33,35 @@ export default function SubjectsScreen() {
   return (
     <Screen title="Matières">
       <SectionTitle>Cette semaine</SectionTitle>
-      {data.subjects.length === 0 && (
-        <ThemedText type="small" themeColor="textSecondary">
-          Aucune matière. Ajoute-en une ci-dessous.
+      {data.subjects.length === 0 ? (
+        <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+          Aucune matière pour l&apos;instant.
         </ThemedText>
+      ) : (
+        <Group>
+          {data.subjects.map((s) => (
+            <SubjectRow
+              key={s.id}
+              subject={s}
+              done={week.get(s.id) ?? 0}
+              open={openId === s.id}
+              onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+            />
+          ))}
+        </Group>
       )}
-      {data.subjects.map((s) => {
-        const done = week.get(s.id) ?? 0;
-        const open = openId === s.id;
-        return (
-          <Card key={s.id}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityHint="Afficher les réglages de la matière"
-              onPress={() => {
-                setOpenId(open ? null : s.id);
-                setConfirmDeleteId(null);
-              }}
-              style={styles.subjectHeader}>
-              <View style={[styles.dot, { backgroundColor: s.color }]} />
-              <ThemedText type="smallBold" style={styles.flex}>
-                {s.name}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {formatDuration(done)} / {formatDuration(s.weeklyGoalMin)}
-              </ThemedText>
-            </Pressable>
-            <ProgressBar value={done / s.weeklyGoalMin} color={s.color} />
-
-            {open && (
-              <View style={styles.editor}>
-                <Stepper
-                  label="Objectif par semaine"
-                  value={formatDuration(s.weeklyGoalMin)}
-                  onMinus={() =>
-                    updateSubject(s.id, { weeklyGoalMin: Math.max(GOAL_STEP, s.weeklyGoalMin - GOAL_STEP) })
-                  }
-                  onPlus={() => updateSubject(s.id, { weeklyGoalMin: s.weeklyGoalMin + GOAL_STEP })}
-                />
-                <ColorPicker value={s.color} onChange={(c) => updateSubject(s.id, { color: c })} />
-                <Button
-                  label={confirmDeleteId === s.id ? 'Confirmer la suppression' : 'Supprimer la matière'}
-                  variant="danger"
-                  onPress={() => {
-                    if (confirmDeleteId !== s.id) return setConfirmDeleteId(s.id);
-                    removeSubject(s.id);
-                    setOpenId(null);
-                  }}
-                />
-              </View>
-            )}
-          </Card>
-        );
-      })}
 
       <SectionTitle>Nouvelle matière</SectionTitle>
-      <Card>
+      <Group>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Ex. : Physique-chimie"
+          placeholder="Nom, ex. Physique-chimie"
           placeholderTextColor={theme.textSecondary}
           returnKeyType="done"
           onSubmitEditing={submit}
           maxLength={30}
-          style={[
-            styles.input,
-            { color: theme.text, backgroundColor: theme.backgroundSelected },
-          ]}
+          style={[styles.input, { color: theme.text }]}
         />
         <ColorPicker value={color} onChange={setColor} />
         <Stepper
@@ -109,9 +70,62 @@ export default function SubjectsScreen() {
           onMinus={() => setGoal((g) => Math.max(GOAL_STEP, g - GOAL_STEP))}
           onPlus={() => setGoal((g) => g + GOAL_STEP)}
         />
-        <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
-      </Card>
+      </Group>
+      <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
     </Screen>
+  );
+}
+
+type SubjectRowProps = {
+  subject: Subject;
+  done: number;
+  open: boolean;
+  onToggle: () => void;
+};
+
+function SubjectRow({ subject: s, done, open, onToggle }: SubjectRowProps) {
+  const { updateSubject, removeSubject } = useStore();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  return (
+    <View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint="Afficher les réglages de la matière"
+        onPress={() => {
+          onToggle();
+          setConfirmDelete(false);
+        }}
+        style={({ pressed }) => [styles.subjectRow, pressed && styles.pressed]}>
+        <View style={styles.subjectHeader}>
+          <View style={[styles.dot, { backgroundColor: s.color }]} />
+          <ThemedText style={styles.flex}>{s.name}</ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.value}>
+            {formatDuration(done)} / {formatDuration(s.weeklyGoalMin)}
+          </ThemedText>
+        </View>
+        <ProgressBar value={done / s.weeklyGoalMin} color={s.color} />
+      </Pressable>
+
+      {open && (
+        <View style={styles.editor}>
+          <Stepper
+            label="Objectif par semaine"
+            value={formatDuration(s.weeklyGoalMin)}
+            onMinus={() =>
+              updateSubject(s.id, { weeklyGoalMin: Math.max(GOAL_STEP, s.weeklyGoalMin - GOAL_STEP) })
+            }
+            onPlus={() => updateSubject(s.id, { weeklyGoalMin: s.weeklyGoalMin + GOAL_STEP })}
+          />
+          <ColorPicker value={s.color} onChange={(c) => updateSubject(s.id, { color: c })} />
+          <Button
+            label={confirmDelete ? 'Confirmer la suppression' : 'Supprimer la matière'}
+            variant="danger"
+            onPress={() => (confirmDelete ? removeSubject(s.id) : setConfirmDelete(true))}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -127,11 +141,9 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (color: str
           accessibilityState={{ selected: c === value }}
           onPress={() => onChange(c)}
           hitSlop={4}
-          style={[
-            styles.swatch,
-            { backgroundColor: c, borderColor: c === value ? theme.text : 'transparent' },
-          ]}
-        />
+          style={[styles.swatchRing, { borderColor: c === value ? theme.text : 'transparent' }]}>
+          <View style={[styles.swatch, { backgroundColor: c }]} />
+        </Pressable>
       ))}
     </View>
   );
@@ -141,34 +153,56 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  empty: {
+    marginLeft: Spacing.three,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  subjectRow: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 14,
+    gap: 10,
+  },
   subjectHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 12,
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  value: {
+    fontVariant: ['tabular-nums'],
   },
   editor: {
-    gap: Spacing.three,
+    paddingBottom: Spacing.two,
   },
   input: {
-    fontSize: 17,
-    borderRadius: 12,
+    fontSize: 16,
+    minHeight: 52,
     paddingHorizontal: Spacing.three,
-    paddingVertical: 12,
   },
   colors: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  swatch: {
+  swatchRing: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    borderWidth: 3,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swatch: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
 });

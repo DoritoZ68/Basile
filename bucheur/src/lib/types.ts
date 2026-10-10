@@ -23,6 +23,8 @@ export type Exam = {
 
 /** Minuteur en cours : basé sur des timestamps pour survivre à la mise en arrière-plan. */
 export type ActiveTimer = {
+  /** `break` : pause entre deux séances, non comptée dans les stats. Absent = `focus`. */
+  kind?: 'focus' | 'break';
   subjectId: string;
   startedAt: number;
   durationMin: number;

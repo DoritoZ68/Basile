@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Card, ProgressBar, Screen, SectionTitle, Stepper } from '@/components/ui';
+import { Group, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,7 +15,8 @@ import {
 } from '@/lib/stats';
 import { useStore } from '@/lib/store';
 
-const CHART_HEIGHT = 120;
+const CHART_HEIGHT = 110;
+const LABEL_HEIGHT = 22;
 
 export default function StatsScreen() {
   const theme = useTheme();
@@ -31,22 +32,29 @@ export default function StatsScreen() {
   const total = sessions.reduce((sum, s) => sum + s.durationMin, 0);
   const recent = [...sessions].sort((a, b) => b.startedAt - a.startedAt).slice(0, 10);
   const subject = (id: string) => subjects.find((s) => s.id === id);
+  const streak = currentStreak(sessions, now);
+  const best = bestStreak(sessions);
 
   return (
-    <Screen title="Stats">
-      <View style={styles.row}>
-        <Stat value={formatDuration(weekTotal)} label="cette semaine" />
-        <Stat value={`🔥 ${currentStreak(sessions, now)}`} label="série actuelle" />
-        <Stat value={`🏆 ${bestStreak(sessions)}`} label="meilleure série" />
+    <Screen title="Statistiques">
+      <View style={[styles.summary, { backgroundColor: theme.backgroundElement }]}>
+        <Stat value={formatDuration(weekTotal)} label="Cette semaine" />
+        <View style={[styles.vSeparator, { backgroundColor: theme.border }]} />
+        <Stat value={`${streak} j`} label="Série" />
+        <View style={[styles.vSeparator, { backgroundColor: theme.border }]} />
+        <Stat value={`${best} j`} label="Record" />
       </View>
 
-      <Card>
-        <ThemedText type="smallBold">Semaine en cours</ThemedText>
+      <SectionTitle>Semaine en cours</SectionTitle>
+      <View style={[styles.chartBox, { backgroundColor: theme.backgroundElement }]}>
         <View style={styles.chart}>
           <View
             style={[
               styles.goalLine,
-              { bottom: (settings.dailyGoalMin / maxBar) * CHART_HEIGHT + 20, borderColor: theme.border },
+              {
+                bottom: (settings.dailyGoalMin / maxBar) * CHART_HEIGHT + LABEL_HEIGHT,
+                borderColor: theme.textSecondary,
+              },
             ]}
           />
           {bars.map((b) => (
@@ -56,14 +64,14 @@ export default function StatsScreen() {
                 style={[
                   styles.bar,
                   {
-                    height: Math.max(4, (b.minutes / maxBar) * CHART_HEIGHT),
+                    height: Math.max(3, (b.minutes / maxBar) * CHART_HEIGHT),
                     backgroundColor: b.minutes > 0 ? theme.accent : theme.backgroundSelected,
-                    opacity: b.isToday || b.minutes === 0 ? 1 : 0.6,
+                    opacity: b.isToday || b.minutes === 0 ? 1 : 0.55,
                   },
                 ]}
               />
               <ThemedText
-                type="smallBold"
+                type={b.isToday ? 'smallBold' : 'small'}
                 themeColor={b.isToday ? 'text' : 'textSecondary'}
                 style={styles.barLabel}>
                 {b.letter}
@@ -72,76 +80,73 @@ export default function StatsScreen() {
           ))}
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          Ligne pointillée : objectif de {formatDuration(settings.dailyGoalMin)} par jour.
+          Pointillés : objectif de {formatDuration(settings.dailyGoalMin)} par jour
         </ThemedText>
-      </Card>
+      </View>
 
       {bySubject.length > 0 && (
-        <Card>
-          <ThemedText type="smallBold">Par matière (semaine)</ThemedText>
-          {bySubject.map(([id, minutes]) => (
-            <View key={id} style={styles.subjectStat}>
-              <View style={styles.subjectStatHeader}>
-                <ThemedText type="small">{subject(id)?.name ?? 'Matière supprimée'}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatDuration(minutes)}
-                </ThemedText>
-              </View>
-              <ProgressBar value={minutes / weekTotal} color={subject(id)?.color ?? theme.textSecondary} />
-            </View>
-          ))}
-        </Card>
+        <>
+          <SectionTitle>Par matière</SectionTitle>
+          <Group>
+            {bySubject.map(([id, minutes]) => (
+              <Row
+                key={id}
+                label={subject(id)?.name ?? 'Matière supprimée'}
+                color={subject(id)?.color ?? theme.textSecondary}
+                value={formatDuration(minutes)}
+              />
+            ))}
+          </Group>
+        </>
       )}
 
       <SectionTitle>Réglages</SectionTitle>
-      <Card>
+      <Group>
         <Stepper
           label="Objectif quotidien"
           value={formatDuration(settings.dailyGoalMin)}
           onMinus={() => updateSettings({ dailyGoalMin: Math.max(15, settings.dailyGoalMin - 15) })}
           onPlus={() => updateSettings({ dailyGoalMin: settings.dailyGoalMin + 15 })}
         />
-      </Card>
+      </Group>
 
       <SectionTitle>Dernières séances · {formatDuration(total)} au total</SectionTitle>
       {recent.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary">
-          Pas encore de séance. Lance ton premier minuteur depuis l&apos;onglet Focus !
+        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+          Pas encore de séance. Ta première t&apos;attend dans l&apos;onglet Focus.
         </ThemedText>
       ) : (
-        <Card style={styles.history}>
-          {recent.map((s) => (
-            <Pressable
-              key={s.id}
-              accessibilityRole="button"
-              accessibilityHint="Appuie deux fois pour supprimer cette séance"
-              onPress={() => {
-                if (confirmDeleteId !== s.id) return setConfirmDeleteId(s.id);
-                removeSession(s.id);
-                setConfirmDeleteId(null);
-              }}
-              style={styles.historyRow}>
-              <View style={[styles.dot, { backgroundColor: subject(s.subjectId)?.color ?? theme.textSecondary }]} />
-              <View style={styles.flex}>
-                <ThemedText type="small">{subject(s.subjectId)?.name ?? 'Matière supprimée'}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {new Date(s.startedAt).toLocaleString('fr-FR', {
+        <>
+          <Group>
+            {recent.map((s) => {
+              const confirming = confirmDeleteId === s.id;
+              return (
+                <Row
+                  key={s.id}
+                  label={subject(s.subjectId)?.name ?? 'Matière supprimée'}
+                  color={subject(s.subjectId)?.color ?? theme.textSecondary}
+                  detail={new Date(s.startedAt).toLocaleString('fr-FR', {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
-                </ThemedText>
-              </View>
-              <ThemedText
-                type="smallBold"
-                style={confirmDeleteId === s.id ? { color: theme.danger } : undefined}>
-                {confirmDeleteId === s.id ? 'Supprimer ?' : formatDuration(s.durationMin)}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </Card>
+                  value={confirming ? 'Supprimer ?' : formatDuration(s.durationMin)}
+                  valueColor={confirming ? theme.danger : undefined}
+                  onPress={() => {
+                    if (!confirming) return setConfirmDeleteId(s.id);
+                    removeSession(s.id);
+                    setConfirmDeleteId(null);
+                  }}
+                />
+              );
+            })}
+          </Group>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+            Touche une séance deux fois pour la supprimer.
+          </ThemedText>
+        </>
       )}
     </Screen>
   );
@@ -149,40 +154,49 @@ export default function StatsScreen() {
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <Card style={styles.stat}>
+    <View style={styles.stat}>
       <ThemedText style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-    </Card>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  summary: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    borderRadius: 16,
+    paddingVertical: Spacing.three,
   },
-  flex: {
-    flex: 1,
+  vSeparator: {
+    width: StyleSheet.hairlineWidth,
   },
   stat: {
     flex: 1,
-    gap: Spacing.one,
-    padding: Spacing.three - 4,
+    alignItems: 'center',
+    gap: 2,
   },
   statValue: {
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: 700,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: 300,
+    fontVariant: ['tabular-nums'],
+  },
+  hint: {
+    marginLeft: Spacing.three,
+  },
+  chartBox: {
+    borderRadius: 16,
+    padding: Spacing.three,
+    gap: Spacing.three,
   },
   chart: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    height: CHART_HEIGHT + 20,
+    height: CHART_HEIGHT + LABEL_HEIGHT,
   },
   goalLine: {
     position: 'absolute',
@@ -190,6 +204,7 @@ const styles = StyleSheet.create({
     right: 0,
     borderTopWidth: 1,
     borderStyle: 'dashed',
+    opacity: 0.5,
   },
   barColumn: {
     flex: 1,
@@ -197,32 +212,11 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bar: {
-    width: '55%',
-    borderRadius: 6,
+    width: 14,
+    borderRadius: 7,
   },
   barLabel: {
-    height: 20,
-    lineHeight: 20,
-  },
-  subjectStat: {
-    gap: Spacing.one,
-  },
-  subjectStatHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  history: {
-    gap: Spacing.two,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    height: LABEL_HEIGHT,
+    lineHeight: LABEL_HEIGHT,
   },
 });

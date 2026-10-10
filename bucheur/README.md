@@ -5,9 +5,12 @@ Développée avec [Expo](https://expo.dev) (React Native), elle se construit et 
 
 ## Fonctionnalités
 
-- **Focus** : minuteur de révision (15, 25, 45 ou 60 min) par matière. La séance est enregistrée
-  automatiquement à la fin, même si l'app a été fermée, et une notification prévient l'utilisateur.
-- **Série 🔥** : nombre de jours consécutifs avec au moins une séance.
+- **Focus** : minuteur de révision (15, 25, 45 ou 60 min) par matière, avec un anneau de progression.
+  Pendant la séance, l'écran passe en mode immersif (rien d'autre à l'écran, écran maintenu allumé).
+  La séance est enregistrée automatiquement à la fin, même si l'app a été fermée, et une notification
+  prévient l'utilisateur.
+- **Pause** : à la fin d'une séance, l'app propose une pause de 5 minutes, puis la séance suivante.
+- **Série** : nombre de jours consécutifs avec au moins une séance.
 - **Objectif du jour** et **compte à rebours** jusqu'au prochain examen (J-12…).
 - **Matières** : couleur et objectif hebdomadaire, avec la progression de la semaine.
 - **Examens** : liste des examens à venir et passés.

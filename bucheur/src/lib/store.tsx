@@ -6,14 +6,14 @@ import { Platform } from 'react-native';
 import { SubjectColors } from '@/constants/theme';
 import { cancelNotification, scheduleTimerEnd } from './notifications';
 import { newId } from './stats';
-import type { AppData, Exam, Session, Subject } from './types';
+import type { ActiveTimer, AppData, Exam, Session, Subject } from './types';
 
 const STORAGE_KEY = 'bucheur:v1';
 
 const defaultData: AppData = {
   subjects: [
-    { id: 'maths', name: 'Maths', color: SubjectColors[1], weeklyGoalMin: 240 },
-    { id: 'francais', name: 'Français', color: SubjectColors[0], weeklyGoalMin: 180 },
+    { id: 'maths', name: 'Maths', color: SubjectColors[0], weeklyGoalMin: 240 },
+    { id: 'francais', name: 'Français', color: SubjectColors[1], weeklyGoalMin: 180 },
     { id: 'anglais', name: 'Anglais', color: SubjectColors[2], weeklyGoalMin: 120 },
   ],
   sessions: [],
@@ -29,6 +29,8 @@ type Store = {
   justCompleted: Session | null;
   dismissCompleted: () => void;
   startTimer: (subjectId: string, durationMin: number) => Promise<void>;
+  /** Pause après une séance : elle n'est pas comptée dans les statistiques. */
+  startBreak: (durationMin: number) => Promise<void>;
   /** Arrête le minuteur ; si `save`, enregistre le temps déjà passé. */
   stopTimer: (save: boolean) => Promise<void>;
   addSubject: (subject: Omit<Subject, 'id'>) => void;
@@ -74,6 +76,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded || !timer) return;
     const complete = () => {
+      if (timer.kind === 'break') {
+        setData((d) => (d.activeTimer?.startedAt === timer.startedAt ? { ...d, activeTimer: null } : d));
+        return;
+      }
       const session: Session = {
         id: newId(),
         subjectId: timer.subjectId,
@@ -99,6 +105,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(id);
   }, [loaded, timer]);
 
+  async function launch(timer: ActiveTimer, title: string, body: string) {
+    setData((d) => ({ ...d, activeTimer: timer }));
+    const notificationId = await scheduleTimerEnd(timer.durationMin * 60, title, body);
+    if (notificationId) {
+      setData((d) =>
+        d.activeTimer?.startedAt === timer.startedAt
+          ? { ...d, activeTimer: { ...d.activeTimer, notificationId } }
+          : d,
+      );
+    }
+  }
+
   const store: Store = {
     data,
     loaded,
@@ -106,18 +124,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissCompleted: () => setJustCompleted(null),
 
     async startTimer(subjectId, durationMin) {
-      const subject = data.subjects.find((s) => s.id === subjectId);
-      const startedAt = Date.now();
+      const subject = data.subjects.find((s) => s.id === subjectId)?.name ?? 'révision';
       setJustCompleted(null);
-      setData((d) => ({ ...d, activeTimer: { subjectId, startedAt, durationMin } }));
-      const notificationId = await scheduleTimerEnd(durationMin * 60, subject?.name ?? 'révision');
-      if (notificationId) {
-        setData((d) =>
-          d.activeTimer?.startedAt === startedAt
-            ? { ...d, activeTimer: { ...d.activeTimer, notificationId } }
-            : d,
-        );
-      }
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      await launch(
+        { kind: 'focus', subjectId, startedAt: Date.now(), durationMin },
+        'Séance terminée',
+        `${durationMin} min de ${subject} enregistrées. Accorde-toi une pause.`,
+      );
+    },
+
+    async startBreak(durationMin) {
+      const subjectId = justCompleted?.subjectId ?? '';
+      setJustCompleted(null);
+      await launch(
+        { kind: 'break', subjectId, startedAt: Date.now(), durationMin },
+        'La pause est finie',
+        'Prêt pour la séance suivante ?',
+      );
     },
 
     async stopTimer(save) {
@@ -129,7 +153,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...d,
         activeTimer: null,
         sessions:
-          save && elapsedMin >= 1
+          save && t.kind !== 'break' && elapsedMin >= 1
             ? [
                 ...d.sessions,
                 { id: newId(), subjectId: t.subjectId, startedAt: t.startedAt, durationMin: elapsedMin },
