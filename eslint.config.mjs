@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Application mobile Expo, qui a sa propre config ESLint.
+    "bucheur/**",
   ]),
 ]);
 
