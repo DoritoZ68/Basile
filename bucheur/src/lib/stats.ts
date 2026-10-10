@@ -83,10 +83,14 @@ export function bestStreak(sessions: Session[]): number {
 
 export type DayBar = { key: string; letter: string; minutes: number; isToday: boolean };
 
-/** Les 7 jours de la semaine en cours (lundi → dimanche). */
-export function weekBars(sessions: Session[], now: Date | number): DayBar[] {
+/** Les 7 jours (lundi → dimanche) de la semaine qui contient `weekOf`. */
+export function weekBars(
+  sessions: Session[],
+  weekOf: Date | number,
+  now: Date | number = weekOf,
+): DayBar[] {
   const days = minutesByDay(sessions);
-  const monday = startOfWeek(now);
+  const monday = startOfWeek(weekOf);
   const today = dayKey(now);
   return Array.from({ length: 7 }, (_, i) => {
     const date = addDays(monday, i);
@@ -100,11 +104,13 @@ export function weekBars(sessions: Session[], now: Date | number): DayBar[] {
   });
 }
 
+/** Minutes par matière sur la semaine (lundi → dimanche) qui contient `now`. */
 export function weekMinutesBySubject(sessions: Session[], now: Date | number): Map<string, number> {
   const from = startOfWeek(now).getTime();
+  const to = addDays(from, 7).getTime();
   const map = new Map<string, number>();
   for (const s of sessions) {
-    if (s.startedAt < from) continue;
+    if (s.startedAt < from || s.startedAt >= to) continue;
     map.set(s.subjectId, (map.get(s.subjectId) ?? 0) + s.durationMin);
   }
   return map;

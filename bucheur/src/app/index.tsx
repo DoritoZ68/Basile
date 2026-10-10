@@ -10,11 +10,18 @@ import { Button, Chip, Group, Row, Screen, Segmented, SectionTitle } from '@/com
 import { BottomTabInset, Display, Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
-import { currentStreak, dayKey, daysUntil, formatClock, formatDuration, minutesOn } from '@/lib/stats';
+import {
+  currentStreak,
+  dayKey,
+  daysUntil,
+  formatClock,
+  formatDuration,
+  minutesOn,
+} from '@/lib/stats';
+import { usePro } from '@/lib/pro';
 import { useStore } from '@/lib/store';
 import type { ActiveTimer, AppData } from '@/lib/types';
 
-const DURATIONS = [15, 25, 45, 60].map((d) => ({ value: d, label: `${d} min` }));
 const BREAK_MIN = 5;
 
 const FOCUS_LINES = [
@@ -51,6 +58,12 @@ export default function FocusScreen() {
 function Idle() {
   const theme = useTheme();
   const { data, startTimer, updateSettings } = useStore();
+  const { isPro, openPaywall } = usePro();
+  // La séance de 90 minutes fait partie de Bûcheur Pro.
+  const durations = [15, 25, 45, 60, 90].map((d) => ({
+    value: d,
+    label: d === 90 && !isPro ? '90 · Pro' : `${d} min`,
+  }));
   const { subjects, sessions, exams, settings } = data;
   const now = useNow(60_000);
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -84,11 +97,7 @@ function Idle() {
   return (
     <Screen subtitle={dateLabel} title="Prêt à réviser ?">
       <View style={styles.ringWrap}>
-        <TreeRings
-          size={240}
-          sessions={rings}
-          goalMinutes={settings.dailyGoalMin}
-        />
+        <TreeRings size={240} sessions={rings} goalMinutes={settings.dailyGoalMin} />
         <View style={styles.trunkCaption}>
           <ThemedText style={styles.trunkValue}>
             {rings.length === 0 ? 'Ton premier cerne t’attend.' : formatDuration(today)}
@@ -114,9 +123,11 @@ function Idle() {
       </View>
 
       <Segmented
-        options={DURATIONS}
+        options={durations}
         value={settings.focusMin}
-        onChange={(focusMin) => updateSettings({ focusMin })}
+        onChange={(focusMin) =>
+          focusMin === 90 && !isPro ? openPaywall() : updateSettings({ focusMin })
+        }
       />
 
       <Button
@@ -237,7 +248,8 @@ function Completed() {
         </ThemedText>
         <ThemedText style={styles.completedTitle}>Un cerne de plus.</ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.line}>
-          {formatDuration(justCompleted.durationMin)} de {subject?.name ?? 'révision'} en plus.{'\n'}
+          {formatDuration(justCompleted.durationMin)} de {subject?.name ?? 'révision'} en plus.
+          {'\n'}
           {left > 0
             ? `Encore ${formatDuration(left)} pour ton objectif du jour.`
             : 'Objectif du jour atteint.'}

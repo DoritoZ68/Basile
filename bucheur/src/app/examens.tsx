@@ -7,6 +7,7 @@ import { Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { addDays, dayKey, daysUntil, formatDate, parseDayKey } from '@/lib/stats';
+import { FREE_LIMITS, usePro } from '@/lib/pro';
 import { useStore } from '@/lib/store';
 
 const SHIFTS = [
@@ -32,6 +33,9 @@ export default function ExamsScreen() {
     .sort((a, b) => a.date.localeCompare(b.date));
   const upcoming = exams.filter((e) => e.days >= 0);
   const past = exams.filter((e) => e.days < 0).reverse();
+  // Seuls les examens à venir comptent dans la limite gratuite.
+  const { isPro, openPaywall } = usePro();
+  const locked = !isPro && upcoming.length >= FREE_LIMITS.exams;
   const inDays = daysUntil(date, now);
 
   const shift = (days: number) => {
@@ -53,7 +57,15 @@ export default function ExamsScreen() {
         key={e.id}
         label={e.name}
         detail={formatDate(e.date)}
-        value={confirming ? 'Retirer ?' : e.days < 0 ? 'Passé' : e.days === 0 ? 'Aujourd’hui' : `J-${e.days}`}
+        value={
+          confirming
+            ? 'Retirer ?'
+            : e.days < 0
+              ? 'Passé'
+              : e.days === 0
+                ? 'Aujourd’hui'
+                : `J-${e.days}`
+        }
         valueColor={confirming ? theme.danger : e.days >= 0 ? theme.accent : undefined}
         onPress={() => {
           if (!confirming) return setConfirmDeleteId(e.id);
@@ -76,42 +88,56 @@ export default function ExamsScreen() {
       )}
 
       <SectionTitle>Nouvel examen</SectionTitle>
-      <Group>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Nom, ex. Bac de français"
-          placeholderTextColor={theme.textSecondary}
-          returnKeyType="done"
-          onSubmitEditing={submit}
-          maxLength={40}
-          style={[styles.input, { color: theme.text }]}
-        />
-        <View style={styles.dateRow}>
-          <View style={styles.flex}>
-            <ThemedText>{formatDate(date)}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {inDays === 0 ? 'aujourd’hui' : `dans ${inDays} jour${inDays > 1 ? 's' : ''}`}
-            </ThemedText>
-          </View>
-        </View>
-        <View style={styles.shifts}>
-          {SHIFTS.map((s) => (
-            <Pressable
-              key={s.label}
-              accessibilityRole="button"
-              accessibilityLabel={`${s.days > 0 ? 'Avancer' : 'Reculer'} de ${Math.abs(s.days)} jours`}
-              onPress={() => shift(s.days)}
-              style={({ pressed }) => [
-                styles.shift,
-                { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
-              ]}>
-              <ThemedText type="small">{s.label} j</ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </Group>
-      <Button label="Ajouter l'examen" onPress={submit} disabled={!name.trim()} />
+      {locked ? (
+        <Group>
+          <Row
+            label={`Plus de ${FREE_LIMITS.exams} examens à venir`}
+            detail="Examens illimités avec Bûcheur Pro"
+            value="Pro ›"
+            valueColor={theme.accent}
+            onPress={openPaywall}
+          />
+        </Group>
+      ) : (
+        <>
+          <Group>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Nom, ex. Bac de français"
+              placeholderTextColor={theme.textSecondary}
+              returnKeyType="done"
+              onSubmitEditing={submit}
+              maxLength={40}
+              style={[styles.input, { color: theme.text }]}
+            />
+            <View style={styles.dateRow}>
+              <View style={styles.flex}>
+                <ThemedText>{formatDate(date)}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {inDays === 0 ? 'aujourd’hui' : `dans ${inDays} jour${inDays > 1 ? 's' : ''}`}
+                </ThemedText>
+              </View>
+            </View>
+            <View style={styles.shifts}>
+              {SHIFTS.map((s) => (
+                <Pressable
+                  key={s.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${s.days > 0 ? 'Avancer' : 'Reculer'} de ${Math.abs(s.days)} jours`}
+                  onPress={() => shift(s.days)}
+                  style={({ pressed }) => [
+                    styles.shift,
+                    { backgroundColor: theme.backgroundSelected, opacity: pressed ? 0.6 : 1 },
+                  ]}>
+                  <ThemedText type="small">{s.label} j</ThemedText>
+                </Pressable>
+              ))}
+            </View>
+          </Group>
+          <Button label="Ajouter l'examen" onPress={submit} disabled={!name.trim()} />
+        </>
+      )}
 
       {past.length > 0 && (
         <>

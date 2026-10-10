@@ -31,9 +31,13 @@ export type ActiveTimer = {
   notificationId?: string;
 };
 
+export type EssenceId = 'sauge' | 'chene' | 'erable' | 'nuit';
+
 export type Settings = {
   dailyGoalMin: number;
   focusMin: number;
+  /** Couleur d'accent (Bûcheur Pro). Absent = sauge. */
+  essence?: EssenceId;
 };
 
 export type AppData = {

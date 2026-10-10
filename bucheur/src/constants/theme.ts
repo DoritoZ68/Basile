@@ -34,6 +34,14 @@ export const Colors = {
   },
 } as const;
 
+/** Essences de bois : couleurs d'accent proposées avec Bûcheur Pro. */
+export const Essences = {
+  sauge: { name: 'Sauge', light: '#3E6B5A', dark: '#8FBFA8' },
+  chene: { name: 'Chêne', light: '#8A5A2B', dark: '#D9A86C' },
+  erable: { name: 'Érable', light: '#A4472F', dark: '#E8907A' },
+  nuit: { name: 'Bois de nuit', light: '#2F4A6B', dark: '#8FB0D8' },
+} as const;
+
 /** Couleurs douces proposées pour les matières. */
 export const SubjectColors = [
   '#5B7FA6',

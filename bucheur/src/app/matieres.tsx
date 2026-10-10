@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Group, ProgressBar, Screen, SectionTitle, Stepper } from '@/components/ui';
+import { Button, Group, ProgressBar, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
 import { Spacing, SubjectColors } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDuration, weekMinutesBySubject } from '@/lib/stats';
+import { FREE_LIMITS, usePro } from '@/lib/pro';
 import { useStore } from '@/lib/store';
 import type { Subject } from '@/lib/types';
 
@@ -15,6 +16,8 @@ const GOAL_STEP = 30;
 export default function SubjectsScreen() {
   const theme = useTheme();
   const { data, addSubject } = useStore();
+  const { isPro, openPaywall } = usePro();
+  const locked = !isPro && data.subjects.length >= FREE_LIMITS.subjects;
   const week = weekMinutesBySubject(data.sessions, useNow(60_000));
 
   const [openId, setOpenId] = useState<string | null>(null);
@@ -52,26 +55,40 @@ export default function SubjectsScreen() {
       )}
 
       <SectionTitle>Nouvelle matière</SectionTitle>
-      <Group>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Nom, ex. Physique-chimie"
-          placeholderTextColor={theme.textSecondary}
-          returnKeyType="done"
-          onSubmitEditing={submit}
-          maxLength={30}
-          style={[styles.input, { color: theme.text }]}
-        />
-        <ColorPicker value={color} onChange={setColor} />
-        <Stepper
-          label="Objectif par semaine"
-          value={formatDuration(goal)}
-          onMinus={() => setGoal((g) => Math.max(GOAL_STEP, g - GOAL_STEP))}
-          onPlus={() => setGoal((g) => g + GOAL_STEP)}
-        />
-      </Group>
-      <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
+      {locked ? (
+        <Group>
+          <Row
+            label={`Plus de ${FREE_LIMITS.subjects} matières`}
+            detail="Matières illimitées avec Bûcheur Pro"
+            value="Pro ›"
+            valueColor={theme.accent}
+            onPress={openPaywall}
+          />
+        </Group>
+      ) : (
+        <>
+          <Group>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Nom, ex. Physique-chimie"
+              placeholderTextColor={theme.textSecondary}
+              returnKeyType="done"
+              onSubmitEditing={submit}
+              maxLength={30}
+              style={[styles.input, { color: theme.text }]}
+            />
+            <ColorPicker value={color} onChange={setColor} />
+            <Stepper
+              label="Objectif par semaine"
+              value={formatDuration(goal)}
+              onMinus={() => setGoal((g) => Math.max(GOAL_STEP, g - GOAL_STEP))}
+              onPlus={() => setGoal((g) => g + GOAL_STEP)}
+            />
+          </Group>
+          <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
+        </>
+      )}
     </Screen>
   );
 }
@@ -113,7 +130,9 @@ function SubjectRow({ subject: s, done, open, onToggle }: SubjectRowProps) {
             label="Objectif par semaine"
             value={formatDuration(s.weeklyGoalMin)}
             onMinus={() =>
-              updateSubject(s.id, { weeklyGoalMin: Math.max(GOAL_STEP, s.weeklyGoalMin - GOAL_STEP) })
+              updateSubject(s.id, {
+                weeklyGoalMin: Math.max(GOAL_STEP, s.weeklyGoalMin - GOAL_STEP),
+              })
             }
             onPlus={() => updateSubject(s.id, { weeklyGoalMin: s.weeklyGoalMin + GOAL_STEP })}
           />

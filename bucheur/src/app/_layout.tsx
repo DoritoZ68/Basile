@@ -7,6 +7,8 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import AppTabs from '@/components/app-tabs';
+import { Paywall } from '@/components/paywall';
+import { ProProvider } from '@/lib/pro';
 import { StoreProvider, useStore } from '@/lib/store';
 
 SplashScreen.preventAutoHideAsync();
@@ -17,8 +19,11 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <StoreProvider>
-        <HideSplashWhenReady ready={fontsLoaded || fontError !== null} />
-        <AppTabs />
+        <ProProvider>
+          <HideSplashWhenReady ready={fontsLoaded || fontError !== null} />
+          <AppTabs />
+          <Paywall />
+        </ProProvider>
       </StoreProvider>
     </ThemeProvider>
   );

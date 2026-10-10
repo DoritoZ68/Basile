@@ -22,6 +22,44 @@ l'objectif quotidien, et pendant une séance on voit le nouveau cerne se dessine
 
 Toutes les données restent sur le téléphone (AsyncStorage) : aucun serveur, aucun coût d'hébergement.
 
+## Bûcheur Pro (4,99 €, achat unique)
+
+| Gratuit | Pro |
+|---|---|
+| 4 matières, 2 examens à venir | Matières et examens illimités |
+| Séances de 15 à 60 min | + séances de 90 min |
+| Semaine en cours | Tout l'historique, semaine par semaine |
+| Essence « Sauge » | Essences Chêne, Érable, Bois de nuit |
+
+Sur 4,99 € TTC, il reste environ **3,50 €** par vente (TVA puis 15 % de commission Apple avec le
+Small Business Program) : une trentaine de ventes remboursent le compte développeur.
+
+Les achats passent par [RevenueCat](https://www.revenuecat.com) (gratuit jusqu'à 2 500 $ de revenus par
+mois), qui vérifie les reçus Apple et gère la restauration des achats. Le code est dans `src/lib/pro.tsx`
+et l'écran d'achat dans `src/components/paywall.tsx`.
+
+### Mise en place
+
+1. **App Store Connect** › ton app › *Achats intégrés* : crée un achat **non consommable**,
+   identifiant `bucheur_pro_lifetime`, prix 4,99 €, avec un nom et une capture de l'écran Pro.
+2. **RevenueCat** : crée un projet et ajoute l'app iOS (bundle `com.bucheur.app`) avec la clé
+   d'achats intégrés d'App Store Connect. Puis :
+   - *Entitlements* : crée `pro` et rattache-lui le produit `bucheur_pro_lifetime` ;
+   - *Offerings* : dans l'offre `default`, ajoute un package **Lifetime** avec ce produit.
+3. Copie la clé publique iOS (`appl_…`) :
+   - en local : `cp .env.example .env.local` puis colle la clé ;
+   - pour les builds EAS :
+     `npx eas-cli@latest env:create --name EXPO_PUBLIC_REVENUECAT_IOS_KEY --value appl_… --environment production --visibility plaintext`
+4. Envoie l'achat intégré en vérification **avec** la version de l'app qui l'utilise.
+5. Dans la fiche de confidentialité App Store, déclare « Achats » (historique d'achats, non lié à l'identité).
+
+### Tester
+
+- **Expo Go, sans clé** : l'achat est simulé, pour vérifier les écrans et les fonctions Pro.
+- **Vrai achat (bac à sable)** : il faut un build de développement
+  (`npx eas-cli@latest build --profile development --platform ios`) et un testeur *Sandbox*
+  créé dans App Store Connect › Utilisateurs et accès.
+
 ## Tester sur ton iPhone (gratuit, depuis Linux)
 
 1. Installe **Expo Go** depuis l'App Store sur ton iPhone.

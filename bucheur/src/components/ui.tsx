@@ -96,7 +96,10 @@ export function Row({ label, value, detail, color, onPress, valueColor }: RowPro
   );
   if (!onPress) return content;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => pressed && styles.pressed}>
       {content}
     </Pressable>
   );
@@ -171,7 +174,11 @@ type SegmentedProps<T extends string | number> = {
   onChange: (value: T) => void;
 };
 
-export function Segmented<T extends string | number>({ options, value, onChange }: SegmentedProps<T>) {
+export function Segmented<T extends string | number>({
+  options,
+  value,
+  onChange,
+}: SegmentedProps<T>) {
   const theme = useTheme();
   return (
     <View style={[styles.segmented, { backgroundColor: theme.backgroundSelected }]}>

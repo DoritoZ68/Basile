@@ -44,6 +44,11 @@ type Store = {
 
 const StoreContext = createContext<Store | null>(null);
 
+/** Comme `useStore`, mais renvoie `null` hors du <StoreProvider> au lieu de lever une erreur. */
+export function useOptionalStore(): Store | null {
+  return use(StoreContext);
+}
+
 export function useStore(): Store {
   const store = use(StoreContext);
   if (!store) throw new Error('useStore doit être utilisé dans <StoreProvider>');
@@ -60,7 +65,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then((raw) => {
         if (raw) {
           const saved = JSON.parse(raw) as Partial<AppData>;
-          setData({ ...defaultData, ...saved, settings: { ...defaultData.settings, ...saved.settings } });
+          setData({
+            ...defaultData,
+            ...saved,
+            settings: { ...defaultData.settings, ...saved.settings },
+          });
         }
       })
       .catch(() => {})
@@ -77,7 +86,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!loaded || !timer) return;
     const complete = () => {
       if (timer.kind === 'break') {
-        setData((d) => (d.activeTimer?.startedAt === timer.startedAt ? { ...d, activeTimer: null } : d));
+        setData((d) =>
+          d.activeTimer?.startedAt === timer.startedAt ? { ...d, activeTimer: null } : d,
+        );
         return;
       }
       const session: Session = {
@@ -126,7 +137,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async startTimer(subjectId, durationMin) {
       const subject = data.subjects.find((s) => s.id === subjectId)?.name ?? 'révision';
       setJustCompleted(null);
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (Platform.OS !== 'web')
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       await launch(
         { kind: 'focus', subjectId, startedAt: Date.now(), durationMin },
         'Séance terminée',
@@ -156,7 +168,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           save && t.kind !== 'break' && elapsedMin >= 1
             ? [
                 ...d.sessions,
-                { id: newId(), subjectId: t.subjectId, startedAt: t.startedAt, durationMin: elapsedMin },
+                {
+                  id: newId(),
+                  subjectId: t.subjectId,
+                  startedAt: t.startedAt,
+                  durationMin: elapsedMin,
+                },
               ]
             : d.sessions,
       }));
