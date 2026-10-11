@@ -1,9 +1,19 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { SettingsButton } from '@/components/settings-sheet';
+import { ScreenSettingsButton } from '@/components/settings-sheet';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Group, ProgressBar, Row, Screen, SectionTitle, Stepper } from '@/components/ui';
+import {
+  Button,
+  Grid,
+  Group,
+  Panel,
+  ProgressBar,
+  Row,
+  Screen,
+  SectionTitle,
+  Stepper,
+} from '@/components/ui';
 import { Spacing, SubjectColors } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
@@ -35,61 +45,79 @@ export default function SubjectsScreen() {
   };
 
   return (
-    <Screen title="Matières" action={<SettingsButton />}>
-      <SectionTitle>Cette semaine</SectionTitle>
-      {data.subjects.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-          Aucune matière pour l&apos;instant.
-        </ThemedText>
-      ) : (
-        <Group>
-          {data.subjects.map((s) => (
-            <SubjectRow
-              key={s.id}
-              subject={s}
-              done={week.get(s.id) ?? 0}
-              open={openId === s.id}
-              onToggle={() => setOpenId(openId === s.id ? null : s.id)}
-            />
-          ))}
-        </Group>
-      )}
+    <Screen subtitle="Ce que tu révises" title="Matières" action={<ScreenSettingsButton />}>
+      <Grid min={340}>
+        <View style={styles.column}>
+          <SectionTitle>Cette semaine</SectionTitle>
+          {data.subjects.length === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+              Aucune matière pour l&apos;instant.
+            </ThemedText>
+          ) : (
+            <Group>
+              {data.subjects.map((s) => (
+                <SubjectRow
+                  key={s.id}
+                  subject={s}
+                  done={week.get(s.id) ?? 0}
+                  open={openId === s.id}
+                  onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+                />
+              ))}
+            </Group>
+          )}
 
-      <SectionTitle>Nouvelle matière</SectionTitle>
-      {locked ? (
-        <Group>
-          <Row
-            label={`Plus de ${FREE_LIMITS.subjects} matières`}
-            detail="Matières illimitées avec Bûcheur Pro"
-            value="Pro ›"
-            valueColor={theme.accent}
-            onPress={openPaywall}
-          />
-        </Group>
-      ) : (
-        <>
-          <Group>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Nom, ex. Physique-chimie"
-              placeholderTextColor={theme.textSecondary}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              maxLength={30}
-              style={[styles.input, { color: theme.text }]}
-            />
-            <ColorPicker value={color} onChange={setColor} />
-            <Stepper
-              label="Objectif par semaine"
-              value={formatDuration(goal)}
-              onMinus={() => setGoal((g) => Math.max(GOAL_STEP, g - GOAL_STEP))}
-              onPlus={() => setGoal((g) => g + GOAL_STEP)}
-            />
-          </Group>
-          <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
-        </>
-      )}
+          {data.subjects.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+              Touche une matière pour la renommer, changer sa couleur ou son objectif.
+            </ThemedText>
+          )}
+        </View>
+        <View style={styles.column}>
+          <SectionTitle>Nouvelle matière</SectionTitle>
+          {locked ? (
+            <Group>
+              <Row
+                label={`Plus de ${FREE_LIMITS.subjects} matières`}
+                detail="Matières illimitées avec Bûcheur Pro"
+                value="Pro ›"
+                valueColor={theme.accent}
+                onPress={openPaywall}
+              />
+            </Group>
+          ) : (
+            <>
+              <Group>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Nom, ex. Physique-chimie"
+                  placeholderTextColor={theme.textSecondary}
+                  returnKeyType="done"
+                  onSubmitEditing={submit}
+                  maxLength={30}
+                  style={[styles.input, { color: theme.text }]}
+                />
+                <ColorPicker value={color} onChange={setColor} />
+                <Stepper
+                  label="Objectif par semaine"
+                  value={formatDuration(goal)}
+                  onMinus={() => setGoal((g) => Math.max(GOAL_STEP, g - GOAL_STEP))}
+                  onPlus={() => setGoal((g) => g + GOAL_STEP)}
+                />
+              </Group>
+              <Button label="Ajouter" onPress={submit} disabled={!name.trim()} />
+            </>
+          )}
+          <Panel eyebrow="Conseil" title="Des objectifs réalistes">
+            <ThemedText themeColor="textSecondary">
+              Mieux vaut 3 h par semaine tenues que 10 h abandonnées. Donne plus de temps aux
+              matières à fort coefficient et à celles où tu as le plus de retard, puis ajuste chaque
+              dimanche en regardant tes statistiques.
+            </ThemedText>
+          </Panel>
+        </View>
+      </Grid>
     </Screen>
   );
 }
@@ -195,6 +223,9 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (color: str
 }
 
 const styles = StyleSheet.create({
+  column: {
+    gap: Spacing.three,
+  },
   flex: {
     flex: 1,
   },

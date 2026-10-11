@@ -27,6 +27,36 @@ export type Exam = {
   subjectId?: string;
 };
 
+/** Une chose à réviser : chapitre, exercice, fiche à relire… */
+export type Task = {
+  id: string;
+  title: string;
+  subjectId?: string;
+  /** Échéance facultative (YYYY-MM-DD). */
+  due?: string;
+  done: boolean;
+  createdAt: number;
+  doneAt?: number;
+};
+
+/** Fiche de révision recto / verso, révisée selon la méthode Leitner (boîtes 1 à 5). */
+export type Card = {
+  id: string;
+  front: string;
+  back: string;
+  subjectId?: string;
+  box: number;
+  /** Prochain jour de révision (YYYY-MM-DD). */
+  due: string;
+  createdAt: number;
+  /** Nombre total de révisions, et de bonnes réponses. */
+  reviews?: number;
+  correct?: number;
+};
+
+/** Ambiance sonore pendant les séances (version web). */
+export type SoundId = 'none' | 'pluie' | 'brun' | 'blanc';
+
 /** Minuteur en cours : basé sur des timestamps pour survivre à la mise en arrière-plan. */
 export type ActiveTimer = {
   /** `break` : pause entre deux séances, non comptée dans les stats. Absent = `focus`. */
@@ -64,12 +94,26 @@ export type Settings = {
   keepAwake?: boolean;
   /** Afficher une phrase d'encouragement pendant la séance. */
   quotes?: boolean;
+  /** Prénom affiché dans le message d'accueil. */
+  name?: string;
+  /** Une pause longue toutes les N séances (cycle Pomodoro). 0 = jamais. */
+  longBreakEvery?: number;
+  /** Durée de la pause longue, en minutes. */
+  longBreakMin?: number;
+  /** Ambiance sonore pendant les séances. */
+  sound?: SoundId;
+  /** Volume de l'ambiance, de 0 à 1. */
+  soundVolume?: number;
+  /** Petit carillon à la fin d'une séance ou d'une pause. */
+  chime?: boolean;
 };
 
 export type AppData = {
   subjects: Subject[];
   sessions: Session[];
   exams: Exam[];
+  tasks: Task[];
+  cards: Card[];
   activeTimer: ActiveTimer | null;
   settings: Settings;
 };

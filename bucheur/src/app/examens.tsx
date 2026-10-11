@@ -1,9 +1,20 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { SettingsButton } from '@/components/settings-sheet';
+import { ScreenSettingsButton } from '@/components/settings-sheet';
 import { ThemedText } from '@/components/themed-text';
-import { Button, Chip, Group, Row, Screen, SectionTitle } from '@/components/ui';
+import {
+  Button,
+  Chip,
+  Grid,
+  Group,
+  Panel,
+  Row,
+  Screen,
+  SectionTitle,
+  TextLink,
+} from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
@@ -69,66 +80,85 @@ export default function ExamsScreen() {
   );
 
   return (
-    <Screen title="Examens" action={<SettingsButton />}>
-      <SectionTitle>À venir</SectionTitle>
-      {upcoming.length === 0 ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-          Ajoute tes examens pour suivre le compte à rebours.
-        </ThemedText>
-      ) : (
-        <Group>{upcoming.map(renderExam)}</Group>
-      )}
+    <Screen subtitle="Compte à rebours" title="Examens" action={<ScreenSettingsButton />}>
+      <Grid min={340}>
+        <View style={styles.column}>
+          <SectionTitle>À venir</SectionTitle>
+          {upcoming.length === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+              Ajoute tes examens pour suivre le compte à rebours.
+            </ThemedText>
+          ) : (
+            <Group>{upcoming.map(renderExam)}</Group>
+          )}
 
-      <SectionTitle>Nouvel examen</SectionTitle>
-      {locked ? (
-        <Group>
-          <Row
-            label={`Plus de ${FREE_LIMITS.exams} examens à venir`}
-            detail="Examens illimités avec Bûcheur Pro"
-            value="Pro ›"
-            valueColor={theme.accent}
-            onPress={openPaywall}
-          />
-        </Group>
-      ) : (
-        <>
-          <Group>
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder="Nom, ex. Bac blanc de mathématiques"
-              placeholderTextColor={theme.textSecondary}
-              returnKeyType="done"
-              onSubmitEditing={submit}
-              maxLength={40}
-              style={[styles.input, { color: theme.text }]}
-            />
-            <DatePicker
-              date={date}
-              days={daysUntil(date, now)}
-              onShift={(days) => setDate(shiftDate(date, days, todayKey))}
-            />
-            <SubjectPicker value={subjectId} onChange={setSubjectId} />
-          </Group>
-          <Button
-            label="Ajouter l'examen"
-            onPress={submit}
-            disabled={name.trim().length < MIN_NAME}
-          />
-        </>
-      )}
+          {past.length > 0 && (
+            <>
+              <SectionTitle>Passés</SectionTitle>
+              <Group>{past.map(renderExam)}</Group>
+            </>
+          )}
+          {exams.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+              Touche un examen pour le modifier ou le retirer.
+            </ThemedText>
+          )}
+        </View>
+        <View style={styles.column}>
+          <SectionTitle>Nouvel examen</SectionTitle>
+          {locked ? (
+            <Group>
+              <Row
+                label={`Plus de ${FREE_LIMITS.exams} examens à venir`}
+                detail="Examens illimités avec Bûcheur Pro"
+                value="Pro ›"
+                valueColor={theme.accent}
+                onPress={openPaywall}
+              />
+            </Group>
+          ) : (
+            <>
+              <Group>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Nom, ex. Bac blanc de mathématiques"
+                  placeholderTextColor={theme.textSecondary}
+                  returnKeyType="done"
+                  onSubmitEditing={submit}
+                  maxLength={40}
+                  style={[styles.input, { color: theme.text }]}
+                />
+                <DatePicker
+                  date={date}
+                  days={daysUntil(date, now)}
+                  onShift={(days) => setDate(shiftDate(date, days, todayKey))}
+                />
+                <SubjectPicker value={subjectId} onChange={setSubjectId} />
+              </Group>
+              <Button
+                label="Ajouter l'examen"
+                onPress={submit}
+                disabled={name.trim().length < MIN_NAME}
+              />
+            </>
+          )}
 
-      {past.length > 0 && (
-        <>
-          <SectionTitle>Passés</SectionTitle>
-          <Group>{past.map(renderExam)}</Group>
-        </>
-      )}
-      {exams.length > 0 && (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-          Touche un examen pour le modifier ou le retirer.
-        </ThemedText>
-      )}
+          <Panel eyebrow="Méthode" title="Le planning à rebours">
+            <ThemedText themeColor="textSecondary">
+              Pars de la date de l’examen, liste les chapitres et répartis-les sur les semaines qui
+              restent, en gardant la dernière pour la révision générale.
+            </ThemedText>
+            <TextLink
+              label="Lire la méthode ›"
+              onPress={() =>
+                router.navigate({ pathname: '/methodes/[id]', params: { id: 'planning-retro' } })
+              }
+            />
+            <TextLink label="Créer mes tâches ›" onPress={() => router.navigate('/taches')} />
+          </Panel>
+        </View>
+      </Grid>
     </Screen>
   );
 }
@@ -275,6 +305,9 @@ function SubjectPicker({
 }
 
 const styles = StyleSheet.create({
+  column: {
+    gap: Spacing.three,
+  },
   hint: {
     marginLeft: Spacing.three,
   },

@@ -13,7 +13,7 @@ const LICENSE_KEY = 'bucheur:license';
 export const FALLBACK_PRICE = '4,99 €';
 
 /** Ce que la version gratuite permet. */
-export const FREE_LIMITS = { subjects: 4, exams: 2 } as const;
+export const FREE_LIMITS = { subjects: 4, exams: 2, cards: 40 } as const;
 
 const API_KEY = Platform.select({
   ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY,

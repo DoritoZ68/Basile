@@ -5,8 +5,10 @@ import { Platform } from 'react-native';
 
 import { SubjectColors } from '@/constants/theme';
 import { cancelNotification, scheduleTimerEnd } from './notifications';
-import { newId } from './stats';
-import type { ActiveTimer, AppData, Exam, Session, Settings, Subject } from './types';
+import { reviewCard } from './leitner';
+import { playChime } from './sound';
+import { dayKey, newId } from './stats';
+import type { ActiveTimer, AppData, Card, Exam, Session, Settings, Subject, Task } from './types';
 
 const STORAGE_KEY = 'bucheur:v1';
 
@@ -20,6 +22,12 @@ const defaultSettings: Required<Omit<Settings, 'essence'>> & Pick<Settings, 'ess
   haptics: true,
   keepAwake: true,
   quotes: true,
+  name: '',
+  longBreakEvery: 4,
+  longBreakMin: 15,
+  sound: 'none',
+  soundVolume: 0.5,
+  chime: true,
 };
 
 const defaultData: AppData = {
@@ -30,6 +38,8 @@ const defaultData: AppData = {
   ],
   sessions: [],
   exams: [],
+  tasks: [],
+  cards: [],
   activeTimer: null,
   settings: defaultSettings,
 };
@@ -42,6 +52,26 @@ export function timerEndsAt(t: ActiveTimer): number {
 /** Temps de séance réellement écoulé (hors pauses), en ms. */
 export function timerElapsed(t: ActiveTimer, now: number): number {
   return (t.pausedAt ?? now) - t.startedAt - (t.pausedMs ?? 0);
+}
+
+/** Lit une sauvegarde exportée (ou un ancien export brut) ; `null` si elle n'est pas valable. */
+export function parseBackup(raw: string): AppData | null {
+  try {
+    const json = JSON.parse(raw) as { app?: string; data?: Partial<AppData> } & Partial<AppData>;
+    const saved = json.app === 'bucheur' ? json.data : json;
+    if (!saved || !Array.isArray(saved.subjects) || !Array.isArray(saved.sessions)) return null;
+    return {
+      ...defaultData,
+      ...saved,
+      exams: Array.isArray(saved.exams) ? saved.exams : [],
+      tasks: Array.isArray(saved.tasks) ? saved.tasks : [],
+      cards: Array.isArray(saved.cards) ? saved.cards : [],
+      activeTimer: null,
+      settings: { ...defaultSettings, ...saved.settings },
+    };
+  } catch {
+    return null;
+  }
 }
 
 type Store = {
@@ -70,7 +100,22 @@ type Store = {
   removeExam: (id: string) => void;
   updateSession: (id: string, changes: Partial<Pick<Session, 'note' | 'focus'>>) => void;
   removeSession: (id: string) => void;
+  addTask: (task: Pick<Task, 'title' | 'subjectId' | 'due'>) => void;
+  updateTask: (id: string, changes: Partial<Omit<Task, 'id'>>) => void;
+  toggleTask: (id: string) => void;
+  removeTask: (id: string) => void;
+  /** Retire toutes les tâches déjà faites. */
+  clearDoneTasks: () => void;
+  addCard: (card: Pick<Card, 'front' | 'back' | 'subjectId'>) => void;
+  updateCard: (id: string, changes: Partial<Pick<Card, 'front' | 'back' | 'subjectId'>>) => void;
+  /** Enregistre la réponse à une fiche et la range dans la bonne boîte. */
+  answerCard: (id: string, correct: boolean) => void;
+  removeCard: (id: string) => void;
   updateSettings: (changes: Partial<Settings>) => void;
+  /** Sauvegarde complète, au format JSON. */
+  exportData: () => string;
+  /** Remplace toutes les données par une sauvegarde ; renvoie faux si le fichier n'est pas valable. */
+  importData: (raw: string) => Promise<boolean>;
   /** Efface toutes les données et revient à l'état de la première ouverture. */
   resetAll: () => Promise<void>;
 };
@@ -128,6 +173,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded || !timer || timer.pausedAt) return;
     const complete = () => {
+      if (settings.chime) playChime();
       if (timer.kind === 'break') {
         setData((d) =>
           d.activeTimer?.startedAt === timer.startedAt ? { ...d, activeTimer: null } : d,
@@ -290,8 +336,75 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeSession(id) {
       setData((d) => ({ ...d, sessions: d.sessions.filter((s) => s.id !== id) }));
     },
+    addTask(task) {
+      setData((d) => ({
+        ...d,
+        tasks: [...d.tasks, { ...task, id: newId(), done: false, createdAt: Date.now() }],
+      }));
+    },
+    updateTask(id, changes) {
+      setData((d) => ({
+        ...d,
+        tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...changes } : t)),
+      }));
+    },
+    toggleTask(id) {
+      setData((d) => ({
+        ...d,
+        tasks: d.tasks.map((t) =>
+          t.id === id ? { ...t, done: !t.done, doneAt: t.done ? undefined : Date.now() } : t,
+        ),
+      }));
+    },
+    removeTask(id) {
+      setData((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
+    },
+    clearDoneTasks() {
+      setData((d) => ({ ...d, tasks: d.tasks.filter((t) => !t.done) }));
+    },
+    addCard(card) {
+      const created: Card = {
+        ...card,
+        id: newId(),
+        box: 1,
+        due: dayKey(Date.now()),
+        createdAt: Date.now(),
+      };
+      setData((d) => ({ ...d, cards: [...d.cards, created] }));
+    },
+    updateCard(id, changes) {
+      setData((d) => ({
+        ...d,
+        cards: d.cards.map((c) => (c.id === id ? { ...c, ...changes } : c)),
+      }));
+    },
+    answerCard(id, correct) {
+      setData((d) => ({
+        ...d,
+        cards: d.cards.map((c) => (c.id === id ? reviewCard(c, correct) : c)),
+      }));
+    },
+    removeCard(id) {
+      setData((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
+    },
     updateSettings(changes) {
       setData((d) => ({ ...d, settings: { ...d.settings, ...changes } }));
+    },
+    exportData() {
+      const { activeTimer: _timer, ...rest } = data;
+      return JSON.stringify(
+        { app: 'bucheur', version: 1, exportedAt: new Date().toISOString(), data: rest },
+        null,
+        2,
+      );
+    },
+    async importData(raw) {
+      const parsed = parseBackup(raw);
+      if (!parsed) return false;
+      await cancelNotification(data.activeTimer?.notificationId);
+      setJustCompleted(null);
+      setData(parsed);
+      return true;
     },
     async resetAll() {
       await cancelNotification(data.activeTimer?.notificationId);

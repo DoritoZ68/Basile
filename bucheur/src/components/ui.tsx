@@ -21,7 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ambient } from '@/components/ambient';
 import { Glass } from '@/components/glass';
 import { ThemedText } from '@/components/themed-text';
-import { BottomTabInset, Display, MaxContentWidth, Spacing } from '@/constants/theme';
+import { SiteFooter } from '@/components/site-footer';
+import { BottomTabInset, Display, HeaderInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type ScreenProps = {
@@ -71,6 +72,7 @@ export function Screen({ title, subtitle, action, children }: ScreenProps) {
           )}
           {children}
         </Animated.View>
+        {Platform.OS === 'web' && <SiteFooter />}
       </ScrollView>
     </SafeAreaView>
   );
@@ -365,6 +367,80 @@ export function IconButton({
   );
 }
 
+type PanelProps = {
+  title?: string;
+  /** Petit libellé au-dessus du titre. */
+  eyebrow?: string;
+  /** Lien ou bouton affiché à droite du titre. */
+  action?: ReactNode;
+  children?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+  tint?: string;
+};
+
+/** Carte de verre d'un tableau de bord, avec un titre facultatif. */
+export function Panel({ title, eyebrow, action, children, style, tint }: PanelProps) {
+  return (
+    <Glass tint={tint} style={[styles.panel, style]}>
+      {(title || eyebrow || action) && (
+        <View style={styles.panelHeader}>
+          <View style={styles.rowText}>
+            {eyebrow && (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.eyebrow}>
+                {eyebrow}
+              </ThemedText>
+            )}
+            {title && <ThemedText style={styles.panelTitle}>{title}</ThemedText>}
+          </View>
+          {action}
+        </View>
+      )}
+      {children}
+    </Glass>
+  );
+}
+
+/**
+ * Grille souple : les colonnes se placent côte à côte sur un grand écran et s'empilent sur
+ * téléphone, sans connaître la largeur de l'écran (ça marche aussi pour le rendu statique).
+ */
+export function Grid({
+  children,
+  min = 320,
+  style,
+}: {
+  children: ReactNode;
+  /** Largeur minimale d'une colonne. */
+  min?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <View style={[styles.grid, style]}>
+      {Children.toArray(children).map((child, i) => (
+        <View key={i} style={[styles.gridCell, { flexBasis: min }]}>
+          {child}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Lien texte discret (« Tout voir › »). */
+export function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={onPress}
+      hitSlop={8}
+      style={({ pressed }) => pressed && styles.pressed}>
+      <ThemedText type="smallBold" style={{ color: theme.accent }}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
 export function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>
@@ -379,7 +455,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'web' ? Spacing.five : Spacing.three,
+    paddingTop: Platform.OS === 'web' ? HeaderInset + Spacing.four : Spacing.three,
     paddingBottom: BottomTabInset + Spacing.six,
     alignItems: 'center',
   },
@@ -409,9 +485,41 @@ const styles = StyleSheet.create({
     fontFamily: Display.title,
     // Avec une police personnalisée, un fontWeight explicite peut faire retomber sur la police système.
     fontWeight: 'normal',
-    fontSize: 34,
-    lineHeight: 42,
+    fontSize: Platform.OS === 'web' ? 40 : 34,
+    lineHeight: Platform.OS === 'web' ? 48 : 42,
     letterSpacing: -0.3,
+  },
+  panel: {
+    borderRadius: 26,
+    padding: 20,
+    gap: Spacing.three,
+    overflow: 'hidden',
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  panelTitle: {
+    fontFamily: Display.title,
+    fontWeight: 'normal',
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  eyebrow: {
+    textTransform: 'uppercase',
+    fontSize: 12,
+    letterSpacing: 0.8,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.three,
+  },
+  gridCell: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   group: {
     borderRadius: 26,

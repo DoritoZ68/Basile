@@ -105,5 +105,10 @@ export const Spacing = {
 } as const;
 
 // Sur le web, la barre d'onglets flotte en bas de l'écran comme sur iOS 26.
-export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 96 }) ?? 0;
-export const MaxContentWidth = 800;
+export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 24 }) ?? 0;
+/** Hauteur de la barre de navigation du site (web), posée au-dessus du contenu. */
+export const HeaderInset = Platform.OS === 'web' ? 84 : 0;
+/** Largeur maximale du contenu : une page de site sur le web, une colonne sur iPhone. */
+export const MaxContentWidth = Platform.OS === 'web' ? 1120 : 800;
+/** Au-delà de cette largeur, la navigation du site affiche tous ses liens. */
+export const WideBreakpoint = 980;

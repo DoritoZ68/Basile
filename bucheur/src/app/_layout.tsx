@@ -5,6 +5,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, type ReactNode } from 'react';
 
+import { AmbiencePlayer } from '@/components/ambience-player';
 import AppTabs from '@/components/app-tabs';
 import { Paywall } from '@/components/paywall';
 import { useApplyAppearance, useColorScheme } from '@/hooks/use-color-scheme';
@@ -21,6 +22,7 @@ export default function RootLayout() {
         <ProProvider>
           <HideSplashWhenReady ready={fontsLoaded || fontError !== null} />
           <AppTabs />
+          <AmbiencePlayer />
           <Paywall />
         </ProProvider>
       </Themed>

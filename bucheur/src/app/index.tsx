@@ -14,30 +14,55 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ambient } from '@/components/ambient';
 import { ProgressGauge } from '@/components/progress-gauge';
-import { FREE_MAX_FOCUS, SettingsButton } from '@/components/settings-sheet';
+import { FREE_MAX_FOCUS, ScreenSettingsButton } from '@/components/settings-sheet';
 import { ThemedText } from '@/components/themed-text';
+import { MethodCard } from '@/components/method-card';
+import { TaskRow } from '@/components/task-row';
 import { TreeRings, type RingSession } from '@/components/tree-rings';
-import { Button, Chip, Group, Row, Screen, Segmented, SectionTitle } from '@/components/ui';
-import { BottomTabInset, Display, Spacing } from '@/constants/theme';
+import {
+  Button,
+  Chip,
+  Grid,
+  Group,
+  Panel,
+  Screen,
+  Segmented,
+  SectionTitle,
+  TextLink,
+} from '@/components/ui';
+import { BottomTabInset, Display, HeaderInset, Spacing } from '@/constants/theme';
+import { useHydrated } from '@/hooks/use-layout';
 import { useNow } from '@/hooks/use-now';
 import { useTheme } from '@/hooks/use-theme';
+import { dueCards, masteredCount } from '@/lib/leitner';
+import { methodOfTheDay } from '@/lib/methods';
 import {
   currentStreak,
   dayKey,
   daysUntil,
   formatClock,
+  formatDate,
   formatDuration,
   minutesOn,
+  weekBars,
 } from '@/lib/stats';
 import { usePro } from '@/lib/pro';
+import { SOUND_SUPPORTED } from '@/lib/sound';
 import { timerElapsed, timerEndsAt, useStore } from '@/lib/store';
-import type { ActiveTimer, AppData } from '@/lib/types';
+import type { ActiveTimer, AppData, Exam, SoundId } from '@/lib/types';
 
 const PRESETS = [15, 25, 45, 60];
 /** Bleu clair de la jauge pendant une pause. */
 const BREAK_COLOR = '#7FB2D9';
 /** Valeur du segment « Perso » dans le choix de durée. */
 const CUSTOM = -1;
+
+const SOUNDS: { value: SoundId; label: string }[] = [
+  { value: 'none', label: 'Silence' },
+  { value: 'pluie', label: 'Pluie' },
+  { value: 'brun', label: 'Bruit brun' },
+  { value: 'blanc', label: 'Bruit blanc' },
+];
 
 const FOCUS_LEVELS = [
   { value: 1 as const, label: 'Difficile' },
@@ -76,62 +101,132 @@ export default function FocusScreen() {
   return <Idle />;
 }
 
+/** « Bonjour », « Bon après-midi », « Bonsoir » selon l'heure. */
+function greeting(now: number, name: string) {
+  const h = new Date(now).getHours();
+  const hello = h < 5 ? 'Bonne nuit' : h < 12 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir';
+  return name ? `${hello}, ${name}.` : 'Prêt à réviser ?';
+}
+
+/** Nombre de séances de travail terminées aujourd'hui. */
+function sessionsToday(data: AppData, now: number) {
+  const today = dayKey(now);
+  return data.sessions.filter((s) => dayKey(s.startedAt) === today).length;
+}
+
 function Idle() {
   const theme = useTheme();
+  const { data, settings } = useStore();
+  const { subjects, sessions, exams } = data;
+  const now = useNow(60_000);
+
+  const today = minutesOn(sessions, now);
+  const rings = todayRings(data, now);
+  const streak = currentStreak(sessions, now);
+  const week = weekBars(sessions, now).reduce((sum, b) => sum + b.minutes, 0);
+  const upcoming = exams
+    .map((e) => ({ ...e, days: daysUntil(e.date, now) }))
+    .filter((e) => e.days >= 0)
+    .sort((a, b) => a.days - b.days);
+  const date = new Date(now).toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  // La date et l'heure ne sont pas connues au moment de générer le site : on les affiche au chargement.
+  const hydrated = useHydrated();
+  const dateLabel = hydrated ? date.charAt(0).toUpperCase() + date.slice(1) : ' ';
+  const title = hydrated ? greeting(now, settings.name) : 'Prêt à réviser ?';
+
+  if (subjects.length === 0) {
+    return (
+      <Screen subtitle={dateLabel} title={title} action={<ScreenSettingsButton />}>
+        <Panel title="Commençons par tes matières">
+          <ThemedText themeColor="textSecondary">
+            Ajoute les matières que tu révises : chaque séance y sera rattachée et dessinera un
+            cerne de sa couleur.
+          </ThemedText>
+          <Button label="Ajouter une matière" onPress={() => router.navigate('/matieres')} />
+        </Panel>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen subtitle={dateLabel} title={title} action={<ScreenSettingsButton />}>
+      <Grid min={340}>
+        <Panel style={styles.heroPanel}>
+          <View style={styles.ringWrap}>
+            <TreeRings size={220} sessions={rings} goalMinutes={settings.dailyGoalMin} />
+            <View style={styles.trunkCaption}>
+              <ThemedText style={styles.trunkValue}>
+                {rings.length === 0 ? 'Ton premier cerne t’attend.' : formatDuration(today)}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+                {rings.length === 0
+                  ? `Objectif du jour : ${formatDuration(settings.dailyGoalMin)}`
+                  : `sur ${formatDuration(settings.dailyGoalMin)} · ${rings.length} cerne${rings.length > 1 ? 's' : ''} aujourd’hui`}
+              </ThemedText>
+            </View>
+          </View>
+          <View style={[styles.statsRow, { borderTopColor: theme.border }]}>
+            <Stat label="Aujourd’hui" value={formatDuration(today)} />
+            <Stat label="Cette semaine" value={formatDuration(week)} />
+            <Stat label="Série" value={streak === 0 ? '—' : `${streak} j`} accent={streak > 0} />
+          </View>
+        </Panel>
+        <StartPanel />
+      </Grid>
+
+      <Grid min={280}>
+        <TodayTasksPanel now={now} />
+        <CardsPanel now={now} />
+        <ExamPanel exams={upcoming} />
+      </Grid>
+
+      <View style={styles.sectionHeader}>
+        <SectionTitle>Méthode du jour</SectionTitle>
+        <TextLink label="Toutes les méthodes ›" onPress={() => router.navigate('/methodes')} />
+      </View>
+      <Grid min={300}>
+        <MethodCard method={methodOfTheDay(now)} />
+        <MethodCard method={methodOfTheDay(now + 86_400_000 * 5)} />
+      </Grid>
+    </Screen>
+  );
+}
+
+function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.stat}>
+      <ThemedText style={[styles.statValue, accent && { color: theme.accent }]}>{value}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {label}
+      </ThemedText>
+    </View>
+  );
+}
+
+/** Choix de la matière et de la durée, puis lancement de la séance. */
+function StartPanel() {
   const { data, settings, startTimer, updateSettings } = useStore();
   const { isPro, openPaywall } = usePro();
-  const { subjects, sessions, exams } = data;
+  const now = useNow(60_000);
+  const { subjects } = data;
   // « Perso » : durée libre de 5 min à 2 h (au-delà de 60 min avec Bûcheur Pro).
   const [custom, setCustom] = useState(!PRESETS.includes(settings.focusMin));
   const durations = [
     ...PRESETS.map((d) => ({ value: d, label: `${d} min` })),
     { value: CUSTOM, label: 'Perso' },
   ];
-  const now = useNow(60_000);
   const [pickedId, setPickedId] = useState<string | null>(null);
   const selected = subjects.find((s) => s.id === pickedId) ?? subjects[0];
-
-  const today = minutesOn(sessions, now);
-  const rings = todayRings(data, now);
-  const streak = currentStreak(sessions, now);
-  const nextExam = exams
-    .map((e) => ({ ...e, days: daysUntil(e.date, now) }))
-    .filter((e) => e.days >= 0)
-    .sort((a, b) => a.days - b.days)[0];
-  const date = new Date(now).toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-  const dateLabel = date.charAt(0).toUpperCase() + date.slice(1);
-
-  if (subjects.length === 0) {
-    return (
-      <Screen subtitle={dateLabel} title="Prêt à réviser ?" action={<SettingsButton />}>
-        <ThemedText themeColor="textSecondary">
-          Commence par ajouter les matières que tu révises.
-        </ThemedText>
-        <Button label="Ajouter une matière" onPress={() => router.navigate('/matieres')} />
-      </Screen>
-    );
-  }
+  const done = sessionsToday(data, now);
+  const every = settings.breaks ? settings.longBreakEvery : 0;
 
   return (
-    <Screen subtitle={dateLabel} title="Prêt à réviser ?" action={<SettingsButton />}>
-      <View style={styles.ringWrap}>
-        <TreeRings size={240} sessions={rings} goalMinutes={settings.dailyGoalMin} />
-        <View style={styles.trunkCaption}>
-          <ThemedText style={styles.trunkValue}>
-            {rings.length === 0 ? 'Chaque minute compte.' : formatDuration(today)}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {rings.length === 0
-              ? `Objectif du jour : ${formatDuration(settings.dailyGoalMin)} · lance ta première séance`
-              : `sur ${formatDuration(settings.dailyGoalMin)} · ${rings.length} cerne${rings.length > 1 ? 's' : ''} aujourd’hui`}
-          </ThemedText>
-        </View>
-      </View>
-
+    <Panel eyebrow="Nouvelle séance" title="Sur quoi travailles-tu ?">
       <View style={styles.chips}>
         {subjects.map((s) => (
           <Chip
@@ -143,7 +238,6 @@ function Idle() {
           />
         ))}
       </View>
-
       <Segmented
         options={durations}
         value={custom ? CUSTOM : settings.focusMin}
@@ -162,37 +256,137 @@ function Idle() {
           />
         </Group>
       )}
-
       <Button
         label={`Commencer · ${settings.focusMin} min`}
         disabled={!selected}
         onPress={() => selected && startTimer(selected.id, settings.focusMin)}
       />
+      <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
+        {every > 0
+          ? `Séance ${(done % every) + 1} sur ${every} avant la pause longue · pauses de ${settings.breakMin} min`
+          : settings.breaks
+            ? `Une pause de ${settings.breakMin} min te sera proposée à la fin.`
+            : 'Pauses désactivées dans les réglages.'}
+      </ThemedText>
+    </Panel>
+  );
+}
 
-      <SectionTitle>En ce moment</SectionTitle>
-      <Group>
-        <Row
-          label="Série"
-          value={streak === 0 ? 'à lancer' : `${streak} jour${streak > 1 ? 's' : ''}`}
+function TodayTasksPanel({ now }: { now: number }) {
+  const { data } = useStore();
+  const todayKey = dayKey(now);
+  const todo = data.tasks
+    .filter((t) => !t.done)
+    .sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.createdAt - b.createdAt);
+  const urgent = todo.filter((t) => t.due && t.due <= todayKey).length;
+  return (
+    <Panel
+      eyebrow="Tâches"
+      title={
+        todo.length === 0
+          ? 'Liste vide'
+          : urgent > 0
+            ? `${urgent} pour aujourd’hui`
+            : `${todo.length} à faire`
+      }
+      action={<TextLink label="Tout voir ›" onPress={() => router.navigate('/taches')} />}>
+      {todo.length === 0 ? (
+        <ThemedText themeColor="textSecondary">
+          Note ce que tu dois réviser, chapitre par chapitre, et coche au fur et à mesure.
+        </ThemedText>
+      ) : (
+        <View style={styles.taskList}>
+          {todo.slice(0, 3).map((t) => (
+            <TaskRow key={t.id} task={t} now={now} />
+          ))}
+        </View>
+      )}
+      {todo.length === 0 && (
+        <Button
+          label="Ajouter une tâche"
+          variant="glass"
+          onPress={() => router.navigate('/taches')}
         />
-        {nextExam ? (
-          <Row
-            label={nextExam.name}
-            detail="Prochain examen"
-            value={nextExam.days === 0 ? 'Aujourd’hui' : `J-${nextExam.days}`}
-            valueColor={theme.accent}
-          />
-        ) : (
-          <Row
-            label="Aucun examen programmé"
-            detail="Ajoute-en un pour suivre le compte à rebours."
-            value="Ajouter ›"
-            valueColor={theme.accent}
-            onPress={() => router.navigate('/examens')}
-          />
-        )}
-      </Group>
-    </Screen>
+      )}
+    </Panel>
+  );
+}
+
+function CardsPanel({ now }: { now: number }) {
+  const { data } = useStore();
+  const due = dueCards(data.cards, now).length;
+  return (
+    <Panel
+      eyebrow="Fiches"
+      title={
+        data.cards.length === 0
+          ? 'Mémoriser pour de bon'
+          : due === 0
+            ? 'Tout est à jour'
+            : `${due} à revoir`
+      }
+      action={<TextLink label="Ouvrir ›" onPress={() => router.navigate('/fiches')} />}>
+      <ThemedText themeColor="textSecondary">
+        {data.cards.length === 0
+          ? 'Crée des fiches question / réponse : Bûcheur te les repropose juste avant que tu les oublies.'
+          : `${data.cards.length} fiche${data.cards.length > 1 ? 's' : ''} · ${masteredCount(data.cards)} acquise${masteredCount(data.cards) > 1 ? 's' : ''}. ${due > 0 ? 'Dix minutes suffisent.' : 'Reviens demain.'}`}
+      </ThemedText>
+      <Button
+        label={
+          data.cards.length === 0
+            ? 'Créer une fiche'
+            : due > 0
+              ? 'Réviser maintenant'
+              : 'Ajouter des fiches'
+        }
+        variant={due > 0 ? 'primary' : 'glass'}
+        onPress={() => router.navigate('/fiches')}
+      />
+    </Panel>
+  );
+}
+
+function ExamPanel({ exams }: { exams: (Exam & { days: number })[] }) {
+  const theme = useTheme();
+  const { data } = useStore();
+  const next = exams[0];
+  if (!next) {
+    return (
+      <Panel
+        eyebrow="Examens"
+        title="Aucun examen prévu"
+        action={<TextLink label="Ajouter ›" onPress={() => router.navigate('/examens')} />}>
+        <ThemedText themeColor="textSecondary">
+          Ajoute tes dates d’examen pour suivre le compte à rebours et planifier à rebours.
+        </ThemedText>
+      </Panel>
+    );
+  }
+  const subject = data.subjects.find((s) => s.id === next.subjectId);
+  return (
+    <Panel
+      eyebrow="Prochain examen"
+      title={next.name}
+      action={<TextLink label="Tout voir ›" onPress={() => router.navigate('/examens')} />}>
+      <View style={styles.countdown}>
+        <ThemedText style={[styles.countdownValue, { color: subject?.color ?? theme.accent }]}>
+          {next.days === 0 ? 'Jour J' : `J-${next.days}`}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {formatDate(next.date)}
+          {subject ? ` · ${subject.name}` : ''}
+        </ThemedText>
+      </View>
+      {exams.length > 1 && (
+        <ThemedText type="small" themeColor="textSecondary">
+          Puis :{' '}
+          {exams
+            .slice(1, 3)
+            .map((e) => `${e.name} (J-${e.days})`)
+            .join(', ')}
+        </ThemedText>
+      )}
+    </Panel>
   );
 }
 
@@ -271,7 +465,8 @@ function KeepAwake() {
 
 function ActiveSession({ timer }: { timer: ActiveTimer }) {
   const theme = useTheme();
-  const { data, settings, stopTimer, pauseTimer, resumeTimer, extendTimer } = useStore();
+  const { data, settings, stopTimer, pauseTimer, resumeTimer, extendTimer, updateSettings } =
+    useStore();
   const now = useNow(1000);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
 
@@ -361,6 +556,18 @@ function ActiveSession({ timer }: { timer: ActiveTimer }) {
             )}
           </View>
         </View>
+        {SOUND_SUPPORTED && !isBreak && (
+          <View style={styles.sounds}>
+            {SOUNDS.map((o) => (
+              <Chip
+                key={o.value}
+                label={o.label}
+                selected={settings.sound === o.value}
+                onPress={() => updateSettings({ sound: o.value })}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -376,6 +583,10 @@ function Completed() {
   const subject = data.subjects.find((s) => s.id === justCompleted.subjectId);
   const today = minutesOn(data.sessions, now);
   const left = settings.dailyGoalMin - today;
+  // Cycle Pomodoro : une pause longue toutes les N séances de la journée.
+  const every = settings.longBreakEvery;
+  const longBreak = every > 0 && sessionsToday(data, now) % every === 0;
+  const breakMin = longBreak ? settings.longBreakMin : settings.breakMin;
 
   return (
     <SafeAreaView style={styles.flex}>
@@ -435,8 +646,8 @@ function Completed() {
             {settings.breaks ? (
               <>
                 <Button
-                  label={`Pause de ${settings.breakMin} min`}
-                  onPress={() => startBreak(settings.breakMin)}
+                  label={longBreak ? `Pause longue de ${breakMin} min` : `Pause de ${breakMin} min`}
+                  onPress={() => startBreak(breakMin)}
                 />
                 <Button label="Continuer sans pause" variant="glass" onPress={dismissCompleted} />
               </>
@@ -454,13 +665,61 @@ const styles = StyleSheet.create({
   ringWrap: {
     alignItems: 'center',
     gap: Spacing.three,
-    paddingBottom: Spacing.two,
+    paddingTop: Spacing.two,
+  },
+  heroPanel: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Spacing.three,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  statValue: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: 600,
+    fontVariant: ['tabular-nums'],
+  },
+  centerText: {
+    textAlign: 'center',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingRight: Spacing.three,
+  },
+  taskList: {
+    marginHorizontal: -Spacing.three,
+  },
+  countdown: {
+    gap: 2,
+  },
+  countdownValue: {
+    fontFamily: Display.title,
+    fontWeight: 'normal',
+    fontSize: 48,
+    lineHeight: 56,
+  },
+  sounds: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.two,
   },
   trunkCaption: {
     alignItems: 'center',
     gap: 2,
   },
   trunkValue: {
+    textAlign: 'center',
     fontFamily: Display.italic,
     fontWeight: 'normal',
     fontSize: 24,
@@ -525,7 +784,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.three,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+    paddingTop: HeaderInset + Spacing.three,
     paddingBottom: BottomTabInset + Spacing.four,
   },
   immersiveTop: {
@@ -560,7 +819,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: Spacing.four,
     paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.four,
+    paddingTop: HeaderInset + Spacing.four,
     paddingBottom: BottomTabInset + Spacing.four,
   },
   review: {

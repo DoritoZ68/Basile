@@ -18,7 +18,22 @@ l'objectif quotidien, et pendant une séance on voit le nouveau cerne se dessine
 - **Objectif du jour** et **compte à rebours** jusqu'au prochain examen (J-12…).
 - **Matières** : couleur et objectif hebdomadaire, avec la progression de la semaine.
 - **Examens** : liste des examens à venir et passés.
-- **Stats** : « ta semaine en rondelles » (un tronc par jour), répartition par matière, record, historique.
+- **Stats** : « ta semaine en rondelles » (un tronc par jour), progression par matière, calendrier
+  des 12 dernières semaines, totaux (séances, tâches, fiches), historique.
+- **Tâches** : liste de révisions par matière avec échéance (aujourd'hui, demain, cette semaine…),
+  rangée en « En retard / Aujourd'hui / Cette semaine / Plus tard ».
+- **Fiches** : cartes recto / verso révisées par répétition espacée (méthode Leitner, 5 boîtes :
+  1, 2, 4, 8 et 16 jours), avec recherche et filtre par matière.
+- **Méthodes** : 14 fiches pratiques (Pomodoro, rappel actif, Feynman, planning à rebours, sommeil,
+  stress, veille d'examen…), une page par méthode (`/methodes/pomodoro`), chacune reliée à une action
+  dans l'app (« Régler sur 25 / 5 », « Créer des fiches »…). Contenu : `src/lib/methods.ts`.
+- **Réglages** : prénom pour l'accueil, cycle Pomodoro (pause longue toutes les N séances), ambiance
+  sonore pendant les séances (pluie, bruit brun, bruit blanc, générés dans le navigateur) et carillon
+  de fin, sauvegarde et restauration des données (fichier `.json`).
+
+**Version web = un site.** Sur le web, Bûcheur s'affiche comme un site : barre de navigation en verre
+en haut (menu déroulant sur téléphone), tableau de bord en colonnes, pied de page
+(`src/components/app-tabs.web.tsx`). L'app iPhone garde sa barre d'onglets native.
 
 **Design iOS 26.** Barre d'onglets, boutons, puces, sélecteurs et cartes en Liquid Glass
 (`expo-glass-effect`) sur un fond d'ambiance aux couleurs de l'essence choisie. Sur les iOS plus anciens,
@@ -31,6 +46,7 @@ Toutes les données restent sur le téléphone (AsyncStorage) : aucun serveur, a
 | Gratuit | Pro |
 |---|---|
 | 4 matières, 2 examens à venir | Matières et examens illimités |
+| 40 fiches | Fiches illimitées |
 | Séances de 5 à 60 min | Séances jusqu'à 2 h |
 | Semaine en cours | Tout l'historique, semaine par semaine |
 | Essence « Sauge » | Essences Chêne, Érable, Bois de nuit |

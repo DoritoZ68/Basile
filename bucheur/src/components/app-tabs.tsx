@@ -19,6 +19,16 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="timer" md="timer" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="taches">
+        <NativeTabs.Trigger.Label>Tâches</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="checklist" md="checklist" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="fiches">
+        <NativeTabs.Trigger.Label>Fiches</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="rectangle.on.rectangle.angled" md="style" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="matieres">
         <NativeTabs.Trigger.Label>Matières</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="books.vertical.fill" md="menu_book" />
@@ -32,6 +42,11 @@ export default function AppTabs() {
       <NativeTabs.Trigger name="stats">
         <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="chart.bar.fill" md="bar_chart" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="methodes">
+        <NativeTabs.Trigger.Label>Méthodes</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="lightbulb" md="lightbulb" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );
