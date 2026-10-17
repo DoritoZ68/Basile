@@ -1,0 +1,174 @@
+{
+ "W": 176,
+ "H": 132,
+ "variants": [
+  {
+   "name": "Papier",
+   "theme": "LiquidGlass-Papier",
+   "desc": "fond iOS 27 fourni (vagues de papier)"
+  },
+  {
+   "name": "Aurore",
+   "theme": "LiquidGlass-Aurore",
+   "desc": "rubans bleu, violet et rose sur bleu nuit (fond d'origine)"
+  },
+  {
+   "name": "Ocean",
+   "theme": "LiquidGlass-Ocean",
+   "desc": "vagues turquoise et bleu profond"
+  },
+  {
+   "name": "Crepuscule",
+   "theme": "LiquidGlass-Crepuscule",
+   "desc": "coucher de soleil orange, rose et pourpre"
+  },
+  {
+   "name": "Graphite",
+   "theme": "LiquidGlass-Graphite",
+   "desc": "gris anthracite et reflets argentés, très sobre"
+  }
+ ],
+ "TITLE_VP": [
+  9,
+  13,
+  158,
+  17
+ ],
+ "LIST_VP": [
+  8,
+  34,
+  160,
+  90
+ ],
+ "ROW_H": 18,
+ "ROWS": 5,
+ "PILL": [
+  0,
+  1,
+  157,
+  17
+ ],
+ "TEXT_X": 21,
+ "TEXT_W": 127,
+ "TEXT_Y": 3,
+ "ICON_X": 3,
+ "ICON_Y": 2,
+ "ICON_SIZE": 14,
+ "SCROLL_VP": [
+  166,
+  38,
+  2,
+  82
+ ],
+ "CLOCK_VP": [
+  8,
+  1,
+  44,
+  12
+ ],
+ "BATT_POS": [
+  151,
+  3
+ ],
+ "BATT_PCT_VP": [
+  114,
+  2,
+  34,
+  10
+ ],
+ "LOCK_POS": [
+  106,
+  2
+ ],
+ "ISLAND_RECT": [
+  66,
+  1,
+  44,
+  11
+ ],
+ "ART": [
+  8,
+  18,
+  66,
+  66
+ ],
+ "ART_R": 6,
+ "INFO_X": 82,
+ "INFO_W": 88,
+ "TIME_L_VP": [
+  12,
+  96,
+  30,
+  10
+ ],
+ "TIME_R_VP": [
+  134,
+  96,
+  30,
+  10
+ ],
+ "PB_VP": [
+  44,
+  99,
+  88,
+  4
+ ],
+ "CTRL_VP": [
+  12,
+  108,
+  152,
+  18
+ ],
+ "VOL_VP": [
+  18,
+  108,
+  140,
+  18
+ ],
+ "CTRL": {
+  "shuffle": 4,
+  "prev": 44,
+  "play": 68,
+  "next": 95,
+  "repeat": 135
+ },
+ "CTRL_Y": {
+  "small": 3,
+  "skip": 3,
+  "play": 0
+ },
+ "VOLBAR_X": 18,
+ "VOLBAR_Y": 7,
+ "VOLBAR_W": 104,
+ "VOLBAR_H": 4,
+ "VOL_LOW_X": 2,
+ "VOL_HIGH_X": 126,
+ "VOL_ICON_Y": 4,
+ "WPS_LINES": {
+  "title": 20,
+  "artist": 37,
+  "album": 50,
+  "nextLabel": 66,
+  "next": 76
+ },
+ "SCROLL_THUMB": 16,
+ "COLORS": {
+  "text": "F2F4FA",
+  "text2": "DCE0F0",
+  "text3": "B2B8D4",
+  "white": "FFFFFF",
+  "pill": "0886FF"
+ },
+ "ICON": {
+  "coverflow": 27,
+  "wallpaper": 4
+ },
+ "covers": [
+  "blue-hour",
+  "glass-garden",
+  "liquid-light",
+  "neon-desert",
+  "northern-lights",
+  "paper-waves"
+ ]
+}

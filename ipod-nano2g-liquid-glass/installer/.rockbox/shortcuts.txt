@@ -1,0 +1,11 @@
+[shortcut]
+type: file
+name: Cover Flow
+data: /.rockbox/rocks/demos/pictureflow.rock
+icon: 27
+
+[shortcut]
+type: browse
+name: Fond d'écran
+data: /.rockbox/themes/
+icon: 4

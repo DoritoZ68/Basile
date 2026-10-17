@@ -1,0 +1,62 @@
+# Liquid Glass — barre d'état et menus (176x132x16)
+# Généré par generateur/build.py : modifier le script plutôt que ce fichier.
+#
+%Fl(2,15-InterDisplay-Bold.fnt)
+%Fl(3,10-Inter-SemiBold.fnt)
+%Fl(4,9-Inter-Medium.fnt)
+#
+%xl(P,pill.bmp,0,1)
+%xl(S,sep.bmp,21,17)
+%xl(I,__list_icons__,0,0)
+%xl(J,icons-selected.bmp,0,0,32)
+%xl(B,battery-sbs.bmp,0,0,12)
+%xl(C,battery-charge-sbs.bmp,0,0,12)
+%xl(K,lock-sbs.bmp,0,0)
+%xl(D,island.bmp,0,0,6)
+%xl(T,thumb.bmp,0,0)
+#
+# --- Zone des menus : le panneau de verre est dans le fond d'écran -------
+%Vi(-,8,34,160,90,1)
+%Lb(l,160,18)
+#
+# Chaque ligne de liste = 3 viewports « l » superposés :
+# 1. pastille bleue si la ligne est choisie, sinon un fin séparateur
+%Vl(l,0,0,160,18,-)
+%?Lc<%xd(P)|%xd(S)>
+# 2. icône
+%Vl(l,3,2,14,15,1)
+# (Rockbox mélange l'alpha avec le fond : sur la pastille il faut des icônes
+#  déjà composées sur le bleu, sinon leurs coins laissent voir le panneau.)
+%?Lc<%xd(J,%LI,1)|%xd(I,%LI,2)>
+# 3. texte ; la ligne choisie défile et se peint du bleu exact de la pastille
+%Vl(l,21,3,127,13,1)%Vf(F2F4FA)%Vg(0886FF,0886FF,FFFFFF)
+%?Lc<%Vs(gradient)%s%LT|%LT>
+#
+# --- Grand titre façon iOS ------------------------------------------------
+%V(9,13,158,17,2)%Vf(FFFFFF)
+%s%?Lt<%Lt|Rockbox>
+#
+# --- Indicateur de défilement ------------------------------------------
+%V(166,38,2,82,-)
+%?LB<%LB(0,0,2,82,vertical,invert,nobar,slider,T)|>
+#
+# --- « Dynamic Island » : visible pendant la lecture ----------------------
+%V(66,1,44,11,-)
+%t(0.4)%?mp<%xd(Da)|%xd(Db)|%xd(De)|%xd(Df)|%xd(Df)|%xd(Da)>;%t(0.4)%?mp<%xd(Da)|%xd(Dc)|%xd(De)|%xd(Df)|%xd(Df)|%xd(Da)>;%t(0.4)%?mp<%xd(Da)|%xd(Dd)|%xd(De)|%xd(Df)|%xd(Df)|%xd(Da)>
+#
+# --- Barre d'état -------------------------------------------------------
+# Heure (si l'horloge est réglée)
+%V(8,1,44,12,3)%Vf(FFFFFF)
+%?cc<%?St(time format)<%cH|%cI>:%cM|>
+#
+# Niveau de batterie en texte
+%V(114,2,34,10,4)%Vf(FFFFFF)
+%ar%bl%%
+#
+# Pile (12 vignettes : inconnu, 0 %, 10 % ... 100 %)
+%V(151,3,18,8,-)
+%?bc<%xd(C,%bl)|%xd(B,%bl)>
+#
+# Verrou (bouton Hold)
+%V(106,2,7,9,-)
+%?mh<%xd(K)|>
