@@ -3,7 +3,7 @@
 Liquid Glass — thème Rockbox pour iPod nano 3G (écran 320x240, 16 bits).
 
 Ce script fabrique tout le thème à partir de zéro :
-  - le fond d'écran et les panneaux de verre (flou, réfraction des bords,
+  - le fond d'écran (fond-ios27.png) et les panneaux de verre (flou, réfraction des bords,
     reflet spéculaire, ombre portée), pré-calculés car Rockbox ne sait pas
     flouter en temps réel ;
   - les icônes façon iOS (tuiles colorées 20x20) ;
@@ -196,48 +196,29 @@ def bilinear(arr, sx, sy):
 
 
 # ---------------------------------------------------------------------------
-# Fond d'écran : rubans lumineux sur un bleu nuit, façon fond iOS
+# Fond d'écran : image fournie (fond-ios27.png), recadrée en 4:3
 # ---------------------------------------------------------------------------
 
+WALLPAPER = os.path.join(HERE, "fond-ios27.png")
+
+
 def wallpaper(variant="menu"):
+    src = Image.open(WALLPAPER).convert("RGB")
+    sw, sh = src.size
+    cw = min(sw, round(sh * W / H))         # recadrage 4:3 centré
+    left = (sw - cw) // 2
+    src = src.crop((left, 0, left + cw, sh)).resize((W, H), Image.LANCZOS)
+    img = np.asarray(src, np.float64)
+
     ys, xs = np.mgrid[0:H, 0:W].astype(np.float64)
     u, v = xs / W, ys / H
-    img = np.zeros((H, W, 3))
-    top = np.array([8, 10, 32.0])
-    bottom = np.array([18, 10, 46.0])
-    img[:] = top * (1 - v[..., None]) + bottom * v[..., None]
-
-    def blob(cx, cy, rx, ry, color, k):
-        d = ((u - cx) / rx) ** 2 + ((v - cy) / ry) ** 2
-        return np.exp(-d)[..., None] * np.array(color, np.float64) * k
-
-    def ribbon(y0, amp, freq, phase, width, c1, c2, k):
-        yc = y0 + amp * np.sin(freq * u * 2 * math.pi + phase)
-        d = (v - yc) / width
-        t = u[..., None]
-        col = np.array(c1, np.float64) * (1 - t) + np.array(c2, np.float64) * t
-        core = np.exp(-d ** 2)[..., None]
-        sheen = np.exp(-(d * 3.2) ** 2)[..., None] * 0.55
-        return (core + sheen) * col * k
-
-    light = np.zeros_like(img)
-    light += blob(0.18, 0.95, 0.55, 0.45, (40, 70, 255), 0.85)
-    light += blob(0.92, 0.18, 0.40, 0.42, (150, 60, 255), 0.70)
-    light += blob(0.70, 1.05, 0.45, 0.35, (255, 70, 150), 0.55)
-    light += ribbon(0.62, 0.10, 0.75, 0.6, 0.11, (30, 120, 255), (190, 80, 255), 0.95)
-    light += ribbon(0.80, 0.08, 0.55, 2.4, 0.08, (255, 90, 170), (255, 160, 80), 0.75)
-    light += ribbon(0.38, 0.12, 0.60, 4.1, 0.07, (40, 220, 230), (80, 120, 255), 0.45)
-    img = img + light * (1.0 - 0.35 * np.exp(-((v - 0.0) / 0.25) ** 2))[..., None]
-
-    # Le haut reste sombre : la barre d'état et le grand titre restent lisibles.
-    shade = 1.0 - 0.45 * np.clip(1 - v / 0.32, 0, 1) ** 1.5
-    img *= shade[..., None]
+    # Voile sombre en haut : l'heure et le grand titre blancs restent lisibles
+    # sur ce fond clair.
+    img *= (1.0 - 0.42 * np.clip(1 - v / 0.30, 0, 1) ** 1.3)[..., None]
     if variant == "wps":
-        # plus sombre derrière le texte (colonne de droite) pour la lisibilité
-        img *= (0.66 - 0.16 * np.exp(-(((u - 0.72) / 0.30) ** 2 + ((v - 0.40) / 0.30) ** 2)))[..., None]
-    # Tonalité douce pour éviter la saturation brutale.
-    img = 255 * (1 - np.exp(-img / 255 * 1.35)) / (1 - math.exp(-1.35))
-    return gaussian(img, 1.2)
+        # plus sombre partout, et davantage derrière le texte (colonne de droite)
+        img *= (0.70 - 0.22 * np.exp(-(((u - 0.74) / 0.30) ** 2 + ((v - 0.40) / 0.30) ** 2)))[..., None]
+    return img
 
 
 # ---------------------------------------------------------------------------

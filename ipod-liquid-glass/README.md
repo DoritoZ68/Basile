@@ -94,7 +94,7 @@ Pour régler l'heure affichée en haut à gauche : *Réglages › Date & heure*.
 
 | Élément | Détail |
 | --- | --- |
-| Fond | rubans lumineux bleu/violet/rose sur bleu nuit, tramés en RGB565 pour éviter les bandes |
+| Fond | fond d'écran iOS 27 (vagues de papier), recadré en 4:3, voile sombre en haut pour la lisibilité, tramé en RGB565 pour éviter les bandes |
 | Verre | flou, réfraction sur les bords, vibrance, reflet spéculaire en haut à gauche, ombre portée |
 | Barre d'état | heure, pourcentage et pile façon iOS (verte en charge, rouge sous 20 %), cadenas si *Hold* |
 | Dynamic Island | capsule noire animée en haut des menus pendant la lecture (onde, pause, avance rapide) |
@@ -129,7 +129,8 @@ Dans `build.py` :
 
 - `BLUE` : couleur de la pastille de sélection (essaie `(255, 55, 95)` pour
   du rose) ;
-- `wallpaper()` : le fond (taches et rubans de couleur) ;
+- `fond-ios27.png` : le fond d'écran ; remplace ce fichier par n'importe quelle
+  image (elle est recadrée en 4:3) et `wallpaper()` règle le voile sombre ;
 - `glass()` : opacité, flou et reflets du verre ;
 - `ICONS` : couleurs et dessins des icônes ;
 - les constantes en haut du fichier : toutes les positions à l'écran.
@@ -158,6 +159,7 @@ ipod-liquid-glass/
 │   └── fonts/                Inter en .fnt + licence OFL
 ├── generateur/
 │   ├── build.py              génère tout le thème
+│   ├── fond-ios27.png        fond d'écran source
 │   └── polices.sh            génère les polices
 └── apercus/                  captures du simulateur
 ```
@@ -168,5 +170,6 @@ ipod-liquid-glass/
 - Polices : **Inter**, © The Inter Project Authors, licence SIL OFL 1.1
   (`installer/.rockbox/fonts/Inter-OFL.txt`).
 - Rockbox est un logiciel libre sous GPL v2 ; il n'est pas inclus ici.
-- Aucun élément graphique d'Apple n'est utilisé : le style est inspiré
-  d'iOS, mais tout est dessiné par le script.
+- Le fond d'écran (`generateur/fond-ios27.png`) est l'image fournie pour ce
+  projet ; ses droits appartiennent à son auteur (usage personnel). Tout le
+  reste (verre, icônes, commandes) est dessiné par le script.
