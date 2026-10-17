@@ -19,6 +19,15 @@ français (moteur de rendu réel, pas une maquette), agrandies ×2 :
 | **Raccourcis** | **Cover Flow** | **Pistes de l'album** |
 | ![](apercus/raccourcis.png) | ![](apercus/coverflow.png) | ![](apercus/coverflow-pistes.png) |
 
+## Essayer sans iPod
+
+[`emulateur/`](emulateur) contient un **émulateur web** : un iPod nano 3G avec
+sa molette cliquable, qui reprend les vraies images et positions du thème
+(menus, 5 fonds, Cover Flow, lecture, volume). Ce n'est pas Rockbox lui-même :
+pas de son, et seuls les réglages de thème sont simulés. Pour le régénérer
+après une modification : `python3 generateur/build.py && python3
+generateur/export_web.py`.
+
 ## Pourquoi Rockbox (et pas iPodLinux)
 
 - **iPodLinux** n'a jamais fonctionné sur le nano 3G (le projet s'est arrêté
@@ -214,7 +223,10 @@ ipod-liquid-glass/
 ├── generateur/
 │   ├── build.py              génère tout le thème
 │   ├── fond-ios27.png        fond d'écran source
-│   └── polices.sh            génère les polices
+│   ├── polices.sh            génère les polices
+│   ├── export_web.py         images de l'émulateur web
+│   └── pochettes-demo/       pochettes des albums de démo
+├── emulateur/                émulateur web (index.html + assets)
 └── apercus/                  captures du simulateur
 ```
 

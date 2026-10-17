@@ -1,0 +1,740 @@
+<title>Émulateur Liquid Glass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Une seule ambiance, sombre : l'iPod posé sur un plan de travail graphite,
+     mode d'emploi à côté (en dessous sur téléphone). */
+  :root {
+    --ground: #101114;
+    --ground-2: #17191e;
+    --ink: #e9eaee;
+    --muted: #9a9eab;
+    --line: #2a2d35;
+    --accent: #0a84ff;
+    --alu-hi: #eef0f3;
+    --alu-lo: #c4c8cf;
+    --wheel: #f7f7f8;
+    --wheel-label: #9ea2aa;
+    --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(120% 80% at 50% 0%, var(--ground-2), var(--ground) 70%);
+    background-color: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .page {
+    min-height: 100%;
+    box-sizing: border-box;
+    padding-block: 28px 40px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  /* ---- l'iPod --------------------------------------------------------- */
+  .ipod {
+    width: min(360px, 100%);
+    aspect-ratio: 52.3 / 69.8;
+    border-radius: 9% / 6.8%;
+    background: linear-gradient(160deg, var(--alu-hi), var(--alu-lo) 55%, #b7bbc3);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.9),
+      inset 0 -2px 4px rgba(0,0,0,.18),
+      0 30px 60px -20px rgba(0,0,0,.7),
+      0 8px 18px rgba(0,0,0,.35);
+    position: relative;
+    flex: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .bezel {
+    position: absolute;
+    left: 7.5%; right: 7.5%; top: 6.5%;
+    aspect-ratio: 4 / 3;
+    background: #050506;
+    border-radius: 3.5% / 4.6%;
+    padding: 2.6%;
+    box-sizing: border-box;
+    box-shadow: inset 0 0 0 1px #000, 0 1px 0 rgba(255,255,255,.6);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 2px;
+    outline: none;
+  }
+  .wheel {
+    position: absolute;
+    left: 50%;
+    top: 74.5%;
+    width: 60%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, #fff, var(--wheel) 60%, #e3e4e7);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.15), 0 1px 0 rgba(255,255,255,.8);
+    cursor: grab;
+  }
+  .wheel:active { cursor: grabbing; }
+  .wheel .lbl {
+    position: absolute;
+    color: var(--wheel-label);
+    font: 600 11px/1 var(--font-ui);
+    letter-spacing: .06em;
+    pointer-events: none;
+  }
+  .lbl.menu { top: 9%; left: 50%; transform: translateX(-50%); }
+  .lbl.prev { left: 8%; top: 50%; transform: translateY(-50%); }
+  .lbl.next { right: 8%; top: 50%; transform: translateY(-50%); }
+  .lbl.play { bottom: 9%; left: 50%; transform: translateX(-50%); }
+  .lbl svg { display: block; width: 18px; height: 11px; fill: currentColor; }
+  .center {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 38%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 0;
+    padding: 0;
+    background: linear-gradient(160deg, var(--alu-hi), var(--alu-lo));
+    box-shadow: 0 1px 2px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.9);
+    cursor: pointer;
+  }
+  .center:active { filter: brightness(.94); }
+  .center:focus-visible, .wheel:focus-visible, canvas:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* ---- mode d'emploi -------------------------------------------------- */
+  .notes {
+    width: min(380px, 100%);
+    min-width: 0;
+    display: grid;
+    gap: 22px;
+  }
+  .notes h1 {
+    font-size: 26px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .notes h1 small {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: .04em;
+    margin-top: 6px;
+  }
+  .notes h2 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin: 0 0 8px;
+  }
+  .notes p { margin: 0; color: var(--ink); }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+  .keys dt { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink);
+    background: var(--ground-2); border: 1px solid var(--line); border-radius: 5px;
+    padding: 1px 7px; white-space: nowrap; justify-self: start; align-self: start; }
+  .keys dd { margin: 0; color: var(--muted); }
+  .try { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--muted); }
+  .try b { color: var(--ink); font-weight: 600; }
+  .state { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .state span { color: var(--ink); }
+  .fine { font-size: 13px; color: var(--muted); }
+</style>
+
+<div class="page">
+  <div class="ipod" id="ipod">
+    <div class="bezel"><canvas id="lcd" width="640" height="480" tabindex="0" aria-label="Écran de l'iPod"></canvas></div>
+    <div class="wheel" id="wheel" tabindex="0" role="application" aria-label="Molette cliquable : tourner pour défiler, cliquer en haut pour Menu, en bas pour lecture, à gauche et à droite pour piste précédente et suivante">
+      <span class="lbl menu">MENU</span>
+      <span class="lbl prev"><svg viewBox="0 0 18 11"><rect x="0" y="0" width="2" height="11"/><path d="M10 0 2 5.5 10 11z"/><path d="M18 0 10 5.5 18 11z"/></svg></span>
+      <span class="lbl next"><svg viewBox="0 0 18 11"><path d="M0 0 8 5.5 0 11z"/><path d="M8 0 16 5.5 8 11z"/><rect x="16" y="0" width="2" height="11"/></svg></span>
+      <span class="lbl play"><svg viewBox="0 0 18 11"><path d="M0 0 8 5.5 0 11z"/><rect x="11" y="0" width="2.4" height="11"/><rect x="15.6" y="0" width="2.4" height="11"/></svg></span>
+      <button class="center" id="center" aria-label="Bouton central (sélection)"></button>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h1>Liquid Glass sur iPod nano 3G<small>ÉMULATEUR WEB DU THÈME ROCKBOX</small></h1>
+
+    <section>
+      <h2>Commandes</h2>
+      <dl class="keys">
+        <dt>molette</dt><dd>tourner pour défiler (souris, doigt ou molette de la souris sur l'écran)</dd>
+        <dt>centre · Entrée</dt><dd>sélectionner</dd>
+        <dt>MENU · Échap</dt><dd>revenir</dd>
+        <dt>▶❚❚ · Espace</dt><dd>lecture / pause</dd>
+        <dt>⏮ ⏭ · ← →</dt><dd>piste précédente / suivante</dd>
+        <dt>↑ ↓</dt><dd>défiler au clavier</dd>
+      </dl>
+    </section>
+
+    <section>
+      <h2>À essayer</h2>
+      <ol class="try">
+        <li><b>Raccourcis › Fond d'écran</b> : change de fond parmi les 5.</li>
+        <li><b>Raccourcis › Cover Flow</b> : parcours les pochettes, centre pour voir les pistes.</li>
+        <li>Lance un morceau, puis tourne la molette sur l'écran de lecture : jauge de volume.</li>
+        <li>Centre pendant la lecture : aléatoire et répétition.</li>
+        <li>Reviens au menu : la « Dynamic Island » s'anime.</li>
+      </ol>
+    </section>
+
+    <p class="state">Thème actif : <span id="theme-name">LiquidGlass-Papier</span></p>
+
+    <p class="fine">Reproduction du thème dans le navigateur, avec ses vraies images et ses
+      positions à l'écran. Les menus suivent ceux de Rockbox en français, mais ce n'est pas
+      Rockbox : pas de son, et les réglages autres que le thème ne sont pas simulés. Le rendu de
+      référence reste celui du simulateur Rockbox (captures dans le dépôt).</p>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------------------------------------------------------------- données
+  const LIB = [
+    { artist: "Aurora", album: "Northern Lights", cover: "northern-lights",
+      tracks: [["Polar Drift", 214], ["Magnetic Sky", 247], ["Veil of Green", 198]] },
+    { artist: "Kairo", album: "Neon Desert", cover: "neon-desert",
+      tracks: [["Mirage", 223], ["Sandglass", 254]] },
+    { artist: "Lumen", album: "Liquid Light", cover: "liquid-light",
+      tracks: [["Glass Horizon", 200], ["Refraction (Extended Mix of a Very Long Title)", 372], ["Afterglow", 189]] },
+    { artist: "Mira", album: "Glass Garden", cover: "glass-garden",
+      tracks: [["Greenhouse", 211], ["Bloom Under Glass", 236]] },
+    { artist: "Odyssée", album: "Blue Hour", cover: "blue-hour",
+      tracks: [["Heure bleue", 245], ["Dernier métro", 198]] },
+    { artist: "Solene", album: "Paper Waves", cover: "paper-waves",
+      tracks: [["Origami Tides", 231], ["Folded Light", 202]] },
+    { artist: "Inconnu", album: "Sans pochette", cover: null,
+      tracks: [["Démo sans pochette", 180]] },
+  ];
+  LIB.forEach(al => { al.tracks = al.tracks.map(([title, len], i) => ({ title, len, no: i + 1, al })); });
+
+  // Icônes (ordre Rockbox)
+  const IC = { audio: 0, folder: 1, playlist: 2, wps: 4, font: 6, config: 8, plugin: 9,
+    bookmark: 10, setting: 17, func: 18, submenuIn: 20, rec: 21, general: 23, system: 24,
+    playback: 25, coverflow: 27, fileview: 29, rockbox: 31, none: -1 };
+
+  // --------------------------------------------------------------- ressources
+  const cvs = document.getElementById("lcd");
+  const ctx = cvs.getContext("2d");
+  ctx.scale(2, 2);
+  let L = null;
+  const img = {};
+  const load = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+
+  // ------------------------------------------------------------------- état
+  const st = {
+    variant: "Papier",
+    stack: [],
+    splash: null,
+    play: { queue: [], idx: 0, pos: 0, playing: false, paused: false },
+    shuffle: false,
+    repeat: 0, // 0 non, 1 tout, 2 une seule
+    volume: 62,
+    volShownAt: -1e9,
+    now: 0,
+  };
+  try { const v = localStorage.getItem("lg-variant"); if (v) st.variant = v; } catch (e) {}
+
+  const cur = () => st.stack[st.stack.length - 1];
+  const push = s => { s.sel = s.sel || 0; s.top = s.top || 0; s.selAt = st.now; st.stack.push(s); };
+  const pop = () => { if (st.stack.length > 1) st.stack.pop(); cur().selAt = st.now; };
+  const splash = (text, ms = 1600) => { st.splash = { text, until: st.now + ms }; };
+
+  // ------------------------------------------------------------- lecture
+  const track = () => st.play.queue[st.play.idx];
+  const active = () => st.play.queue.length > 0 && st.play.playing;
+  function playList(list, i) {
+    let q = list.slice();
+    if (st.shuffle) { const first = q.splice(i, 1)[0]; q.sort(() => Math.random() - .5); q.unshift(first); i = 0; }
+    Object.assign(st.play, { queue: q, idx: i, pos: 0, playing: true, paused: false });
+  }
+  function nextTrack(manual) {
+    const p = st.play;
+    if (!p.queue.length) return;
+    if (st.repeat === 2 && !manual) { p.pos = 0; return; }
+    if (p.idx + 1 < p.queue.length) { p.idx++; p.pos = 0; }
+    else if (st.repeat === 1 || manual) { p.idx = 0; p.pos = 0; }
+    else { p.playing = false; p.pos = 0; }
+  }
+  function prevTrack() {
+    const p = st.play;
+    if (!p.queue.length) return;
+    if (p.pos > 3) p.pos = 0;
+    else { p.idx = (p.idx - 1 + p.queue.length) % p.queue.length; p.pos = 0; }
+  }
+  function togglePlay() {
+    const p = st.play;
+    if (!p.queue.length) { splash("Aucune piste à reprendre"); return; }
+    if (!p.playing) { p.playing = true; p.paused = false; }
+    else p.paused = !p.paused;
+  }
+  const upNext = () => {
+    const p = st.play;
+    if (p.idx + 1 < p.queue.length) return p.queue[p.idx + 1];
+    return st.repeat === 1 && p.queue.length ? p.queue[0] : null;
+  };
+
+  // ------------------------------------------------------------- écrans
+  const todo = () => splash("Non simulé dans l'émulateur");
+  const allTracks = () => LIB.flatMap(al => al.tracks);
+  const trackItems = list => list.map((t, i) => ({ label: t.title, icon: IC.audio, act: () => { playList(list, i); push(wpsScreen()); } }));
+  const fileTrackItems = list => list.map((t, i) => ({ label: String(t.no).padStart(2, "0") + " - " + t.title, icon: IC.audio, act: () => { playList(list, i); push(wpsScreen()); } }));
+  const artists = () => [...new Set(LIB.map(a => a.artist))].sort((a, b) => a.localeCompare(b, "fr"));
+
+  function listScreen(title, items) { return { kind: "list", title, items }; }
+  function wpsScreen() { return { kind: "wps" }; }
+
+  function themeList() {
+    const names = ["cabbiev2", ...L.variants.map(v => v.theme).sort(), "rockbox_default_icons", "rockbox_failsafe"];
+    const s = listScreen("themes", names.map(n => ({
+      label: n, icon: IC.config,
+      act: () => {
+        const v = L.variants.find(x => x.theme === n);
+        if (!v) { splash("Thème d'origine de Rockbox : non simulé"); return; }
+        setVariant(v.name);
+      },
+    })));
+    s.sel = Math.max(0, names.indexOf("LiquidGlass-" + st.variant));
+    return s;
+  }
+  function filesRoot() {
+    return listScreen("Dossiers et fichiers", [{ label: "Music", icon: IC.folder, act: () =>
+      push(listScreen("Music", artists().map(ar => ({ label: ar, icon: IC.folder, act: () =>
+        push(listScreen(ar, LIB.filter(a => a.artist === ar).map(al => ({ label: al.album, icon: IC.folder, act: () =>
+          push(listScreen(al.album, fileTrackItems(al.tracks))) })))) })))) }]);
+  }
+  function databaseRoot() {
+    return listScreen("Base de données tags", [
+      { label: "Artiste", icon: IC.folder, act: () => push(listScreen("Artiste", artists().map(ar => ({ label: ar, icon: IC.folder, act: () =>
+          push(listScreen(ar, LIB.filter(a => a.artist === ar).map(al => ({ label: al.album, icon: IC.folder, act: () =>
+            push(listScreen(al.album, trackItems(al.tracks))) })))) })))) },
+      { label: "Album", icon: IC.folder, act: () => push(listScreen("Album", LIB.map(al => ({ label: al.album, icon: IC.folder, act: () =>
+          push(listScreen(al.album, trackItems(al.tracks))) })))) },
+      { label: "Piste", icon: IC.folder, act: () => push(listScreen("Piste", trackItems(allTracks()))) },
+    ]);
+  }
+  function settingsRoot() {
+    return listScreen("Réglages", [
+      { label: "Réglages son", icon: IC.audio, act: todo },
+      { label: "Réglages lecture", icon: IC.playback, act: todo },
+      { label: "Réglages généraux", icon: IC.general, act: todo },
+      { label: "Réglages thème", icon: IC.wps, act: () => push(listScreen("Réglages thème", [
+        { label: "Liste des thèmes", icon: IC.config, act: () => push(themeList()) },
+        { label: "Choisir une police de caractères", icon: IC.font, act: todo },
+        { label: "Ecran de lecture LCD principal", icon: IC.wps, act: todo },
+        { label: "Habillage", icon: IC.wps, act: todo },
+        { label: "Afficher les icônes", icon: IC.setting, act: todo },
+      ])) },
+      { label: "Options d'enregistrement", icon: IC.rec, act: todo },
+      { label: "Date & heure", icon: IC.setting, act: todo },
+      { label: "Menu principal", icon: IC.rockbox, act: todo },
+      { label: "Gestion des configurations", icon: IC.config, act: todo },
+    ]);
+  }
+  function systemRoot() {
+    return listScreen("Système", [
+      { label: "Infos Rockbox", icon: IC.func, act: () => push(listScreen("Infos Rockbox", [
+        "Batterie: 87% 10h 19m", "Disque: 7.4 Go libres", "Thème: LiquidGlass-" + st.variant,
+        "Modèle: iPod Nano 3G", "Écran: 320x240, 16 bits"].map(t => ({ label: t, icon: IC.folder, act: () => {} })))) },
+      { label: "Crédits", icon: IC.func, act: todo },
+      { label: "Durée d'utilisation", icon: IC.func, act: todo },
+    ]);
+  }
+  function mainMenu() {
+    return listScreen("Rockbox", [
+      { label: "Raccourcis", icon: IC.bookmark, act: () => push(listScreen("Raccourcis", [
+        { label: "Cover Flow", icon: IC.coverflow, act: () => push(coverflow()) },
+        { label: "Fond d'écran", icon: IC.wps, act: () => push(themeList()) },
+      ])) },
+      { label: "Dossiers et fichiers", icon: IC.fileview, act: () => push(filesRoot()) },
+      { label: "Base de données tags", icon: IC.audio, act: () => push(databaseRoot()) },
+      { label: () => active() ? "En lecture" : "Reprendre la lecture", icon: IC.playback, act: () => {
+          if (!st.play.queue.length) { splash("Aucune piste à reprendre"); return; }
+          if (!st.play.playing) { st.play.playing = true; st.play.paused = false; }
+          push(wpsScreen()); } },
+      { label: "Réglages", icon: IC.submenuIn, act: () => push(settingsRoot()) },
+      { label: "Enregistrement", icon: IC.rec, act: todo },
+      { label: "Listes de lecture", icon: IC.playlist, act: todo },
+      { label: "Modules d'extension", icon: IC.plugin, act: todo },
+      { label: "Système", icon: IC.system, act: () => push(systemRoot()) },
+    ]);
+  }
+  function coverflow() {
+    const albums = LIB.filter(a => a.cover);
+    return { kind: "cf", albums, sel: 0, pos: 0 };
+  }
+  function contextMenu() {
+    const lbl = ["Non", "Tout", "Une seule"];
+    return listScreen("Menu contextuel", [
+      { label: () => "Aléatoire : " + (st.shuffle ? "Oui" : "Non"), icon: IC.setting, act: () => { st.shuffle = !st.shuffle; } },
+      { label: () => "Répéter : " + lbl[st.repeat], icon: IC.setting, act: () => { st.repeat = (st.repeat + 1) % 3; } },
+      { label: "Cover Flow", icon: IC.coverflow, act: () => push(coverflow()) },
+    ]);
+  }
+
+  function setVariant(name) {
+    st.variant = name;
+    document.getElementById("theme-name").textContent = "LiquidGlass-" + name;
+    try { localStorage.setItem("lg-variant", name); } catch (e) {}
+  }
+
+  // ---------------------------------------------------------- dessin
+  const hex = h => "#" + h;
+  const asc = px => Math.round(px * 0.82);
+  const font = (w, px) => `${w} ${px}px Inter, system-ui, sans-serif`;
+  const labelOf = it => typeof it.label === "function" ? it.label() : it.label;
+
+  function text(str, x, top, px, weight, color, maxW, scroll, since) {
+    ctx.font = font(weight, px);
+    ctx.fillStyle = color;
+    const base = top + asc(px);
+    const w = ctx.measureText(str).width;
+    if (!maxW || w <= maxW) { ctx.fillText(str, x, base); return; }
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, top - 2, maxW, px + 6); ctx.clip();
+    let off = 0;
+    if (scroll) {
+      const gap = 36, t = Math.max(0, (st.now - since) / 1000 - 1);
+      off = (t * 34) % (w + gap);
+      ctx.fillText(str, x - off + w + gap, base);
+    }
+    ctx.fillText(str, x - off, base);
+    ctx.restore();
+  }
+  function textRight(str, right, top, px, weight, color) {
+    ctx.font = font(weight, px);
+    ctx.fillStyle = color;
+    ctx.fillText(str, right - ctx.measureText(str).width, top + asc(px));
+  }
+  function frame(im, i, n, x, y) {
+    if (!im) return;
+    const h = im.height / n;
+    ctx.drawImage(im, 0, i * h, im.width, h, x, y, im.width, h);
+  }
+  function capsule(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2); ctx.fill();
+  }
+  const mmss = s => { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+  function drawStatus(menu) {
+    const [cx, cy] = L.CLOCK_VP;
+    const d = new Date();
+    text(String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"), cx, cy, 13, 600, "#fff");
+    const [px, py, pw] = L.BATT_PCT_VP;
+    textRight("87%", px + pw, py, 12, 500, "#fff");
+    frame(img.battery, 9, 12, L.BATT_POS[0], L.BATT_POS[1]);
+    if (menu && st.play.queue.length && st.play.playing) {
+      const [ix, iy] = L.ISLAND_RECT;
+      const f = st.play.paused ? 4 : 1 + Math.floor(st.now / 400) % 3;
+      frame(img.island, f, 6, ix, iy);
+    }
+  }
+
+  function drawList(s) {
+    ctx.drawImage(img["menu-" + st.variant], 0, 0);
+    drawStatus(true);
+    const [tx, ty, tw] = L.TITLE_VP;
+    text(s.title, tx, ty, 24, 700, "#fff", tw, true, s.selAt);
+    const [lx, ly] = L.LIST_VP;
+    const R = L.ROW_H, n = s.items.length;
+    if (s.sel < s.top) s.top = s.sel;
+    if (s.sel >= s.top + L.ROWS) s.top = s.sel - L.ROWS + 1;
+    for (let r = 0; r < L.ROWS && s.top + r < n; r++) {
+      const i = s.top + r, it = s.items[i], y0 = ly + r * R, selected = i === s.sel;
+      if (selected) ctx.drawImage(img.pill, lx + L.PILL[0], y0 + L.PILL[1]);
+      else {
+        ctx.fillStyle = "rgba(255,255,255,0.133)";
+        ctx.fillRect(lx + L.TEXT_X, y0 + R - 1, L.PILL[0] + L.PILL[2] - L.TEXT_X, 1);
+      }
+      if (it.icon >= 0) {
+        const src = selected ? img.iconsSel : img.icons;
+        ctx.drawImage(src, 0, it.icon * 20, 20, 20, lx + L.ICON_X, y0 + 4, 20, 20);
+      }
+      text(labelOf(it), lx + L.TEXT_X, y0 + 6, 16, 500, selected ? "#fff" : hex(L.COLORS.text),
+        L.TEXT_W, selected, s.selAt);
+    }
+    if (n > L.ROWS) {
+      const [sx, sy, sw, sh] = L.SCROLL_VP;
+      const y = sy + (sh - 26) * (n > 1 ? s.sel / (n - 1) : 0);
+      capsule(sx, y, sw, 26, "rgba(255,255,255,0.59)");
+    }
+  }
+
+  function roundedImage(im, x, y, w, h, r) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.clip();
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(im, x, y, w, h);
+    ctx.imageSmoothingEnabled = false;
+    ctx.restore();
+  }
+
+  function drawWps(s) {
+    ctx.drawImage(img["wps-" + st.variant], 0, 0);
+    drawStatus(false);
+    const t = track();
+    if (!t) return;
+    const [ax, ay, aw, ah] = L.ART;
+    if (t.al.cover && img["cover-" + t.al.cover]) roundedImage(img["cover-" + t.al.cover], ax, ay, aw, ah, L.ART_R);
+    const X = L.INFO_X, W = L.INFO_W;
+    if (s.trackRef !== t) { s.trackRef = t; s.since = st.now; }
+    text(t.title, X, 40, 19, 600, "#fff", W, true, s.since);
+    text(t.al.artist, X, 64, 15, 400, hex(L.COLORS.text2), W, true, s.since);
+    text(t.al.album, X, 83, 15, 400, hex(L.COLORS.text3), W, true, s.since);
+    const nx = upNext();
+    if (nx) {
+      text("Titre suivant:", X, 116, 12, 500, hex(L.COLORS.text3));
+      text(nx.title, X, 131, 13, 600, hex(L.COLORS.text2), W, true, s.since);
+    }
+    const p = st.play;
+    text(mmss(p.pos), L.TIME_L_VP[0], L.TIME_L_VP[1], 12, 500, hex(L.COLORS.text2));
+    textRight("-" + mmss(t.len - p.pos), L.TIME_R_VP[0] + L.TIME_R_VP[2], L.TIME_R_VP[1], 12, 500, hex(L.COLORS.text2));
+    const [bx, by, bw, bh] = L.PB_VP;
+    capsule(bx, by, bw, bh, "rgba(255,255,255,0.22)");
+    ctx.save(); ctx.beginPath(); ctx.rect(bx, by, bw * Math.min(1, p.pos / t.len), bh); ctx.clip();
+    capsule(bx, by, bw, bh, "rgba(255,255,255,0.94)"); ctx.restore();
+
+    if (st.now - st.volShownAt < 2000) {
+      const [vx, vy, vw] = L.VOL_VP;
+      ctx.drawImage(img.volLow, vx + 4, vy + 7);
+      ctx.drawImage(img.volHigh, vx + vw - 24, vy + 7);
+      const x = vx + L.VOLBAR_X, y = vy + 12;
+      capsule(x, y, L.VOLBAR_W, 6, "rgba(255,255,255,0.22)");
+      ctx.save(); ctx.beginPath(); ctx.rect(x, y, L.VOLBAR_W * st.volume / 100, 6); ctx.clip();
+      capsule(x, y, L.VOLBAR_W, 6, "rgba(255,255,255,0.94)"); ctx.restore();
+    } else {
+      const [cx, cy] = L.CTRL_VP, C = L.CTRL;
+      frame(img.shuffle, st.shuffle ? 0 : 1, 2, cx + C.shuffle, cy + 6);
+      ctx.drawImage(img.prev, cx + C.prev, cy + 5);
+      frame(img.playstate, p.playing && !p.paused ? 1 : 0, 5, cx + C.play, cy + 1);
+      ctx.drawImage(img.next, cx + C.next, cy + 5);
+      frame(img.repeat, st.repeat, 5, cx + C.repeat, cy + 6);
+    }
+  }
+
+  // Cover Flow : pochettes en perspective (tranches verticales), reflets
+  function drawSlide(im, cx, top, size, angle) {
+    // angle : 0 = de face, ±1 = tournée sur le côté (bord intérieur vers le centre)
+    const a = Math.abs(angle), dir = Math.sign(angle);
+    const w = size * (1 - 0.62 * a);
+    const slices = Math.max(8, Math.round(w));
+    for (let k = 0; k < slices; k++) {
+      const u = k / slices;                       // 0..1 de gauche à droite à l'écran
+      const near = dir > 0 ? 1 - u : u;           // 1 = bord proche du centre
+      const h = size * (1 - 0.22 * a * (1 - near));
+      const x = cx - w / 2 + u * w;
+      const y = top + (size - h) / 2;
+      const sx = u * im.width;
+      ctx.drawImage(im, sx, 0, im.width / slices + 0.5, im.height, x, y, w / slices + 0.6, h);
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      ctx.translate(0, y + h * 2);
+      ctx.scale(1, -1);
+      ctx.drawImage(im, sx, 0, im.width / slices + 0.5, im.height, x, 0, w / slices + 0.6, h);
+      ctx.restore();
+    }
+  }
+  function drawCoverflow(s) {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 320, 240);
+    s.pos += (s.sel - s.pos) * 0.22;
+    if (Math.abs(s.sel - s.pos) < 0.002) s.pos = s.sel;
+    const size = 128, top = 16;
+    const order = s.albums.map((al, i) => i).sort((a, b) => Math.abs(b - s.pos) - Math.abs(a - s.pos));
+    ctx.imageSmoothingEnabled = true;
+    for (const i of order) {
+      const d = i - s.pos;
+      const ad = Math.abs(d);
+      if (ad > 4) continue;
+      const angle = Math.max(-1, Math.min(1, d));
+      const cx = 160 + Math.sign(d) * (Math.min(ad, 1) * 102 + Math.max(0, ad - 1) * 34);
+      const im = img["cover-" + s.albums[i].cover];
+      if (im) drawSlide(im, cx, top, size, angle);
+    }
+    ctx.imageSmoothingEnabled = false;
+    const g = ctx.createLinearGradient(0, top + size, 0, top + size + 70);
+    g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(1, "rgba(0,0,0,1)");
+    ctx.fillStyle = g; ctx.fillRect(0, top + size, 320, 240 - top - size);
+    const al = s.albums[s.sel];
+    ctx.textAlign = "center";
+    text(al.album, 160, 192, 15, 500, "#fff");
+    text(al.artist, 160, 216, 15, 500, "#fff");
+    ctx.textAlign = "left";
+  }
+  function drawCfTracks(s) {
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 320, 240);
+    const al = s.album;
+    ctx.textAlign = "center";
+    al.tracks.forEach((t, i) => {
+      const y = 70 + i * 17;
+      if (i === s.sel) { ctx.fillStyle = "#4b5cf0"; ctx.fillRect(0, y - 1, 320, 17); }
+      text(`${i + 1}: ${t.title}`, 160, y, 13, 500, i === s.sel ? "#fff" : "#c9ccd6");
+    });
+    text(al.album, 160, 192, 15, 500, "#fff");
+    text(al.artist, 160, 216, 15, 500, "#fff");
+    ctx.textAlign = "left";
+  }
+
+  function drawSplash() {
+    if (!st.splash || st.now > st.splash.until) { st.splash = null; return; }
+    ctx.font = font(500, 15);
+    const w = Math.min(300, ctx.measureText(st.splash.text).width + 24);
+    const x = (320 - w) / 2, y = 104;
+    ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, 30);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, w - 1, 29);
+    ctx.textAlign = "center";
+    text(st.splash.text, 160, y + 7, 15, 500, "#fff");
+    ctx.textAlign = "left";
+  }
+
+  // ------------------------------------------------------------ boucle
+  let last = performance.now();
+  function loop(t) {
+    const dt = (t - last) / 1000; last = t; st.now = t;
+    const p = st.play;
+    if (p.queue.length && p.playing && !p.paused) {
+      p.pos += dt;
+      if (p.pos >= track().len) nextTrack(false);
+    }
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, 320, 240);
+    const s = cur();
+    if (s.kind === "list") drawList(s);
+    else if (s.kind === "wps") drawWps(s);
+    else if (s.kind === "cf") drawCoverflow(s);
+    else if (s.kind === "cftracks") drawCfTracks(s);
+    drawSplash();
+    requestAnimationFrame(loop);
+  }
+
+  // ------------------------------------------------------------ actions
+  function act(a) {
+    const s = cur();
+    if (a === "play") { togglePlay(); return; }
+    if (s.kind === "wps") {
+      if (a === "down" || a === "up") { st.volume = Math.max(0, Math.min(100, st.volume + (a === "down" ? 2.5 : -2.5))); st.volShownAt = st.now; }
+      else if (a === "select") push(contextMenu());
+      else if (a === "menu") pop();
+      else if (a === "next") nextTrack(true);
+      else if (a === "prev") prevTrack();
+      return;
+    }
+    if (s.kind === "cf") {
+      if (a === "down" || a === "next") s.sel = Math.min(s.albums.length - 1, s.sel + 1);
+      else if (a === "up" || a === "prev") s.sel = Math.max(0, s.sel - 1);
+      else if (a === "select") push({ kind: "cftracks", album: s.albums[s.sel], sel: 0 });
+      else if (a === "menu") pop();
+      return;
+    }
+    if (s.kind === "cftracks") {
+      if (a === "down") s.sel = Math.min(s.album.tracks.length - 1, s.sel + 1);
+      else if (a === "up") s.sel = Math.max(0, s.sel - 1);
+      else if (a === "select") { playList(s.album.tracks, s.sel); push(wpsScreen()); }
+      else if (a === "menu") pop();
+      return;
+    }
+    // listes
+    const n = s.items.length;
+    if (a === "down" && s.sel < n - 1) { s.sel++; s.selAt = st.now; }
+    else if (a === "up" && s.sel > 0) { s.sel--; s.selAt = st.now; }
+    else if (a === "select") s.items[s.sel].act();
+    else if (a === "menu") pop();
+    else if (a === "next" && st.play.queue.length) nextTrack(true);
+    else if (a === "prev" && st.play.queue.length) prevTrack();
+  }
+
+  // Molette : rotation = défilement, clic sur les zones = boutons
+  const wheel = document.getElementById("wheel");
+  let drag = null;
+  const angleAt = e => {
+    const r = wheel.getBoundingClientRect();
+    return Math.atan2(e.clientY - (r.top + r.height / 2), e.clientX - (r.left + r.width / 2));
+  };
+  wheel.addEventListener("pointerdown", e => {
+    if (e.target.id === "center") return;
+    wheel.setPointerCapture(e.pointerId);
+    drag = { a: angleAt(e), acc: 0, moved: 0, x: e.clientX, y: e.clientY };
+  });
+  wheel.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const a = angleAt(e);
+    let d = a - drag.a;
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    drag.a = a; drag.acc += d; drag.moved += Math.abs(d);
+    const step = Math.PI / 10;
+    while (drag.acc > step) { act("down"); drag.acc -= step; }
+    while (drag.acc < -step) { act("up"); drag.acc += step; }
+  });
+  wheel.addEventListener("pointerup", e => {
+    if (!drag) return;
+    const still = drag.moved < 0.12 && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 8;
+    drag = null;
+    if (!still) return;
+    const a = angleAt(e) * 180 / Math.PI;
+    if (a > -135 && a < -45) act("menu");
+    else if (a >= -45 && a <= 45) act("next");
+    else if (a > 45 && a < 135) act("play");
+    else act("prev");
+  });
+  wheel.addEventListener("pointercancel", () => { drag = null; });
+  document.getElementById("center").addEventListener("click", e => { e.stopPropagation(); act("select"); });
+  cvs.addEventListener("wheel", e => { e.preventDefault(); act(e.deltaY > 0 ? "down" : "up"); }, { passive: false });
+
+  const KEYS = { ArrowDown: "down", ArrowUp: "up", Enter: "select", Escape: "menu", Backspace: "menu",
+    " ": "play", ArrowLeft: "prev", ArrowRight: "next" };
+  document.addEventListener("keydown", e => {
+    const a = KEYS[e.key];
+    if (!a || e.target.closest("button") && e.key === "Enter") return;
+    e.preventDefault(); act(a);
+  });
+
+  // ------------------------------------------------------------ démarrage
+  (async () => {
+    L = await (await fetch("assets/layout.json")).json();
+    const names = { pill: "pill", icons: "icons", iconsSel: "icons-selected", battery: "battery",
+      island: "island", playstate: "playstate", prev: "prev", next: "next", shuffle: "shuffle",
+      repeat: "repeat", volLow: "vol-low", volHigh: "vol-high" };
+    const jobs = Object.entries(names).map(async ([k, f]) => { img[k] = await load(`assets/${f}.png`); });
+    for (const v of L.variants) {
+      jobs.push(load(`assets/menu-${v.name}.png`).then(i => { img["menu-" + v.name] = i; }));
+      jobs.push(load(`assets/wps-${v.name}.png`).then(i => { img["wps-" + v.name] = i; }));
+    }
+    for (const c of L.covers) jobs.push(load(`assets/cover-${c}.png`).then(i => { img["cover-" + c] = i; }));
+    jobs.push(Promise.all(["700 24px Inter", "500 16px Inter", "600 13px Inter", "400 15px Inter", "600 19px Inter"]
+      .map(f => document.fonts.load(f).catch(() => {}))));
+    await Promise.all(jobs);
+    if (!L.variants.some(v => v.name === st.variant)) st.variant = L.variants[0].name;
+    setVariant(st.variant);
+    push(mainMenu());
+    requestAnimationFrame(loop);
+  })();
+})();
+</script>

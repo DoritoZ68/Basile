@@ -1,0 +1,153 @@
+{
+ "W": 320,
+ "H": 240,
+ "variants": [
+  {
+   "name": "Papier",
+   "theme": "LiquidGlass-Papier",
+   "desc": "fond iOS 27 fourni (vagues de papier)"
+  },
+  {
+   "name": "Aurore",
+   "theme": "LiquidGlass-Aurore",
+   "desc": "rubans bleu, violet et rose sur bleu nuit (fond d'origine)"
+  },
+  {
+   "name": "Ocean",
+   "theme": "LiquidGlass-Ocean",
+   "desc": "vagues turquoise et bleu profond"
+  },
+  {
+   "name": "Crepuscule",
+   "theme": "LiquidGlass-Crepuscule",
+   "desc": "coucher de soleil orange, rose et pourpre"
+  },
+  {
+   "name": "Graphite",
+   "theme": "LiquidGlass-Graphite",
+   "desc": "gris anthracite et reflets argentés, très sobre"
+  }
+ ],
+ "TITLE_VP": [
+  16,
+  23,
+  290,
+  30
+ ],
+ "LIST_VP": [
+  14,
+  57,
+  292,
+  174
+ ],
+ "ROW_H": 29,
+ "ROWS": 6,
+ "PILL": [
+  0,
+  1,
+  288,
+  27
+ ],
+ "TEXT_X": 32,
+ "TEXT_W": 248,
+ "ICON_X": 4,
+ "SCROLL_VP": [
+  304,
+  66,
+  3,
+  156
+ ],
+ "CLOCK_VP": [
+  14,
+  3,
+  70,
+  16
+ ],
+ "BATT_POS": [
+  284,
+  6
+ ],
+ "BATT_PCT_VP": [
+  226,
+  3,
+  54,
+  16
+ ],
+ "LOCK_POS": [
+  214,
+  4
+ ],
+ "ISLAND_RECT": [
+  126,
+  3,
+  68,
+  17
+ ],
+ "ART": [
+  16,
+  30,
+  124,
+  124
+ ],
+ "ART_R": 10,
+ "INFO_X": 156,
+ "INFO_W": 150,
+ "TIME_L_VP": [
+  24,
+  175,
+  44,
+  14
+ ],
+ "TIME_R_VP": [
+  252,
+  175,
+  44,
+  14
+ ],
+ "PB_VP": [
+  70,
+  179,
+  180,
+  6
+ ],
+ "CTRL_VP": [
+  24,
+  196,
+  272,
+  30
+ ],
+ "VOL_VP": [
+  36,
+  196,
+  248,
+  30
+ ],
+ "CTRL": {
+  "shuffle": 6,
+  "prev": 74,
+  "play": 122,
+  "next": 176,
+  "repeat": 246
+ },
+ "VOLBAR_X": 30,
+ "VOLBAR_W": 188,
+ "COLORS": {
+  "text": "F2F4FA",
+  "text2": "DCE0F0",
+  "text3": "B2B8D4",
+  "white": "FFFFFF",
+  "pill": "0886FF"
+ },
+ "ICON": {
+  "coverflow": 27,
+  "wallpaper": 4
+ },
+ "covers": [
+  "blue-hour",
+  "glass-garden",
+  "liquid-light",
+  "neon-desert",
+  "northern-lights",
+  "paper-waves"
+ ]
+}
