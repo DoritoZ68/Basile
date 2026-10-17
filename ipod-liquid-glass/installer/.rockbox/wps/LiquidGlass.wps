@@ -1,0 +1,116 @@
+# Liquid Glass — écran de lecture (320x240x16)
+# Généré par generateur/build.py : modifier le script plutôt que ce fichier.
+#
+%wd
+%X(wps-backdrop.bmp)
+%Fl(2,19-InterDisplay-SemiBold.fnt)
+%Fl(3,13-Inter-SemiBold.fnt)
+%Fl(4,12-Inter-Medium.fnt)
+%Fl(5,15-Inter-Regular.fnt)
+#
+%xl(crn00,corner0.bmp,0,0)
+%xl(crn01,corner1.bmp,117,0)
+%xl(crn02,corner2.bmp,0,1)
+%xl(crn03,corner3.bmp,119,1)
+%xl(crn04,corner4.bmp,0,2)
+%xl(crn05,corner5.bmp,121,2)
+%xl(crn06,corner6.bmp,0,3)
+%xl(crn07,corner7.bmp,122,3)
+%xl(crn08,corner8.bmp,0,4)
+%xl(crn09,corner9.bmp,122,4)
+%xl(crn10,corner10.bmp,0,5)
+%xl(crn11,corner11.bmp,123,5)
+%xl(crn12,corner12.bmp,0,6)
+%xl(crn13,corner13.bmp,123,6)
+%xl(crn14,corner14.bmp,0,117)
+%xl(crn15,corner15.bmp,123,117)
+%xl(crn16,corner16.bmp,0,118)
+%xl(crn17,corner17.bmp,123,118)
+%xl(crn18,corner18.bmp,0,119)
+%xl(crn19,corner19.bmp,122,119)
+%xl(crn20,corner20.bmp,0,120)
+%xl(crn21,corner21.bmp,122,120)
+%xl(crn22,corner22.bmp,0,121)
+%xl(crn23,corner23.bmp,121,121)
+%xl(crn24,corner24.bmp,0,122)
+%xl(crn25,corner25.bmp,119,122)
+%xl(crn26,corner26.bmp,0,123)
+%xl(crn27,corner27.bmp,117,123)
+%xl(B,battery-wps.bmp,0,0,12)
+%xl(C,battery-charge-wps.bmp,0,0,12)
+%xl(K,lock-wps.bmp,0,0)
+%xl(F,pb-fill.bmp,0,0)
+%xl(R,pb-track.bmp,0,0)
+%xl(G,vol-fill.bmp,0,0)
+%xl(H,vol-track.bmp,0,0)
+%xl(Q,vol-low.bmp,4,7)
+%xl(U,vol-high.bmp,224,7)
+# vignettes « vrai/faux » : la première = activé
+%xl(L,shuffle.bmp,6,6,2)
+%xl(E,repeat.bmp,246,6,5)
+%xl(J,prev.bmp,74,5)
+%xl(O,next.bmp,176,5)
+%xl(A,playstate.bmp,122,1,5)
+#
+# Volume : la rangée de commandes laisse place à une jauge pendant le réglage
+%?mv(2)<%Vd(v)|%Vd(c)>
+#
+# --- Pochette aux coins arrondis -------------------------------------------
+%V(16,30,124,124,-)
+# Pas de conditionnelle ici : Rockbox efface la zone des images de la
+# branche inactive à chaque rafraîchissement, ce qui effacerait la pochette.
+# La tuile « pas de pochette » est donc peinte dans le fond.
+%Cl(0,0,124,124,c,c)
+%Cd
+%xd(crn00)%xd(crn01)%xd(crn02)%xd(crn03)%xd(crn04)%xd(crn05)%xd(crn06)%xd(crn07)%xd(crn08)%xd(crn09)%xd(crn10)%xd(crn11)%xd(crn12)%xd(crn13)%xd(crn14)%xd(crn15)%xd(crn16)%xd(crn17)%xd(crn18)%xd(crn19)%xd(crn20)%xd(crn21)%xd(crn22)%xd(crn23)%xd(crn24)%xd(crn25)%xd(crn26)%xd(crn27)
+#
+# --- Titre, artiste, album -------------------------------------------------
+%V(156,40,150,24,2)%Vf(FFFFFF)
+%s%?it<%it|%fn>
+%V(156,64,150,19,5)%Vf(DCE0F0)
+%s%?ia<%ia|%?iA<%iA|%?d(2)<%d(2)|>>>
+%V(156,83,150,19,5)%Vf(B2B8D4)
+%s%?id<%id|%?d(1)<%d(1)|>>
+#
+# --- À suivre --------------------------------------------------------------
+%V(156,116,150,15,4)%Vf(B2B8D4)
+%?It<%Sx(Next Track:)|%?Fn<%Sx(Next Track:)|>>
+%V(156,131,150,16,3)%Vf(DCE0F0)
+%s%?It<%It|%Fn>
+#
+# --- Panneau du lecteur ----------------------------------------------------
+%V(24,175,44,14,4)%Vf(DCE0F0)
+%pc
+%V(252,175,44,14,4)%Vf(DCE0F0)
+%ar-%pr
+%V(70,179,180,6,-)
+%pb(0,0,180,6,image,F,backdrop,R)
+#
+%Vl(c,24,196,272,30,-)
+%xd(L,%ps)
+%xd(J)
+%?mp<%xd(Aa)|%xd(Ab)|%xd(Aa)|%xd(Ad)|%xd(Ae)|%xd(Aa)>
+%xd(O)
+%xd(E,%mm)
+#
+%Vl(v,36,196,248,30,-)
+%xd(Q)
+%xd(U)
+%Vl(v,66,208,188,6,-)
+%pv(0,0,188,6,image,G,backdrop,H)
+# --- Barre d'état -------------------------------------------------------
+# Heure (si l'horloge est réglée)
+%V(14,3,70,16,3)%Vf(FFFFFF)
+%?cc<%?St(time format)<%cH|%cI>:%cM|>
+#
+# Niveau de batterie en texte
+%V(226,3,54,16,4)%Vf(FFFFFF)
+%ar%bl%%
+#
+# Pile (12 vignettes : inconnu, 0 %, 10 % ... 100 %)
+%V(284,6,25,11,-)
+%?bc<%xd(C,%bl)|%xd(B,%bl)>
+#
+# Verrou (bouton Hold)
+%V(214,4,10,13,-)
+%?mh<%xd(K)|>
