@@ -381,6 +381,15 @@ def g_palette(c):
         c.ellipse(x - 1.4, y - 1.4, x + 1.4, y + 1.4, fill=col)
 
 
+def g_coverflow(c):
+    """Trois pochettes en perspective, comme Cover Flow."""
+    side = (255, 255, 255, 150)
+    c.poly([(2.5, 6.5), (6.5, 5), (6.5, 15), (2.5, 13.5)], side)
+    c.poly([(17.5, 6.5), (13.5, 5), (13.5, 15), (17.5, 13.5)], side)
+    c.rrect(6.2, 4, 13.8, 13.2, 1.2, WH)
+    c.rrect(6.2, 13.8, 13.8, 16.4, 0.8, (255, 255, 255, 90))  # reflet
+
+
 def g_chip(c):
     c.rrect(6, 6, 14, 14, 1.5, WH)
     for k in (8, 10, 12):
@@ -496,11 +505,6 @@ def g_sun(c):
                 (10 + 6.6 * math.cos(a), 10 + 6.6 * math.sin(a))], WH, 1.3)
 
 
-def g_screen(c):
-    c.rrect(3.5, 4.5, 16.5, 13, 1.6, WH)
-    c.rrect(7.5, 14.5, 12.5, 15.8, 0.6, WH)
-
-
 def g_radio(c):
     c.ellipse(8.6, 8.6, 11.4, 11.4, fill=WH)
     for rr, wd in ((4.2, 1.4), (7.0, 1.4)):
@@ -548,7 +552,8 @@ ICONS = [
     ((120, 124, 140), (72, 76, 92), g_info),          # System_menu
     ((255, 94, 126), (255, 45, 85), g_playback),      # Playback_menu
     ((90, 176, 255), (10, 122, 255), g_sun),          # Display_menu
-    ((90, 176, 255), (10, 122, 255), g_screen),       # Remote_Display_menu
+    ((255, 120, 90), (230, 40, 110), g_coverflow),    # Remote_Display_menu -> Cover Flow
+                                                      # (pas de télécommande sur le nano)
     ((255, 184, 64), (255, 140, 10), g_radio),        # Radio_screen
     ((90, 176, 255), (10, 122, 255), g_folder),       # file_view_menu
     ((255, 94, 126), (255, 45, 85), g_eq),            # EQ
@@ -1035,6 +1040,17 @@ SHUF_X, PREV_X, PLAY_X, NEXT_X, REP_X = 6, 74, 122, 176, 246
 VOLBAR_X, VOLBAR_W = 30, 188
 
 
+COVERFLOW_ICON = 27  # case « Remote_Display_menu », inutile sur le nano 3G
+
+
+def write_shortcuts():
+    """Raccourci « Cover Flow » (plugin PictureFlow de Rockbox)."""
+    with open(os.path.join(OUT, "shortcuts.txt"), "w") as f:
+        f.write("[shortcut]\ntype: file\nname: Cover Flow\n"
+                "data: /.rockbox/rocks/demos/pictureflow.rock\n"
+                "icon: %d\n" % COVERFLOW_ICON)
+
+
 def write_cfg():
     cfg = """# Liquid Glass — thème Rockbox pour iPod nano 3G (320x240)
 # Copier le dossier .rockbox à la racine de l'iPod, puis :
@@ -1058,6 +1074,8 @@ scrollbar: off
 show icons: on
 list separator height: 0
 ui viewport: -
+# Raccourcis (dont Cover Flow) en tête du menu principal
+root menu order: shortcuts, files, database, wps, settings, recording, playlists, plugins, system_menu
 """.format(n=NAME, fg=hexcol(TEXT), sel=hexcol(PILL_BODY))
     os.makedirs(os.path.join(OUT, "themes"), exist_ok=True)
     with open(os.path.join(OUT, "themes", NAME + ".cfg"), "w") as f:
@@ -1136,6 +1154,7 @@ def main():
     write_sbs()
     write_wps()
     write_cfg()
+    write_shortcuts()
     print("terminé :", os.path.normpath(OUT))
 
 

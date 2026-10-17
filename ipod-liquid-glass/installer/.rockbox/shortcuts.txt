@@ -1,0 +1,5 @@
+[shortcut]
+type: file
+name: Cover Flow
+data: /.rockbox/rocks/demos/pictureflow.rock
+icon: 27

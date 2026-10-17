@@ -16,6 +16,8 @@ français (moteur de rendu réel, pas une maquette), agrandies ×2 :
 | ![](apercus/menu.png) | ![](apercus/album.png) | ![](apercus/lecture.png) |
 | **Volume** | **Réglages** | **Sans pochette** |
 | ![](apercus/volume.png) | ![](apercus/reglages.png) | ![](apercus/sans-pochette.png) |
+| **Raccourcis** | **Cover Flow** | **Pistes de l'album** |
+| ![](apercus/raccourcis.png) | ![](apercus/coverflow.png) | ![](apercus/coverflow-pistes.png) |
 
 ## Pourquoi Rockbox (et pas iPodLinux)
 
@@ -77,8 +79,8 @@ Suis le manuel Rockbox, section « iPod Nano 3G »
 ### 3. Installer le thème
 
 1. Copier le contenu de [`installer/.rockbox`](installer/.rockbox) dans le
-   dossier `.rockbox` de l'iPod, en **fusionnant** les dossiers (rien n'est
-   écrasé : tous les fichiers du thème sont nouveaux).
+   dossier `.rockbox` de l'iPod, en **fusionnant** les dossiers (tous les
+   fichiers du thème sont nouveaux, sauf `shortcuts.txt` : voir Cover Flow).
    > Le dossier commence par un point : il est masqué par défaut
    > (macOS : `Cmd` + `Maj` + `.` dans le Finder).
 2. Rockbox démarre en anglais. Pour passer en français : **Settings ›
@@ -89,6 +91,28 @@ Suis le manuel Rockbox, section « iPod Nano 3G »
    Files*).
 
 Pour régler l'heure affichée en haut à gauche : *Réglages › Date & heure*.
+
+### 4. Cover Flow
+
+Cover Flow passe par **PictureFlow**, le plugin de Rockbox qui reprend
+l'effet de l'iPod : pochettes en perspective, reflets, fond noir.
+Le thème le place dans le menu principal : **Raccourcis › Cover Flow**.
+
+1. Une seule fois : **Base de données tags** › confirmer l'initialisation.
+   Cover Flow liste les albums depuis cette base.
+2. Au premier lancement, PictureFlow prépare le cache des pochettes
+   (`cover.jpg` ou `folder.jpg` dans le dossier de l'album, ou pochette
+   intégrée au fichier). Ça peut prendre un moment avec beaucoup d'albums.
+3. **Molette** : faire défiler les pochettes ; **⏮ / ⏭** : sauter plus
+   loin ; **bouton central** : ouvrir les pistes de l'album, puis lancer la
+   lecture ; **Menu** : revenir.
+
+> Le thème installe `.rockbox/shortcuts.txt` (le raccourci Cover Flow) et
+> place « Raccourcis » en tête du menu principal (ligne `root menu order`
+> de `themes/LiquidGlass.cfg`). Si tu avais déjà des raccourcis, ajoute
+> plutôt le bloc `[shortcut]` de ce fichier à ton propre `shortcuts.txt`.
+> PictureFlow garde son propre style (fond noir) : c'est un plugin, pas
+> une page du thème.
 
 ## Ce que fait le thème
 
@@ -101,6 +125,7 @@ Pour régler l'heure affichée en haut à gauche : *Réglages › Date & heure*.
 | Listes | grand titre, 6 lignes, séparateurs fins, pastille bleue avec reflet, défilement des noms longs, indicateur de défilement |
 | Icônes | 32 tuiles 20×20 dans l'esprit iOS (dossier, musique, réglages, thème, enregistrement…) |
 | Lecture | pochette arrondie avec ombre, titre/artiste/album, morceau suivant, barre de progression, aléatoire/répétition, jauge de volume qui remplace les commandes pendant 2 s |
+| Cover Flow | entrée « Cover Flow » (plugin PictureFlow) dans Raccourcis, en tête du menu, avec sa propre icône |
 | Polices | Inter (la plus proche de SF Pro), anticrénelée, latin + grec + cyrillique |
 
 ### Limites (dues au matériel ou au moteur de Rockbox)
@@ -151,6 +176,7 @@ Dans `build.py` :
 ipod-liquid-glass/
 ├── installer/.rockbox/       ← à copier sur l'iPod
 │   ├── themes/LiquidGlass.cfg
+│   ├── shortcuts.txt         raccourci Cover Flow
 │   ├── wps/LiquidGlass.wps   écran de lecture
 │   ├── wps/LiquidGlass.sbs   barre d'état + menus
 │   ├── wps/LiquidGlass/      images du thème
