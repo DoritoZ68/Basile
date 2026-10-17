@@ -24,7 +24,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 W, H = 320, 240
-NAME = "LiquidGlass"
+NAME = "LiquidGlass"          # remplacé par variante (LiquidGlass-Papier…)
+FAMILY = "LiquidGlass"        # fichiers partagés : icônes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "installer", ".rockbox")
@@ -196,25 +197,97 @@ def bilinear(arr, sx, sy):
 
 
 # ---------------------------------------------------------------------------
-# Fond d'écran : image fournie (fond-ios27.png), recadrée en 4:3
+# Fonds d'écran : un thème Rockbox est généré pour chacun
 # ---------------------------------------------------------------------------
 
 WALLPAPER = os.path.join(HERE, "fond-ios27.png")
 
 
-def wallpaper(variant="menu"):
-    src = Image.open(WALLPAPER).convert("RGB")
+def photo_wallpaper(path):
+    """Image fournie, recadrée en 4:3 au centre."""
+    src = Image.open(path).convert("RGB")
     sw, sh = src.size
-    cw = min(sw, round(sh * W / H))         # recadrage 4:3 centré
+    cw = min(sw, round(sh * W / H))
     left = (sw - cw) // 2
     src = src.crop((left, 0, left + cw, sh)).resize((W, H), Image.LANCZOS)
-    img = np.asarray(src, np.float64)
+    return np.asarray(src, np.float64)
 
+
+def procedural_wallpaper(top, bottom, blobs, ribbons):
+    """Taches et rubans lumineux sur un dégradé, façon fond iOS."""
     ys, xs = np.mgrid[0:H, 0:W].astype(np.float64)
     u, v = xs / W, ys / H
-    # Voile sombre en haut : l'heure et le grand titre blancs restent lisibles
-    # sur ce fond clair.
-    img *= (1.0 - 0.42 * np.clip(1 - v / 0.30, 0, 1) ** 1.3)[..., None]
+    img = np.zeros((H, W, 3))
+    img[:] = (np.array(top, np.float64) * (1 - v[..., None])
+              + np.array(bottom, np.float64) * v[..., None])
+
+    light = np.zeros_like(img)
+    for cx, cy, rx, ry, color, k in blobs:
+        d = ((u - cx) / rx) ** 2 + ((v - cy) / ry) ** 2
+        light += np.exp(-d)[..., None] * np.array(color, np.float64) * k
+    for y0, amp, freq, phase, width, c1, c2, k in ribbons:
+        yc = y0 + amp * np.sin(freq * u * 2 * math.pi + phase)
+        d = (v - yc) / width
+        t = u[..., None]
+        col = np.array(c1, np.float64) * (1 - t) + np.array(c2, np.float64) * t
+        core = np.exp(-d ** 2)[..., None]
+        sheen = np.exp(-(d * 3.2) ** 2)[..., None] * 0.55
+        light += (core + sheen) * col * k
+    img = img + light * (1.0 - 0.35 * np.exp(-(v / 0.25) ** 2))[..., None]
+    # tonalité douce pour éviter la saturation brutale
+    img = 255 * (1 - np.exp(-img / 255 * 1.35)) / (1 - math.exp(-1.35))
+    return gaussian(img, 1.2)
+
+
+# nom, description, fonction qui dessine le fond, force du voile en haut
+WALLPAPERS = [
+    ("Papier", "fond iOS 27 fourni (vagues de papier)",
+     lambda: photo_wallpaper(WALLPAPER), 0.42),
+    ("Aurore", "rubans bleu, violet et rose sur bleu nuit (fond d'origine)",
+     lambda: procedural_wallpaper(
+         (8, 10, 32), (18, 10, 46),
+         [(0.18, 0.95, 0.55, 0.45, (40, 70, 255), 0.85),
+          (0.92, 0.18, 0.40, 0.42, (150, 60, 255), 0.70),
+          (0.70, 1.05, 0.45, 0.35, (255, 70, 150), 0.55)],
+         [(0.62, 0.10, 0.75, 0.6, 0.11, (30, 120, 255), (190, 80, 255), 0.95),
+          (0.80, 0.08, 0.55, 2.4, 0.08, (255, 90, 170), (255, 160, 80), 0.75),
+          (0.38, 0.12, 0.60, 4.1, 0.07, (40, 220, 230), (80, 120, 255), 0.45)]), 0.45),
+    ("Ocean", "vagues turquoise et bleu profond",
+     lambda: procedural_wallpaper(
+         (2, 14, 30), (0, 22, 40),
+         [(0.15, 0.90, 0.55, 0.45, (0, 140, 200), 0.85),
+          (0.90, 0.25, 0.40, 0.40, (0, 90, 220), 0.60),
+          (0.60, 1.05, 0.50, 0.35, (0, 200, 170), 0.55)],
+         [(0.60, 0.09, 0.70, 1.2, 0.10, (0, 180, 220), (60, 120, 255), 0.95),
+          (0.78, 0.07, 0.50, 3.0, 0.07, (40, 230, 200), (0, 160, 255), 0.70),
+          (0.40, 0.10, 0.55, 5.0, 0.06, (120, 220, 255), (0, 120, 200), 0.40)]), 0.45),
+    ("Crepuscule", "coucher de soleil orange, rose et pourpre",
+     lambda: procedural_wallpaper(
+         (24, 8, 30), (40, 10, 24),
+         [(0.20, 0.95, 0.55, 0.45, (255, 110, 40), 0.85),
+          (0.90, 0.20, 0.40, 0.42, (170, 40, 170), 0.65),
+          (0.65, 1.05, 0.45, 0.35, (255, 60, 110), 0.60)],
+         [(0.62, 0.10, 0.70, 0.3, 0.11, (255, 150, 50), (255, 70, 140), 0.95),
+          (0.80, 0.08, 0.55, 2.2, 0.08, (255, 90, 90), (190, 70, 220), 0.75),
+          (0.40, 0.11, 0.60, 4.4, 0.06, (255, 210, 120), (255, 120, 80), 0.40)]), 0.45),
+    ("Graphite", "gris anthracite et reflets argentés, très sobre",
+     lambda: procedural_wallpaper(
+         (10, 10, 12), (18, 18, 22),
+         [(0.20, 0.95, 0.55, 0.45, (80, 84, 96), 0.80),
+          (0.90, 0.20, 0.40, 0.42, (60, 62, 72), 0.60)],
+         [(0.62, 0.10, 0.70, 0.8, 0.10, (150, 155, 170), (110, 115, 130), 0.80),
+          (0.80, 0.08, 0.55, 2.6, 0.07, (190, 192, 200), (120, 124, 140), 0.50)]), 0.40),
+]
+
+CURRENT = WALLPAPERS[0]  # variante en cours de génération
+
+
+def wallpaper(variant="menu"):
+    img = CURRENT[2]().copy()
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float64)
+    u, v = xs / W, ys / H
+    # Voile sombre en haut : l'heure et le grand titre blancs restent lisibles.
+    img *= (1.0 - CURRENT[3] * np.clip(1 - v / 0.30, 0, 1) ** 1.3)[..., None]
     if variant == "wps":
         # plus sombre partout, et davantage derrière le texte (colonne de droite)
         img *= (0.70 - 0.22 * np.exp(-(((u - 0.74) / 0.30) ** 2 + ((v - 0.40) / 0.30) ** 2)))[..., None]
@@ -1043,25 +1116,33 @@ VOLBAR_X, VOLBAR_W = 30, 188
 COVERFLOW_ICON = 27  # case « Remote_Display_menu », inutile sur le nano 3G
 
 
+WALLPAPER_ICON = 4  # « Wps », dessinée en palette
+
+
 def write_shortcuts():
-    """Raccourci « Cover Flow » (plugin PictureFlow de Rockbox)."""
+    """Raccourcis « Cover Flow » (plugin PictureFlow) et « Fond d'écran »."""
     with open(os.path.join(OUT, "shortcuts.txt"), "w") as f:
         f.write("[shortcut]\ntype: file\nname: Cover Flow\n"
                 "data: /.rockbox/rocks/demos/pictureflow.rock\n"
-                "icon: %d\n" % COVERFLOW_ICON)
+                "icon: %d\n\n" % COVERFLOW_ICON)
+        # ouvre la liste des thèmes : un thème par fond d'écran
+        f.write("[shortcut]\ntype: browse\nname: Fond d'écran\n"
+                "data: /.rockbox/themes/\n"
+                "icon: %d\n" % WALLPAPER_ICON)
 
 
 def write_cfg():
     cfg = """# Liquid Glass — thème Rockbox pour iPod nano 3G (320x240)
+# Fond « {fond} » : {desc}
 # Copier le dossier .rockbox à la racine de l'iPod, puis :
-# Réglages > Réglages thème > Liste des thèmes > LiquidGlass
+# Réglages > Réglages thème > Liste des thèmes > {n}
 # (Settings > Theme Settings > Browse Theme Files, en anglais)
 wps: /.rockbox/wps/{n}.wps
 sbs: /.rockbox/wps/{n}.sbs
 fms: -
 backdrop: /.rockbox/backdrops/{n}.bmp
 font: /.rockbox/fonts/16-Inter-Medium.fnt
-iconset: /.rockbox/icons/{n}.bmp
+iconset: /.rockbox/icons/{fam}.bmp
 viewers iconset: -
 foreground color: {fg}
 background color: 0B1020
@@ -1076,7 +1157,8 @@ list separator height: 0
 ui viewport: -
 # Raccourcis (dont Cover Flow) en tête du menu principal
 root menu order: shortcuts, files, database, wps, settings, recording, playlists, plugins, system_menu
-""".format(n=NAME, fg=hexcol(TEXT), sel=hexcol(PILL_BODY))
+""".format(n=NAME, fam=FAMILY, fg=hexcol(TEXT), sel=hexcol(PILL_BODY), fond=CURRENT[0],
+           desc=CURRENT[1])
     os.makedirs(os.path.join(OUT, "themes"), exist_ok=True)
     with open(os.path.join(OUT, "themes", NAME + ".cfg"), "w") as f:
         f.write(cfg)
@@ -1084,7 +1166,7 @@ root menu order: shortcuts, files, database, wps, settings, recording, playlists
 
 # ---------------------------------------------------------------------------
 
-def main():
+def build_variant():
     os.makedirs(SKIN_DIR, exist_ok=True)
 
     print("fond des menus…")
@@ -1094,9 +1176,6 @@ def main():
     print("fond de lecture…")
     wps = wps_backdrop()
     write_bmp(os.path.join(SKIN_DIR, "wps-backdrop.bmp"), wps)
-
-    print("icônes…")
-    write_bmp(os.path.join(OUT, "icons", NAME + ".bmp"), np.round(make_iconset()))
 
     print("liste…")
     pill_img = pill()
@@ -1154,7 +1233,19 @@ def main():
     write_sbs()
     write_wps()
     write_cfg()
+
+
+def main():
+    global CURRENT, NAME, SKIN_DIR
+    print("icônes et raccourcis…")
+    write_bmp(os.path.join(OUT, "icons", FAMILY + ".bmp"), np.round(make_iconset()))
     write_shortcuts()
+    for wp in WALLPAPERS:
+        CURRENT = wp
+        NAME = "%s-%s" % (FAMILY, wp[0])
+        SKIN_DIR = os.path.join(OUT, "wps", NAME)
+        print("== %s ==" % NAME)
+        build_variant()
     print("terminé :", os.path.normpath(OUT))
 
 

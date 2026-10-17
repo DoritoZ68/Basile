@@ -87,12 +87,36 @@ Suis le manuel Rockbox, section « iPod Nano 3G »
    General Settings › Language › francais**. Le thème reprend les textes de
    Rockbox, donc tout suit (« Titre suivant », menus, réglages…).
 3. Activer le thème : **Réglages › Réglages thème › Liste des thèmes ›
-   LiquidGlass** (en anglais : *Settings › Theme Settings › Browse Theme
-   Files*).
+   LiquidGlass-Papier** (en anglais : *Settings › Theme Settings › Browse
+   Theme Files*). Ensuite, le plus simple est de passer par
+   **Raccourcis › Fond d'écran** (voir plus bas).
 
 Pour régler l'heure affichée en haut à gauche : *Réglages › Date & heure*.
 
-### 4. Cover Flow
+### 4. Changer de fond d'écran
+
+Le thème existe en **5 versions**, une par fond d'écran. Pour en changer :
+**Raccourcis › Fond d'écran**, puis choisis une ligne `LiquidGlass-…`.
+Le fond change tout de suite, dans les menus comme sur l'écran de lecture.
+
+| Thème | Fond |
+| --- | --- |
+| `LiquidGlass-Papier` | fond iOS 27 fourni (vagues de papier) |
+| `LiquidGlass-Aurore` | rubans bleu, violet et rose sur bleu nuit (le premier fond) |
+| `LiquidGlass-Ocean` | vagues turquoise et bleu profond |
+| `LiquidGlass-Crepuscule` | coucher de soleil orange, rose et pourpre |
+| `LiquidGlass-Graphite` | gris anthracite et reflets argentés, très sobre |
+
+![Les 5 fonds](apercus/fonds.png)
+
+![Changer de fond depuis l'iPod](apercus/changer-de-fond.png)
+
+> Pourquoi un thème par fond ? Rockbox ne sait pas flouter en direct : le
+> verre, la barre d'état et les commandes sont pré-calculés pour chaque fond.
+> La liste montre aussi les thèmes livrés avec Rockbox (`cabbiev2`…) :
+> les choisir quitte Liquid Glass.
+
+### 5. Cover Flow
 
 Cover Flow passe par **PictureFlow**, le plugin de Rockbox qui reprend
 l'effet de l'iPod : pochettes en perspective, reflets, fond noir.
@@ -107,9 +131,9 @@ Le thème le place dans le menu principal : **Raccourcis › Cover Flow**.
    loin ; **bouton central** : ouvrir les pistes de l'album, puis lancer la
    lecture ; **Menu** : revenir.
 
-> Le thème installe `.rockbox/shortcuts.txt` (le raccourci Cover Flow) et
-> place « Raccourcis » en tête du menu principal (ligne `root menu order`
-> de `themes/LiquidGlass.cfg`). Si tu avais déjà des raccourcis, ajoute
+> Le thème installe `.rockbox/shortcuts.txt` (raccourcis Cover Flow et Fond
+> d'écran) et place « Raccourcis » en tête du menu principal (ligne
+> `root menu order` des fichiers `themes/LiquidGlass-*.cfg`). Si tu avais déjà des raccourcis, ajoute
 > plutôt le bloc `[shortcut]` de ce fichier à ton propre `shortcuts.txt`.
 > PictureFlow garde son propre style (fond noir) : c'est un plugin, pas
 > une page du thème.
@@ -118,7 +142,7 @@ Le thème le place dans le menu principal : **Raccourcis › Cover Flow**.
 
 | Élément | Détail |
 | --- | --- |
-| Fond | fond d'écran iOS 27 (vagues de papier), recadré en 4:3, voile sombre en haut pour la lisibilité, tramé en RGB565 pour éviter les bandes |
+| Fonds | 5 au choix (iOS 27 fourni + 4 générés), voile sombre en haut pour la lisibilité, tramés en RGB565 pour éviter les bandes |
 | Verre | flou, réfraction sur les bords, vibrance, reflet spéculaire en haut à gauche, ombre portée |
 | Barre d'état | heure, pourcentage et pile façon iOS (verte en charge, rouge sous 20 %), cadenas si *Hold* |
 | Dynamic Island | capsule noire animée en haut des menus pendant la lecture (onde, pause, avance rapide) |
@@ -154,20 +178,24 @@ Dans `build.py` :
 
 - `BLUE` : couleur de la pastille de sélection (essaie `(255, 55, 95)` pour
   du rose) ;
-- `fond-ios27.png` : le fond d'écran ; remplace ce fichier par n'importe quelle
-  image (elle est recadrée en 4:3) et `wallpaper()` règle le voile sombre ;
+- `WALLPAPERS` : la liste des fonds, un thème est généré pour chacun. Pour
+  ajouter ta propre image, mets-la dans `generateur/` et ajoute une ligne
+  `("MonFond", "description", lambda: photo_wallpaper(os.path.join(HERE,
+  "mon-image.jpg")), 0.42)` (le dernier nombre règle le voile sombre en
+  haut ; l'image est recadrée en 4:3) ;
 - `glass()` : opacité, flou et reflets du verre ;
 - `ICONS` : couleurs et dessins des icônes ;
 - les constantes en haut du fichier : toutes les positions à l'écran.
 
 ## Comment ça a été testé
 
-- Les deux skins passent **`checkwps`** (le validateur de Rockbox) compilé
+- Les 10 skins (2 par fond) passent **`checkwps`** (le validateur de Rockbox) compilé
   pour la cible **`ipodnano3g`**.
 - Rendu vérifié dans le **simulateur Rockbox de l'iPod Classic**, qui a le
   même écran 320×240 en 16 bits et la même molette (Rockbox n'a pas encore
   de simulateur nano 3G) : menus, navigation, lecture avec et sans pochette,
-  pause, volume, réglages, boîtes de dialogue.
+  pause, volume, réglages, boîtes de dialogue, changement de fond depuis
+  les Raccourcis.
 - Pas encore testé sur un vrai nano 3G : c'est l'étape suivante.
 
 ## Contenu du dossier
@@ -175,13 +203,13 @@ Dans `build.py` :
 ```
 ipod-liquid-glass/
 ├── installer/.rockbox/       ← à copier sur l'iPod
-│   ├── themes/LiquidGlass.cfg
-│   ├── shortcuts.txt         raccourci Cover Flow
-│   ├── wps/LiquidGlass.wps   écran de lecture
-│   ├── wps/LiquidGlass.sbs   barre d'état + menus
-│   ├── wps/LiquidGlass/      images du thème
-│   ├── backdrops/LiquidGlass.bmp
-│   ├── icons/LiquidGlass.bmp
+│   ├── themes/LiquidGlass-*.cfg     un thème par fond d'écran
+│   ├── shortcuts.txt                Cover Flow + Fond d'écran
+│   ├── wps/LiquidGlass-*.wps        écran de lecture
+│   ├── wps/LiquidGlass-*.sbs        barre d'état + menus
+│   ├── wps/LiquidGlass-*/           images de chaque variante
+│   ├── backdrops/LiquidGlass-*.bmp
+│   ├── icons/LiquidGlass.bmp        icônes (communes)
 │   └── fonts/                Inter en .fnt + licence OFL
 ├── generateur/
 │   ├── build.py              génère tout le thème
