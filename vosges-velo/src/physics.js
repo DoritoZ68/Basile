@@ -56,9 +56,73 @@ export function airDensity(alt) {
 }
 
 export function maxPower(r) {
-  // au-dessus de CP, limité par la réserve W'
+  // au-dessus de CP, limité par la réserve W' ; fringale et déshydratation
   const reserve = Math.max(0, r.wbal / r.wPrime);
-  return r.cp * (0.95 + 1.6 * Math.min(1, reserve * 1.4));
+  return r.cp * (0.95 + 1.6 * Math.min(1, reserve * 1.4)) * (r.fuel ? fuelFactor(r) : 1);
+}
+
+// ------------------------------------------------------------ ravitaillement
+// Glycogène (g), glucides en cours d'absorption (g), déficit hydrique (L),
+// bidons (mL) et poches. Un coureur brûle surtout des glucides au-dessus de
+// ~75 % de son seuil ; l'intestin n'en absorbe qu'environ 75 g/h ; on perd
+// 0,4 à 1,4 L de sueur par heure selon l'effort et la chaleur.
+export function makeFuel(mass, heat = 1) {
+  return {
+    gly: 380, glyMax: 500, gut: 0,
+    deficit: 0, // litres perdus et non compensés
+    heat,
+    bottles: [500, 500], // mL dans chaque bidon (500 mL pleins)
+    bars: 2, gels: 2,
+    mass,
+  };
+}
+
+export function fuelFactor(r) {
+  const f = r.fuel;
+  const g = f.gly / f.glyMax;
+  let k = 1;
+  if (g < 0.12) k *= 0.55 + 0.45 * (g / 0.12); // fringale
+  const pct = (f.deficit / f.mass) * 100; // % du poids du corps
+  if (pct > 2) k *= Math.max(0.72, 1 - 0.045 * (pct - 2));
+  return k;
+}
+
+function fuelStep(r, dt) {
+  const f = r.fuel;
+  const met = r.power / 0.23 + 90; // puissance métabolique (W), rendement brut 23 %
+  const carbShare = Math.min(1, Math.max(0.3, 0.25 + 0.75 * (r.power / r.cp)));
+  f.gly = Math.max(0, f.gly - ((met * carbShare) / 17000) * dt); // 17 kJ/g
+  const absorb = Math.min(f.gut, (75 / 3600) * dt);
+  f.gut -= absorb;
+  f.gly = Math.min(f.glyMax, f.gly + absorb);
+  f.deficit += ((0.35 + 0.9 * Math.min(1.4, r.power / r.cp)) * f.heat / 3600) * dt;
+}
+
+// actions : "bar" (40 g), "gel" (25 g), "drink" (150 mL)
+export function eat(r, what) {
+  const f = r.fuel;
+  if (what === "bar" && f.bars > 0) { f.bars--; f.gut += 40; return "Barre énergétique : +40 g de glucides"; }
+  if (what === "gel" && f.gels > 0) { f.gels--; f.gut += 25; f.gly = Math.min(f.glyMax, f.gly + 6); return "Gel : +25 g de glucides, rapide"; }
+  if (what === "drink") {
+    const i = f.bottles.findIndex((b) => b > 0);
+    if (i < 0) return null;
+    const ml = Math.min(150, f.bottles[i]);
+    f.bottles[i] -= ml;
+    f.deficit = Math.max(-0.3, f.deficit - ml / 1000);
+    f.gut += ml * 0.04; // boisson isotonique : 40 g/L
+    return `Une gorgée : ${ml} mL`;
+  }
+  return null;
+}
+
+// puissance nécessaire pour rouler à v (m/s) sur la pente g, avec aspiration
+export function requiredPower(r, v, g, alt, draft, head = 0) {
+  const m = r.mass + r.bikeMass;
+  const th = Math.atan(g);
+  const cda = (r.bike === "clm" ? 0.245 : 0.32) * (1 - draft);
+  const va = v - head;
+  const f = m * G * Math.sin(th) + CRR * m * G * Math.cos(th) + 0.5 * airDensity(alt) * cda * va * Math.abs(va);
+  return Math.max(0, (f * v) / ETA);
 }
 
 const sm = {};
@@ -90,6 +154,7 @@ export function step(r, route, env, dt) {
   r.power += (want - r.power) * Math.min(1, dt * 2.5);
   if (r.power < 1) r.power = 0;
 
+  if (r.fuel) fuelStep(r, dt);
   // W' (Skiba 2)
   if (r.power > r.cp) r.wbal -= (r.power - r.cp) * dt;
   else r.wbal += ((r.cp - r.power) * (r.wPrime - r.wbal) / r.wPrime) * dt * 1.2;
@@ -173,40 +238,102 @@ export function computeDrafts(riders) {
   }
 }
 
-// comportement des concurrents
-export function aiThink(r, route, riders, dt) {
+// Groupes : coureurs qui se suivent à moins de 15 m. Chaque groupe roule au
+// train médian de ses membres (relais), la tête l'impose, les autres
+// s'alignent sur la vitesse de la tête : pas d'effet accordéon.
+export function assignChains(sorted, route) {
+  let start = 0;
+  for (let i = 0; i <= sorted.length; i++) {
+    if (i === sorted.length || (i > 0 && sorted[i - 1].s - sorted[i].s > 15)) {
+      const members = sorted.slice(start, i);
+      const head = members[0];
+      const g = route.sample(head.s + 25).grade;
+      const pace = members.filter((m) => m.ai).map((m) => m.cp * paceFactor(m.ai, g) * m.ai.mood).sort((a, b) => a - b);
+      const med = pace.length ? pace[Math.floor(pace.length / 2)] : 0;
+      for (const m of members) { m._head = head; m._groupPace = med; m._groupSize = members.length; }
+      start = i;
+    }
+  }
+}
+
+function paceFactor(ai, g) {
+  if (g > 0.02) return ai.climb;
+  if (g > -0.02) return ai.flat;
+  if (g > -0.05) return 0.45;
+  return 0.1;
+}
+
+// Comportement des coureurs du peloton. sorted : coureurs triés du premier
+// au dernier, idx : place de r dans ce tableau. Un coureur suit la roue de
+// celui qui le précède tant que l'effort demandé reste dans ses moyens ;
+// sinon il lâche prise et roule à son train. Attaques, relais et sprint
+// final naissent de ces règles.
+export function aiThink(r, route, sorted, idx, dt, env) {
   const ai = r.ai;
+  const here = route.sample(r.s);
   const p = route.sample(r.s + 25);
   const g = p.grade;
   ai.t -= dt;
   if (ai.t <= 0) {
     ai.t = 4 + Math.random() * 8;
     ai.mood = 0.94 + Math.random() * 0.1;
-    // attaque occasionnelle dans les pentes
-    if (g > 0.05 && Math.random() < ai.aggr * 0.25 && r.wbal > r.wPrime * 0.7) ai.attack = 6 + Math.random() * 6;
+    // attaque : plutôt en montée, par les coureurs offensifs et frais
+    const chance = (g > 0.04 ? 0.22 : 0.05) * ai.aggr;
+    if (Math.random() < chance && r.wbal > r.wPrime * 0.75 && !ai.dropped) ai.attack = 8 + Math.random() * 18;
   }
-  let f;
-  if (g > 0.02) f = ai.climb;
-  else if (g > -0.02) f = ai.flat;
-  else if (g > -0.05) f = 0.45;
-  else f = 0.1;
-  let target = r.cp * f * ai.mood;
+  const own = r.cp * paceFactor(ai, g) * ai.mood;
+  let target = own;
+  const head = r._head;
+  const isHead = !head || head === r;
+  // roue à suivre : le coureur le plus proche devant
+  let lead = null, gap = 1e9;
+  // on chasse jusqu'à 120 m si l'on a encore de la réserve
+  const reach = r.wbal > r.wPrime * 0.4 ? 120 : 45;
+  for (let j = idx - 1; j >= 0; j--) {
+    const o = sorted[j];
+    const d = o.s - r.s;
+    if (d > reach) break;
+    if (d > 0.2 && d < gap && !o.crashed) { gap = d; lead = o; }
+  }
+  if (ai.dropped > 0) ai.dropped -= dt;
+  if (isHead && r._groupSize > 1) {
+    // en tête du groupe : il impose le train du groupe s'il en a les moyens
+    target = Math.min(r._groupPace || own, r.wbal > r.wPrime * 0.2 ? r.cp * 1.2 : r.cp * 0.97);
+  }
+  if (lead && ai.dropped <= 0) {
+    // vitesse de référence : la tête du groupe (ou la roue devant si l'on chasse)
+    const ref = !isHead && gap < 15 ? head.v : lead.v;
+    const vWant = ref + Math.max(-1.0, Math.min(2.5, (gap - 1.8) * 0.3));
+    const wind = env.windX * here.dx + env.windZ * here.dz;
+    const need = requiredPower(r, vWant, here.grade, here.y, gap < 3 ? 0.3 : gap < 8 ? 0.12 : 0, wind);
+    // au-dessus du seuil, on puise dans la réserve W' ; quand elle est vide,
+    // on lâche prise et on roule à son train
+    target = Math.min(need, r.wbal > r.wPrime * 0.08 ? r.cp * 1.5 : r.cp * 0.97);
+    if (r.wbal < r.wPrime * 0.05 && need > r.cp) ai.dropped = 20 + Math.random() * 25;
+  }
   if (ai.attack > 0) { ai.attack -= dt; target = r.cp * 1.35; }
-  // gestion de la réserve
-  if (r.wbal < r.wPrime * 0.3) target = Math.min(target, r.cp * 0.92);
-  r.target = target;
+  // gestion de la réserve quand il roule seul
+  if (!lead && r.wbal < r.wPrime * 0.3) target = Math.min(target, r.cp * 0.92);
+  // sprint final
   r.sprint = false;
+  const left = (env.finish ?? route.length) - r.s;
+  if (left < 320 && left > 0 && r.wbal > 0) { target = r.cp * 2.2; r.sprint = true; }
+  r.target = target;
   r.tuck = g < -0.04 && r.v > 11;
   // freinage avant les virages
-  const safe = route.safeSpeedAhead(r.s, 70, ai.mu);
+  const safe = route.safeSpeedAhead(r.s, 70, 0.6);
   r.brake = r.v > safe.v ? Math.min(1, (r.v - safe.v) * 0.6) : 0;
-  // trajectoire : reste à droite, déborde pour doubler
+  // placement latéral : on se décale si la roue devant bouche le passage
   let want = ai.lane;
-  for (const o of riders) {
-    if (o === r) continue;
-    const gap = o.s - r.s;
-    if (gap > 0 && gap < 3 && Math.abs(o.o - r.o) < 0.7 && o.v < r.v + 0.3) want = o.o - 1.0;
+  for (let j = idx - 1; j >= 0; j--) {
+    const o = sorted[j];
+    const d = o.s - r.s;
+    if (d > 4) break;
+    if (d > 0 && Math.abs(o.o - r.o) < 0.65 && (r.v > o.v + 0.2 || ai.attack > 0)) {
+      want = o.o + (o.o > 0 ? -0.9 : 0.9);
+      break;
+    }
   }
-  r.oTarget = Math.max(-2.4, Math.min(2.4, want));
-  r.o += (r.oTarget - r.o) * Math.min(1, dt * 0.8);
+  r.oTarget = Math.max(-2.5, Math.min(2.5, want));
+  r.o += (r.oTarget - r.o) * Math.min(1, dt * 0.7);
 }

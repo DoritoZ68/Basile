@@ -164,3 +164,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .hud-right { width: 140px; }
   .stats { grid-template-columns: 1fr; }
 }
+
+.gauge.fuel i { background: linear-gradient(90deg, #b5541b, #e8b730 40%, #f0d070); }
+.gauge.water i { background: linear-gradient(90deg, #2b5f9e, #4fa3e8 50%, #8fd0ff); }
+.pockets { margin-top: 6px; font-size: 11px; color: var(--muted); }
+.pockets b { color: var(--text); }
+.groups { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 60vw; }
+.groups span { background: rgba(14, 22, 19, 0.78); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.groups span.me { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+@media (max-width: 900px) { .groups { top: 170px; max-width: 90vw; } }

@@ -69,6 +69,9 @@
             <dt>Souris</dt><dd>Regarder autour (clic pour capturer, Échap pour libérer)</dd>
             <dt>R / double-clic</dt><dd>Recentrer le regard</dd>
             <dt>Molette</dt><dd>Zoomer / dézoomer la caméra (ou la carte sous la souris)</dd>
+            <dt>1 / 2 / 3</dt><dd>Manger une barre / prendre un gel / boire une gorgée</dd>
+            <dt>V</dt><dd>Appeler la voiture d'équipe (course) : bidons et ravitaillement</dd>
+            <dt>F</dt><dd>Attraper une musette (zone de ravitaillement) ou remplir ses bidons à une fontaine (village, à l'arrêt)</dd>
             <dt>M</dt><dd>Carte : petite → grande → masquée</dd>
             <dt>Échap / P</dt><dd>Pause</dd>
             <dt>Manette</dt><dd>Gâchettes : effort / frein, stick : direction</dd>
@@ -99,6 +102,7 @@
     <p class="map-hint" id="bigmap-hint">Molette : zoom · glisser : se déplacer · M : réduire / masquer</p>
   </div>
   <div id="toast" class="toast"></div>
+  <div id="h-groups" class="groups"></div>
   <div id="warn" class="warn"></div>
   <div id="countdown" class="countdown"></div>
 
@@ -110,6 +114,9 @@
     </div>
     <div class="target">Consigne <b id="h-target">0</b> W · <span id="h-wkg">0</span> W/kg · Angle <b id="h-lean">0°</b></div>
     <div class="reserve"><span>Réserve</span><div class="gauge"><i id="h-wbal"></i></div></div>
+    <div class="reserve"><span>Glycogène</span><div class="gauge fuel"><i id="h-gly"></i></div></div>
+    <div class="reserve"><span>Hydratation</span><div class="gauge water"><i id="h-hyd"></i></div></div>
+    <div class="pockets" id="h-pockets"></div>
     <div class="minis">
       <div><small>Cadence</small><b id="h-cad">0</b></div>
       <div><small>Braquet</small><b id="h-gear">–</b></div>

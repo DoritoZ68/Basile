@@ -30,6 +30,9 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 | R / double-clic | Recentrer le regard |
 | Molette | Zoomer / dézoomer (chaque caméra garde son zoom) |
 | Échap / P | Pause |
+| 1 / 2 / 3 | Manger une barre / prendre un gel / boire une gorgée |
+| V | Course : appeler la voiture d'équipe (bidons pleins, barre, gel) |
+| F | Attraper une musette dans la zone de ravitaillement ; en mode libre, remplir ses bidons à la fontaine d'un village (à l'arrêt) |
 | M | Carte : petite → grande → masquée (molette pour zoomer, glisser pour se déplacer ; en mode libre, double-clic pour s'y téléporter) |
 
 Manette : gâchette droite pour l'effort, gauche pour freiner, stick pour
@@ -47,7 +50,7 @@ l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
 
 Chaque parcours se joue aussi en sens inverse (descentes).
 
-Modes : course contre 5 adversaires, contre-la-montre face au fantôme de son
+Modes : **course** en peloton (10, 40 ou 80 coureurs de 10 équipes fictives, avec voiture de direction, motos, voitures d'équipe et voiture-balai ; les groupes et les écarts s'affichent en haut de l'écran), contre-la-montre face au fantôme de son
 record, balade sur un parcours, et mode **libre** : on choisit son point de
 départ sur la carte (zoom à la molette ou aux boutons, déplacement en glissant, clic à l'endroit exact) ou par village, et on roule où l'on veut sur les
 24 000 tronçons de routes, rues, routes empierrées, pistes cyclables et
@@ -60,6 +63,14 @@ Vélos : **route** (7,4 kg, cintre à drops, roues à rayons, maniable) ou
 lenticulaire, casque profilé ; position allongée qui réduit la traînée
 d'environ 25 %, mais moins maniable en virage et moins efficace dans les
 fortes pentes).
+
+Ravitaillement : réserve de glycogène (environ 380 g au départ, consommée
+selon l'intensité, l'intestin n'en absorbe que ~75 g/h) et hydratation
+(0,4 à 1,4 L de sueur par heure selon l'effort et la chaleur). Poches :
+barres (40 g), gels (25 g, plus rapides), deux bidons de 500 mL de boisson
+isotonique. Sans manger : fringale, puissance en chute ; sans boire,
+au-delà de 2 % du poids perdu, la puissance baisse aussi. En course, zone
+de ravitaillement à mi-parcours et voiture d'équipe à la demande.
 
 Options : poids, puissance seuil (FTP), maillot,
 niveau des adversaires, heure (matin, midi, soir), météo
@@ -84,6 +95,13 @@ niveau des adversaires, heure (matin, midi, soir), météo
 Conduite : aucune aide pour suivre la route. Le vélo va où on le dirige ;
 l'inclinaison impose le rayon du virage (tan φ = v² / g·R). Au-delà de
 l'adhérence (asphalte, accotement, herbe), la roue glisse et c'est la chute.
+
+Peloton : chaque coureur a son poids, son seuil et son tempérament. Un
+groupe roule au train médian de ses membres, chacun s'aligne sur la tête
+de son groupe et profite de l'aspiration ; au-dessus de son seuil, il puise
+dans sa réserve et lâche prise quand elle est vide. Attaques en montée et
+sprint final. Les coureurs proches sont animés en détail, les autres sont
+dessinés en une seule fois.
 
 Physique : puissance → vitesse avec gravité, résistance au roulement,
 traînée aérodynamique (densité de l'air selon l'altitude, vent selon
