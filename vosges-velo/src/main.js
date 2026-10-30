@@ -246,6 +246,12 @@ function limitGrade(xs, zs, y, fixed, maxG) {
   }
 }
 
+function maxGrade(xs, zs, y) {
+  let m = 0;
+  for (let i = 1; i < y.length; i++) m = Math.max(m, Math.abs(y[i] - y[i - 1]) / (Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]) || 1));
+  return m;
+}
+
 function prepareNetwork(list, hf, routeGround) {
   const out = [];
   // les tronçons qui se rejoignent à un carrefour reçoivent la même altitude
@@ -286,9 +292,13 @@ function prepareNetwork(list, hf, routeGround) {
     }
     // un raccord (parcours, carrefour) ne doit pas créer de marche : la
     // différence d'altitude est étalée sur les points voisins, pente bornée
+    const routeFixed = Uint8Array.from(fixed);
     fixed[0] = fixed[0] || (n.joined0 ? 1 : 0);
     fixed[n2 - 1] = fixed[n2 - 1] || (n.joined1 ? 1 : 0);
     limitGrade(L.x, L.z, y, fixed, 0.16);
+    // tronçon trop court pour absorber l'écart entre ses deux raccords : le
+    // raccord au parcours l'emporte sur celui du carrefour
+    if (maxGrade(L.x, L.z, y) > 0.2) limitGrade(L.x, L.z, y, routeFixed, 0.16);
     // les portions qui doublent un parcours sont retirées du réseau : la
     // chaussée du parcours les remplace (ni double route, ni sol fantôme)
     let a = 0;
@@ -844,6 +854,10 @@ function startRide() {
   }
   game.ghostRec = [];
   game.recT = 0;
+  // messages de la sortie précédente
+  toastTimer = 0;
+  $("toast").classList.remove("on");
+  $("warn").classList.remove("on");
   game.t = 0;
   game.nextEvent = 0;
   game.lastKm = 0;

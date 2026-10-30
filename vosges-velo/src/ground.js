@@ -87,7 +87,8 @@ export class Ground {
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const dx = x - x0 - ex * t, dz = z - z0 - ez * t;
           const d = Math.sqrt(dx * dx + dz * dz);
-          let score = d - r.half - (r.route ? 0.3 : 0);
+          // les parcours (chaussée suivie par la course) passent devant les rues
+          let score = d - r.half - (r.route ? 0.8 : 0);
           if (yRef !== undefined) score += Math.max(0, Math.abs(r.y[k] + (r.y[k + 1] - r.y[k]) * t - yRef) - 1) * 2;
           if (score < best) {
             best = score;
