@@ -14,7 +14,9 @@ export function makeRider(opts) {
     name: opts.name,
     isPlayer: !!opts.isPlayer,
     mass: opts.mass, // cycliste
-    bikeMass: opts.bikeMass ?? 7.8,
+    bike: opts.bike || "route",
+    // vélo de route 7,4 kg, vélo de contre-la-montre 8,6 kg
+    bikeMass: opts.bikeMass ?? (opts.bike === "clm" ? 8.6 : 7.4),
     cp: opts.ftp, // puissance critique ~ FTP
     wPrime: opts.wPrime ?? 20000,
     wbal: opts.wPrime ?? 20000,
@@ -99,7 +101,10 @@ export function step(r, route, env, dt) {
   r.hr += (hrT - r.hr) * Math.min(1, dt / tau);
 
   // aérodynamique : position + aspiration
+  // traînée : sur les cocottes 0,32 m², en danseuse 0,36, recroquevillé en
+  // descente 0,22 ; en contre-la-montre allongé sur les prolongateurs 0,245
   let cda = r.tuck ? 0.22 : r.posture > 0 ? 0.36 : 0.32;
+  if (r.bike === "clm" && !r.tuck) cda = r.posture > 0 ? 0.35 : 0.245;
   cda *= 1 - r.draft;
   const rho = airDensity(p.y);
   const head = env.windX * p.dx + env.windZ * p.dz; // composante du vent dans le sens de marche

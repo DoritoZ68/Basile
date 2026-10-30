@@ -288,18 +288,18 @@ function paint(g, hex) {
   g.setAttribute("color", new THREE.BufferAttribute(a, 3));
 }
 
+// Végétation par cases de la grille, construite à la demande autour du
+// cycliste (carte de végétation BD TOPO : sapins, feuillus, vignes).
 export class Forest {
-  constructor(data, hf, roadIndex) {
-    this.hf = hf;
+  constructor(data, ground) {
+    this.ground = ground;
     this.veg = data.veg;
     this.meta = data.meta;
-    this.roadIndex = roadIndex;
     // deux niveaux de détail : près (~50 triangles) et loin (8 à 10 triangles)
     this.geos = { conifer: conifer(true), broadleaf: broadleaf(true), vine: vine() };
     this.far = { conifer: conifer(false), broadleaf: broadleaf(false) };
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    this.group = new THREE.Group();
-    this.chunks = [];
+    this.built = new Set();
   }
 
   vegAt(x, z) {
@@ -311,128 +311,151 @@ export class Forest {
     return [v.px[k], v.px[k + 1], v.px[k + 2]];
   }
 
-  // plante les arbres dans un couloir autour du parcours
-  build(route, band, density) {
-    this.clear();
-    const R = rng(1234 + route.n);
-    const occupied = new Set();
-    const SEG = 250;
-    const nSeg = Math.ceil(route.length / SEG);
+  // plante une case carrée [ci*size, (ci+1)*size] ; density 0..1
+  buildCell(ci, cj, size, density) {
+    const R = rng((ci * 92821) ^ (cj * 68917) ^ 0x5bd1e995);
+    const g = this.ground;
+    const lists = { conifer: [], broadleaf: [], vine: [] };
     const tmp = new THREE.Object3D();
-    const col = new THREE.Color();
-    for (let sg = 0; sg < nSeg; sg++) {
-      const lists = { conifer: [], broadleaf: [], vine: [] };
-      let cx = 0, cz = 0, cnt = 0;
-      for (let s = sg * SEG; s < Math.min(route.length, (sg + 1) * SEG); s += 10) {
-        const p = route.sample(s);
-        cx += p.x; cz += p.z; cnt++;
-        const rx = -p.dz, rz = p.dx;
-        const tries = Math.round(band * 2 * 10 / 45 * density);
-        for (let t = 0; t < tries; t++) {
-          // densité plus forte près de la route
-          const u = R() * 2 - 1;
-          const off = Math.sign(u) * (6 + Math.pow(Math.abs(u), 1.6) * band);
-          const along = (R() - 0.5) * 10;
-          const x = p.x + rx * off + p.dx * along, z = p.z + rz * off + p.dz * along;
-          const [cR, cG, cB] = this.vegAt(x, z);
-          if (!cR && !cG && !cB) continue;
-          const k = `${Math.round(x / 3.5)},${Math.round(z / 3.5)}`;
-          if (occupied.has(k)) continue;
-          if (this.roadIndex.nearest(x, z, 6.5).y !== null) continue;
-          occupied.add(k);
-          let type;
-          if (cB > 100) type = "vine";
-          else {
-            const pc = cR / (cR + cG + 1);
-            if (cR + cG < 120 && R() > 0.5) continue; // forêt ouverte, haies
-            type = R() < pc ? "conifer" : "broadleaf";
-          }
-          const y = this.hf.height(x, z);
-          let sc;
-          if (type === "vine") {
-            // rangs de vigne orientés dans la pente
-            const gx = this.hf.height(x + 3, z) - this.hf.height(x - 3, z);
-            const gz = this.hf.height(x, z + 3) - this.hf.height(x, z - 3);
-            tmp.position.set(x, y, z);
-            tmp.rotation.set(0, Math.atan2(gx, gz) + (R() - 0.5) * 0.1, 0);
-            tmp.scale.set(1, 0.8 + R() * 0.3, 1);
-            // rangs parallèles serrés
-            for (let rr = -2; rr <= 2; rr++) {
-              const o = new THREE.Object3D();
-              o.rotation.copy(tmp.rotation);
-              o.scale.copy(tmp.scale);
-              const ax = Math.cos(tmp.rotation.y), az = -Math.sin(tmp.rotation.y);
-              const xx = x + ax * rr * 1.8, zz = z + az * rr * 1.8;
-              if (this.roadIndex.nearest(xx, zz, 6).y !== null) continue;
-              o.position.set(xx, this.hf.height(xx, zz) - 0.1, zz);
-              o.updateMatrix();
-              lists.vine.push([o.matrix.clone(), 0.9 + R() * 0.2]);
-            }
-            continue;
-          }
-          if (type === "broadleaf" && this.roadIndex.nearest(x, z, 8.5).y !== null) continue;
-          sc = type === "conifer" ? 18 + R() * 16 : 10 + R() * 9;
-          // hêtres rabougris et sapins plus bas sur les crêtes
-          const alt = Math.min(1, Math.max(0, (y - 1050) / 300));
-          sc *= 1 - 0.55 * alt * alt * (3 - 2 * alt);
-          // la couronne ne doit pas surplomber la chaussée
-          if (this.roadIndex.nearest(x, z, 4 + sc * (type === "conifer" ? 0.16 : 0.27)).y !== null) continue;
-          tmp.position.set(x, y - 0.4, z);
-          tmp.rotation.set((R() - 0.5) * 0.06, R() * 6.28, (R() - 0.5) * 0.06);
-          tmp.scale.set(sc * (0.85 + R() * 0.3), sc, sc * (0.85 + R() * 0.3));
+    const step = 6.5 / Math.sqrt(Math.max(0.2, density));
+    const x0 = ci * size, z0 = cj * size;
+    // vignes : rangs parallèles orientés dans la pente de la case
+    const cx = x0 + size / 2, cz = z0 + size / 2;
+    const gx = g.hf.height(cx + 20, cz) - g.hf.height(cx - 20, cz), gz = g.hf.height(cx, cz + 20) - g.hf.height(cx, cz - 20);
+    const vineRot = Math.atan2(gx, gz);
+    const ax = Math.cos(vineRot), az = -Math.sin(vineRot), lx = Math.sin(vineRot), lz = Math.cos(vineRot);
+    for (let a = 0; a < size; a += step) {
+      for (let b = 0; b < size; b += step) {
+        const x = x0 + a + R() * step, z = z0 + b + R() * step;
+        const [cR, cG, cB] = this.vegAt(x, z);
+        if (!cR && !cG && !cB) { R(); R(); R(); R(); continue; }
+        if (cB > 100) {
+          // une portion de rang de vigne sur deux
+          if (R() < 0.5) continue;
+          const rr = Math.round(((x - cx) * ax + (z - cz) * az) / 1.9), ll = Math.round(((x - cx) * lx + (z - cz) * lz) / 9.8);
+          const xx = cx + rr * 1.9 * ax + ll * 9.8 * lx, zz = cz + rr * 1.9 * az + ll * 9.8 * lz;
+          if (g.road(xx, zz, 4) !== null) continue;
+          tmp.position.set(xx, g.height(xx, zz) - 0.1, zz);
+          tmp.rotation.set(0, vineRot, 0);
+          tmp.scale.set(1, 0.85 + R() * 0.25, 1);
           tmp.updateMatrix();
-          lists[type].push([tmp.matrix.clone(), 0.75 + R() * 0.45]);
+          lists.vine.push([tmp.matrix.clone(), 0.9 + R() * 0.2]);
+          continue;
         }
+        const pc = cR / (cR + cG + 1);
+        if (cR + cG < 120 && R() > 0.5) continue; // forêt ouverte, haies
+        const type = R() < pc ? "conifer" : "broadleaf";
+        const y = g.height(x, z);
+        let sc = type === "conifer" ? 18 + R() * 16 : 10 + R() * 9;
+        // hêtres rabougris et sapins plus bas sur les crêtes
+        const alt = Math.min(1, Math.max(0, (y - 1050) / 300));
+        sc *= 1 - 0.55 * alt * alt * (3 - 2 * alt);
+        // la couronne ne doit pas surplomber une chaussée
+        if (g.road(x, z, 1.5 + sc * (type === "conifer" ? 0.16 : 0.27)) !== null) continue;
+        tmp.position.set(x, y - 0.4, z);
+        tmp.rotation.set((R() - 0.5) * 0.06, R() * 6.28, (R() - 0.5) * 0.06);
+        tmp.scale.set(sc * (0.85 + R() * 0.3), sc, sc * (0.85 + R() * 0.3));
+        tmp.updateMatrix();
+        lists[type].push([tmp.matrix.clone(), 0.75 + R() * 0.45]);
       }
-      const chunk = { x: cx / Math.max(1, cnt), z: cz / Math.max(1, cnt), near: [], far: [], vines: [] };
-      for (const type of Object.keys(lists)) {
-        const L = lists[type];
-        if (!L.length) continue;
-        const im = new THREE.InstancedMesh(this.geos[type], this.mat, L.length);
-        im.castShadow = type !== "vine";
-        L.forEach(([m, shade], i) => {
-          im.setMatrixAt(i, m);
-          col.setRGB(shade, shade * (0.95 + R() * 0.1), shade * (0.9 + R() * 0.15));
-          im.setColorAt(i, col);
-        });
-        im.instanceMatrix.needsUpdate = true;
-        im.computeBoundingSphere();
-        im.matrixAutoUpdate = false;
-        this.group.add(im);
-        if (type === "vine") { chunk.vines.push(im); continue; }
-        chunk.near.push(im);
-        // version simplifiée qui partage positions et couleurs
-        const fm = new THREE.InstancedMesh(this.far[type], this.mat, L.length);
-        fm.instanceMatrix = im.instanceMatrix;
-        fm.instanceColor = im.instanceColor;
-        fm.boundingSphere = im.boundingSphere;
-        fm.matrixAutoUpdate = false;
-        fm.visible = false;
-        this.group.add(fm);
-        chunk.far.push(fm);
-      }
-      this.chunks.push(chunk);
     }
+    const group = new THREE.Group();
+    const cell = { x: cx, z: cz, near: [], far: [], vines: [], group };
+    const col = new THREE.Color();
+    for (const type of Object.keys(lists)) {
+      const L = lists[type];
+      if (!L.length) continue;
+      const im = new THREE.InstancedMesh(this.geos[type], this.mat, L.length);
+      im.castShadow = type !== "vine";
+      L.forEach(([m, shade], i) => {
+        im.setMatrixAt(i, m);
+        col.setRGB(shade, shade * (0.95 + R() * 0.1), shade * (0.9 + R() * 0.15));
+        im.setColorAt(i, col);
+      });
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere();
+      im.matrixAutoUpdate = false;
+      group.add(im);
+      if (type === "vine") { cell.vines.push(im); continue; }
+      cell.near.push(im);
+      // version simplifiée qui partage positions et couleurs
+      const fm = new THREE.InstancedMesh(this.far[type], this.mat, L.length);
+      fm.instanceMatrix = im.instanceMatrix;
+      fm.instanceColor = im.instanceColor;
+      fm.boundingSphere = im.boundingSphere;
+      fm.matrixAutoUpdate = false;
+      fm.visible = false;
+      group.add(fm);
+      cell.far.push(fm);
+    }
+    this.built.add(cell);
+    return {
+      group,
+      dispose: () => {
+        this.built.delete(cell);
+        for (const m of [...cell.near, ...cell.vines]) m.dispose();
+      },
+    };
   }
 
-  // dist : distance d'affichage ; nearDist : en deçà, arbres détaillés
-  update(camPos, dist, nearDist = 150) {
-    for (const c of this.chunks) {
-      const d = Math.hypot(c.x - camPos.x, c.z - camPos.z) - 140;
-      const vis = d < dist;
+  // niveau de détail : arbres détaillés à moins de nearDist
+  update(camPos, nearDist = 150) {
+    for (const c of this.built) {
+      const d = Math.hypot(c.x - camPos.x, c.z - camPos.z) - 125;
       const near = d < nearDist;
-      for (const m of c.near) m.visible = vis && near;
-      for (const m of c.far) m.visible = vis && !near;
+      for (const m of c.near) m.visible = near;
+      for (const m of c.far) m.visible = !near;
       for (const m of c.vines) m.visible = d < nearDist * 1.6;
     }
   }
+}
+
+// Chargement progressif par cases autour d'un point : construit au plus ce
+// que permet le budget de temps à chaque image, libère ce qui s'éloigne.
+export class Streamer {
+  constructor(size, build) {
+    this.size = size;
+    this.build = build;
+    this.cells = new Map();
+    this.group = new THREE.Group();
+  }
+
+  update(fx, fz, radius, budgetMs) {
+    const S = this.size;
+    const t0 = performance.now();
+    for (const [k, c] of this.cells) {
+      if (Math.hypot(c.cx - fx, c.cz - fz) > radius + S) {
+        if (c.obj) { this.group.remove(c.obj.group); c.obj.dispose(); }
+        this.cells.delete(k);
+      }
+    }
+    const want = [];
+    const r = Math.ceil(radius / S);
+    const fi = Math.floor(fx / S), fj = Math.floor(fz / S);
+    for (let j = fj - r; j <= fj + r; j++) {
+      for (let i = fi - r; i <= fi + r; i++) {
+        const cx = (i + 0.5) * S, cz = (j + 0.5) * S;
+        const d = Math.hypot(cx - fx, cz - fz) - S * 0.71;
+        if (d > radius) continue;
+        const k = `${i},${j}`;
+        if (!this.cells.has(k)) want.push([d, i, j, k, cx, cz]);
+      }
+    }
+    want.sort((a, b) => a[0] - b[0]);
+    let built = 0;
+    for (const [, i, j, k, cx, cz] of want) {
+      if (built && performance.now() - t0 > budgetMs) break;
+      const obj = this.build(i, j);
+      if (obj) this.group.add(obj.group);
+      this.cells.set(k, { cx, cz, obj });
+      built++;
+    }
+    return want.length - built; // cases encore à construire
+  }
 
   clear() {
-    for (const c of this.chunks) {
-      for (const m of [...c.near, ...c.vines]) { m.dispose(); this.group.remove(m); }
-      for (const m of c.far) this.group.remove(m);
-    }
-    this.chunks = [];
+    for (const c of this.cells.values()) if (c.obj) { this.group.remove(c.obj.group); c.obj.dispose(); }
+    this.cells.clear();
   }
 }
 
@@ -441,7 +464,7 @@ const WALLS = ["#efe6d2", "#e8d9b5", "#f0d2b4", "#e9c9a0", "#ddd6c6", "#f2e8c9",
 const ROOFS = ["#8a4a36", "#7b3f2f", "#9a5a40", "#6e4a3c", "#80463a", "#5f4b45"];
 
 export function buildBuildings(list, hf, keep = () => true) {
-  const R = rng(99);
+  const R = rng(list.length ? Math.floor(list[0][2][0] * 31 + list[0][2][1] * 17) : 99);
   const cell = 600;
   const buckets = new Map();
   const c1 = new THREE.Color(), c2 = new THREE.Color();

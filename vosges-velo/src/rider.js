@@ -44,7 +44,10 @@ function blobShadow() {
 }
 
 export class RiderModel {
-  constructor({ jersey = "#d81e2c", shorts = "#1b1b1f", bike = "#202020", helmet = "#ffffff", skin = "#e0b293", ghost = false } = {}) {
+  // type : "route" (vélo de route) ou "clm" (vélo de contre-la-montre)
+  constructor({ jersey = "#d81e2c", shorts = "#1b1b1f", bike = "#202020", helmet = "#ffffff", skin = "#e0b293", ghost = false, type = "route" } = {}) {
+    const TT = type === "clm";
+    this.type = type;
     const mk = (c) => {
       const m = new THREE.MeshLambertMaterial({ color: c });
       if (ghost) { m.transparent = true; m.opacity = 0.35; m.depthWrite = false; }
@@ -87,30 +90,131 @@ export class RiderModel {
       return bake(g, color, tmpO.matrix);
     };
     const at = (x, y, z, rx = 0, ry = 0, rz = 0) => { tmpO.position.set(x, y, z); tmpO.rotation.set(rx, ry, rz); tmpO.scale.set(1, 1, 1); tmpO.updateMatrix(); return tmpO.matrix.clone(); };
-    this.wheels = [];
-    for (const z of [-0.5, 0.5]) {
-      const parts = [
-        bake(new THREE.TorusGeometry(0.335, 0.016, 5, 20), "#151515", at(0, 0, 0, 0, Math.PI / 2)),
-        bake(new THREE.TorusGeometry(0.31, 0.012, 3, 20), "#9a9a9a", at(0, 0, 0, 0, Math.PI / 2)),
-        bake(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 6), "#9a9a9a", at(0, 0, 0, 0, 0, Math.PI / 2)),
-      ];
-      for (let k = 0; k < 3; k++) parts.push(bake(new THREE.BoxGeometry(0.008, 0.6, 0.02), "#9a9a9a", at(0, 0, 0, (k * Math.PI) / 3)));
-      const w = new THREE.Mesh(mergeGeometries(parts), vcMat);
-      w.position.set(0, 0.335, z);
-      this.body.add(w);
-      this.wheels.push(w);
-    }
     const P = (x, y, z) => new THREE.Vector3(x, y, z);
-    const bb = P(0, 0.28, -0.04), seatTop = P(0, 0.86, -0.22), head = P(0, 0.82, 0.38), rear = P(0, 0.335, -0.5), front = P(0, 0.335, 0.5);
-    const frame = [
-      tube(bb, seatTop, 0.018, bike), tube(bb, head, 0.022, bike), tube(seatTop, head, 0.018, bike),
-      tube(bb, rear, 0.012, bike), tube(seatTop, rear, 0.011, bike), tube(head, front, 0.014, bike),
-      tube(head, P(0, 0.9, 0.46), 0.014, "#9a9a9a"), tube(seatTop, P(0, 0.92, -0.22), 0.012, "#9a9a9a"),
-      bake(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 6), "#9a9a9a", at(0, 0.9, 0.47, 0, 0, Math.PI / 2)),
-      bake(new THREE.BoxGeometry(0.08, 0.03, 0.26), "#111111", at(0, 0.92, -0.2)),
-      bake(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 14), "#9a9a9a", at(0.05, 0.28, -0.04, 0, 0, Math.PI / 2)),
-    ];
-    this.frame = new THREE.Mesh(mergeGeometries(frame), vcMat);
+    // tube profilé (CLM) : section en goutte d'eau dans le plan du cadre
+    const tubeA = (a, b, r, color, aero) => {
+      const g = new THREE.CylinderGeometry(r, r, 1, aero ? 8 : 7);
+      if (aero) g.scale(0.55, 1, 1.9);
+      g.translate(0, 0.5, 0);
+      tmpO.position.copy(a);
+      tmpA.subVectors(b, a);
+      tmpO.scale.set(1, tmpA.length(), 1);
+      tmpO.quaternion.setFromUnitVectors(UP, tmpA.normalize());
+      tmpO.updateMatrix();
+      return bake(g, color, tmpO.matrix);
+    };
+    const curve = (pts, r, color, seg = 14) => bake(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((q) => P(...q))), seg, r, 5), color);
+    const BLACK = "#16171a", METAL = "#a7a9ad", CARBON = "#2a2b2f";
+
+    // géométrie (m) : empattement 0,995, boîtier 7 cm sous les axes
+    const BB = P(0, 0.265, 0), RA = P(0, 0.335, -0.41), FA = P(0, 0.335, 0.585);
+    const ST = TT ? P(0, 0.72, -0.12) : P(0, 0.765, -0.165);
+    const HT = TT ? P(0, 0.69, 0.475) : P(0, 0.785, 0.47);
+    const HB = TT ? P(0, 0.57, 0.515) : P(0, 0.635, 0.51);
+    this.saddle = TT ? P(0, 0.905, -0.1) : P(0, 0.905, -0.2);
+
+    // --- roues (pièces mobiles)
+    const wheel = (front) => {
+      const parts = [bake(new THREE.TorusGeometry(0.322, 0.0125, 6, 30), "#1a1a1a", at(0, 0, 0, 0, Math.PI / 2))];
+      const rimDepth = TT ? (front ? 0.08 : 0) : 0.035;
+      const rimProfile = (rIn, rOut, w) => {
+        const g = new THREE.LatheGeometry([new THREE.Vector2(rIn, -w), new THREE.Vector2(rOut, -w * 1.1), new THREE.Vector2(rOut, w * 1.1), new THREE.Vector2(rIn, w), new THREE.Vector2(rIn, -w)], 28);
+        g.rotateZ(Math.PI / 2);
+        return g;
+      };
+      if (TT && !front) {
+        // roue lenticulaire
+        parts.push(bake(new THREE.CylinderGeometry(0.31, 0.31, 0.024, 30).rotateZ(Math.PI / 2), CARBON));
+        parts.push(bake(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 10).rotateZ(Math.PI / 2), "#c9c9c9"));
+      } else {
+        parts.push(bake(rimProfile(0.31 - rimDepth, 0.312, 0.011), TT ? CARBON : "#202124"));
+        parts.push(bake(new THREE.CylinderGeometry(0.022, 0.022, 0.1, 8).rotateZ(Math.PI / 2), METAL));
+        const n = TT ? 16 : 20, inner = 0.31 - rimDepth;
+        for (let k = 0; k < n; k++) {
+          const ang = (k / n) * Math.PI * 2, side = k % 2 ? 1 : -1;
+          const len = inner - 0.02;
+          const g = new THREE.BoxGeometry(0.003, len, 0.003);
+          g.translate(0, 0.02 + len / 2, 0);
+          g.rotateZ(side * 0.04);
+          g.rotateX(ang);
+          g.translate(side * 0.022, 0, 0);
+          parts.push(bake(g, "#2c2c2e"));
+        }
+      }
+      return new THREE.Mesh(mergeGeometries(parts), vcMat);
+    };
+    this.wheels = [wheel(false), wheel(true)];
+    this.wheels[0].position.copy(RA);
+    this.wheels[1].position.copy(FA);
+    for (const w of this.wheels) this.body.add(w);
+
+    // --- pédalier (pièce mobile) : manivelles de 172,5 mm et pédales
+    const crankParts = [];
+    for (const side of [-1, 1]) {
+      const arm = new THREE.BoxGeometry(0.014, 0.025, 0.1725);
+      arm.translate(side * 0.085, 0, (side > 0 ? 1 : -1) * 0.086);
+      crankParts.push(bake(arm, "#2b2b2b"));
+      const pedal = new THREE.BoxGeometry(0.085, 0.018, 0.07);
+      pedal.translate(side * 0.13, 0, (side > 0 ? 1 : -1) * 0.1725);
+      crankParts.push(bake(pedal, "#111111"));
+    }
+    crankParts.push(bake(new THREE.CylinderGeometry(0.02, 0.02, 0.18, 8).rotateZ(Math.PI / 2), METAL));
+    this.crank = new THREE.Mesh(mergeGeometries(crankParts), vcMat);
+    this.crank.position.copy(BB);
+    this.body.add(this.crank);
+
+    // --- cadre, fourche, poste de pilotage, transmission (pièce fixe)
+    const fr = [];
+    const R = TT ? 0.017 : 0.016;
+    fr.push(tubeA(BB, ST, R, bike, TT), tubeA(BB, HB, TT ? 0.024 : 0.021, bike, TT), tubeA(ST, HT, TT ? 0.014 : 0.015, bike, TT), tubeA(HB, HT, 0.02, bike, TT));
+    for (const sx of [-1, 1]) {
+      fr.push(tubeA(P(sx * 0.03, BB.y, BB.z - 0.03), P(sx * 0.06, RA.y, RA.z), 0.01, bike, false));
+      fr.push(tubeA(P(sx * 0.025, ST.y - 0.03, ST.z - 0.02), P(sx * 0.06, RA.y, RA.z), 0.0085, bike, TT));
+      // fourche légèrement cintrée (déport)
+      fr.push(curve([[sx * 0.03, HB.y, HB.z], [sx * 0.045, 0.48, 0.56], [sx * 0.05, FA.y, FA.z]], 0.012, bike, 6));
+    }
+    fr.push(tubeA(ST, this.saddle, 0.0135, TT ? bike : CARBON, TT));
+    // selle effilée
+    const saddleG = new THREE.CylinderGeometry(0.075, 0.02, 0.27, 10, 1);
+    saddleG.rotateX(Math.PI / 2);
+    saddleG.scale(1, 0.25, 1);
+    fr.push(bake(saddleG, BLACK, at(this.saddle.x, this.saddle.y + 0.015, this.saddle.z + 0.02)));
+    if (TT) {
+      // cintre de base + prolongateurs relevés et repose-coudes
+      fr.push(tubeA(HT, P(0, HT.y + 0.03, HT.z + 0.06), 0.017, bike, true));
+      fr.push(curve([[-0.2, HT.y + 0.05, HT.z + 0.15], [-0.17, HT.y + 0.04, HT.z + 0.08], [0, HT.y + 0.03, HT.z + 0.07], [0.17, HT.y + 0.04, HT.z + 0.08], [0.2, HT.y + 0.05, HT.z + 0.15]], 0.013, CARBON, 16));
+      for (const sx of [-1, 1]) {
+        fr.push(curve([[sx * 0.05, HT.y + 0.1, HT.z + 0.02], [sx * 0.05, HT.y + 0.11, HT.z + 0.3], [sx * 0.05, HT.y + 0.16, HT.z + 0.38]], 0.011, CARBON, 8));
+        fr.push(tubeA(P(sx * 0.05, HT.y + 0.04, HT.z + 0.05), P(sx * 0.05, HT.y + 0.1, HT.z + 0.04), 0.008, METAL, false));
+        fr.push(bake(new THREE.BoxGeometry(0.075, 0.02, 0.1), "#0d0d0d", at(sx * 0.085, HT.y + 0.115, HT.z + 0.03)));
+      }
+    } else {
+      // potence, cintre à drops, cocottes de frein
+      const top = P(0, HT.y + 0.03, HT.z + 0.1);
+      fr.push(tubeA(HT, top, 0.016, BLACK, false));
+      const bars = [];
+      for (const sx of [-1, 1]) bars.push([[0, top.y, top.z], [sx * 0.12, top.y, top.z + 0.005], [sx * 0.2, top.y, top.z + 0.02], [sx * 0.21, top.y, top.z + 0.09], [sx * 0.21, top.y - 0.07, top.z + 0.12], [sx * 0.21, top.y - 0.13, top.z + 0.08], [sx * 0.21, top.y - 0.14, top.z + 0.02]]);
+      for (const b of bars) fr.push(curve(b, 0.0125, BLACK, 16));
+      for (const sx of [-1, 1]) fr.push(bake(new THREE.BoxGeometry(0.03, 0.045, 0.06), BLACK, at(sx * 0.21, top.y + 0.02, top.z + 0.08, -0.4)));
+      this.hoods = top;
+      // porte-bidon et bidon
+      const mid = BB.clone().lerp(HB, 0.45).add(P(0, 0.045, -0.01));
+      const dir = HB.clone().sub(BB).normalize();
+      tmpO.position.copy(mid);
+      tmpO.quaternion.setFromUnitVectors(UP, dir);
+      tmpO.scale.set(1, 1, 1);
+      tmpO.updateMatrix();
+      fr.push(bake(new THREE.CylinderGeometry(0.034, 0.034, 0.2, 10), "#e8e8e8", tmpO.matrix));
+    }
+    // plateaux, cassette, dérailleur
+    fr.push(bake(new THREE.CylinderGeometry(TT ? 0.115 : 0.105, TT ? 0.115 : 0.105, 0.008, 28).rotateZ(Math.PI / 2), METAL, at(0.06, BB.y, BB.z)));
+    fr.push(bake(new THREE.CylinderGeometry(0.075, 0.075, 0.006, 22).rotateZ(Math.PI / 2), "#7d7f83", at(0.05, BB.y, BB.z)));
+    fr.push(bake(new THREE.CylinderGeometry(0.055, 0.03, 0.035, 16).rotateZ(Math.PI / 2), "#8d8f93", at(0.055, RA.y, RA.z)));
+    fr.push(bake(new THREE.BoxGeometry(0.02, 0.08, 0.04), "#2b2b2b", at(0.065, RA.y - 0.08, RA.z + 0.01)));
+    // chaîne (deux brins)
+    fr.push(tubeA(P(0.058, BB.y + 0.105, BB.z), P(0.058, RA.y + 0.05, RA.z), 0.004, "#3a3a3a", false));
+    fr.push(tubeA(P(0.058, BB.y - 0.105, BB.z), P(0.058, RA.y - 0.06, RA.z + 0.02), 0.004, "#3a3a3a", false));
+    this.frame = new THREE.Mesh(mergeGeometries(fr), vcMat);
     this.body.add(this.frame);
 
     // --- cycliste
@@ -122,13 +226,19 @@ export class RiderModel {
     }
     this.torso = limb(0.13, mJersey);
     this.torso.scale.set(1, 1, 0.8);
-    // tête et casque fusionnés (repère : centre de la tête)
-    const helmetG = new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI * 2, 0, Math.PI / 1.9);
-    helmetG.scale(0.95, 0.9, 1.25);
-    this.headM = new THREE.Mesh(mergeGeometries([
-      bake(new THREE.SphereGeometry(0.105, 10, 7), skin),
-      bake(helmetG, helmet, at(0, 0.05, -0.02, 0.35)),
-    ]), vcMat);
+    // tête et casque fusionnés (repère : centre de la tête) ; casque profilé
+    // à queue longue pour le contre-la-montre
+    let helmetParts;
+    if (TT) {
+      const shell = new THREE.SphereGeometry(0.13, 12, 8);
+      shell.scale(0.92, 0.82, 1.75);
+      helmetParts = [bake(shell, helmet, at(0, 0.035, -0.09, 0.25)), bake(new THREE.SphereGeometry(0.1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 3), "#20242a", at(0, 0.0, 0.07, 1.7))];
+    } else {
+      const shell = new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI * 2, 0, Math.PI / 1.9);
+      shell.scale(0.95, 0.9, 1.25);
+      helmetParts = [bake(shell, helmet, at(0, 0.05, -0.02, 0.35))];
+    }
+    this.headM = new THREE.Mesh(mergeGeometries([bake(new THREE.SphereGeometry(0.105, 10, 7), skin), ...helmetParts]), vcMat);
     this.arms = [];
     for (const side of [-1, 1]) {
       const up = limb(0.045, mJersey), lo = limb(0.038, mSkin);
@@ -143,7 +253,7 @@ export class RiderModel {
     // recopiées chaque image dans UN maillage dynamique : 2 appels de dessin
     // par coureur au lieu de 16. Les objets d'origine ne servent plus que de
     // repères (os) et ne sont pas dessinés.
-    const movers = [...this.wheels, ...this.legs.flatMap((L) => [L.thigh, L.shin, L.foot]), this.torso, this.headM, ...this.arms.flatMap((A) => [A.up, A.lo])];
+    const movers = [...this.wheels, this.crank, ...this.legs.flatMap((L) => [L.thigh, L.shin, L.foot]), this.torso, this.headM, ...this.arms.flatMap((A) => [A.up, A.lo])];
     this.parts = [];
     let total = 0;
     for (const m of movers) {
@@ -169,6 +279,8 @@ export class RiderModel {
     this.wheelAngle = 0;
     this.standing = 0;
     this._v = [P(0, 0, 0), P(0, 0, 0), P(0, 0, 0), P(0, 0, 0)];
+    this.TT = TT;
+    this.HT = HT;
   }
 
   // vue embarquée : on masque la tête pour voir à travers les yeux
@@ -194,26 +306,46 @@ export class RiderModel {
 
     const st = this.standing;
     const sway = Math.sin(this.phase) * 0.12 * st;
-    const hip = this._v[0].set(0, 0.97 + st * 0.2 - aero * 0.02, -0.2 + st * 0.18 + aero * 0.04);
-    const shoulder = this._v[1].set(sway * 0.5, 1.38 + st * 0.12 - aero * 0.17, 0.2 + st * 0.12 + aero * 0.06);
+    const TT = this.TT, HT = this.HT, S = this.saddle;
+    this.crank.rotation.x = this.phase;
+    // posture : CLM allongé sur les prolongateurs (sauf en danseuse),
+    // route : mains aux cocottes, ou en bas du cintre en position aéro
+    const ttAero = TT && st < 0.5;
+    const hip = this._v[0].set(0, S.y + 0.05 + st * 0.2, S.z + 0.01 + st * 0.18);
+    let shY, shZ;
+    if (ttAero) { shY = 1.15; shZ = 0.42; }
+    else if (TT) { shY = 1.3; shZ = 0.3; }
+    else if (aero) { shY = 1.22; shZ = 0.28; }
+    else { shY = 1.35; shZ = 0.22; }
+    const shoulder = this._v[1].set(sway * 0.5, shY + st * 0.1, shZ + st * 0.1);
     place(this.torso, hip, shoulder);
-    this.headM.position.set(sway * 0.6, shoulder.y + 0.1 - aero * 0.02, shoulder.z + 0.12);
+    const headUp = ttAero ? 0.075 : 0.1, headFwd = ttAero ? 0.15 : 0.12;
+    this.headM.position.set(sway * 0.6, shoulder.y + headUp, shoulder.z + headFwd);
+    this.headM.rotation.x = ttAero ? -0.25 : 0;
     // position des yeux (repère du corps) pour la vue à la première personne
-    this.eye.set(sway * 0.6, shoulder.y + 0.13 - aero * 0.02, shoulder.z + 0.19);
+    this.eye.set(sway * 0.6, shoulder.y + headUp + 0.03, shoulder.z + headFwd + 0.07);
 
     for (const L of this.legs) {
       const ang = this.phase + (L.side > 0 ? 0 : Math.PI);
-      const pedal = tmpB.set(L.side * 0.11, 0.28 - Math.sin(ang) * 0.17, -0.04 + Math.cos(ang) * 0.17);
+      const pedal = tmpB.set(L.side * 0.13, 0.265 - Math.sin(ang) * 0.1725, Math.cos(ang) * 0.1725);
       const h = tH.set(L.side * 0.1 + sway * 0.3, hip.y, hip.z);
       const knee = ik(h, pedal, 0.46, 0.48, tK);
       place(L.thigh, h, knee);
       place(L.shin, knee, pedal);
-      L.foot.position.set(pedal.x, pedal.y - 0.02, pedal.z + 0.03);
+      L.foot.position.set(pedal.x, pedal.y + 0.02, pedal.z + 0.02);
     }
     for (const A of this.arms) {
       const sh = tH.set(A.side * 0.18 + sway * 0.5, shoulder.y - 0.04, shoulder.z);
-      const hand = tK.set(A.side * 0.19, 0.9 - aero * 0.06, 0.45 + aero * 0.02);
-      const elbow = tE.set((sh.x + hand.x) / 2 + A.side * 0.05, (sh.y + hand.y) / 2 - 0.03 - aero * 0.05, (sh.z + hand.z) / 2 - 0.02);
+      let hand, elbow;
+      if (ttAero) {
+        hand = tK.set(A.side * 0.05, HT.y + 0.15, HT.z + 0.34);
+        elbow = tE.set(A.side * 0.085, HT.y + 0.14, HT.z + 0.02);
+      } else {
+        if (TT) hand = tK.set(A.side * 0.2, HT.y + 0.06, HT.z + 0.14);
+        else if (aero) hand = tK.set(A.side * 0.21, this.hoods.y - 0.12, this.hoods.z + 0.1);
+        else hand = tK.set(A.side * 0.21, this.hoods.y + 0.04, this.hoods.z + 0.08);
+        elbow = tE.set((sh.x + hand.x) / 2 + A.side * 0.06, (sh.y + hand.y) / 2 - 0.02 - aero * 0.04, (sh.z + hand.z) / 2 - 0.03);
+      }
       place(A.up, sh, elbow);
       place(A.lo, elbow, hand);
     }

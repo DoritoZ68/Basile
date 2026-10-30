@@ -48,7 +48,20 @@ l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
 Chaque parcours se joue aussi en sens inverse (descentes).
 
 Modes : course contre 5 adversaires, contre-la-montre face au fantôme de son
-record, balade libre. Options : poids, puissance seuil (FTP), maillot,
+record, balade sur un parcours, et mode **libre** : on choisit son point de
+départ sur la carte (ou un village) et on roule où l'on veut sur les
+24 000 tronçons de routes, rues, routes empierrées, pistes cyclables et
+voies vertes de la zone ; rues, arbres et bâtiments se construisent autour
+du cycliste au fil du trajet. Pause > « Changer de lieu » pour repartir
+ailleurs.
+
+Vélos : **route** (7,4 kg, cintre à drops, roues à rayons, maniable) ou
+**contre-la-montre** (8,6 kg, tubes profilés, prolongateurs, roue
+lenticulaire, casque profilé ; position allongée qui réduit la traînée
+d'environ 25 %, mais moins maniable en virage et moins efficace dans les
+fortes pentes).
+
+Options : poids, puissance seuil (FTP), maillot,
 niveau des adversaires, heure (matin, midi, soir), météo
 (dont le brouillard qui s'épaissit sur les crêtes), vent, temps accéléré.
 
@@ -115,6 +128,14 @@ python3 tools/fetch_data.py
 python3 tools/fetch_outer.py
 ```
 
+```bash
+python3 tools/fetch_network.py
+```
+
+`fetch_network.py` (réseau complet et tous les bâtiments, pour le mode
+libre) lit aussi la Base nationale des aménagements cyclables au format
+Parquet : il faut `pip install pyarrow`.
+
 Pour ajouter un parcours, ajouter une entrée dans `ROUTES` de
 `tools/fetch_data.py` (points de passage dans `P`), relancer les deux
 scripts puis le build.
@@ -123,5 +144,8 @@ scripts puis le build.
 
 - Altitudes, orthophotographies, bâtiments et végétation : © IGN,
   Licence Ouverte 2.0 (Géoplateforme, data.geopf.fr)
-- Tracés routiers : © contributeurs OpenStreetMap, ODbL
+- Tracés des parcours : © contributeurs OpenStreetMap, ODbL
+- Réseau routier (mode libre) : IGN BD TOPO, Licence Ouverte 2.0
+- Pistes cyclables et voies vertes : Base nationale des aménagements
+  cyclables (export OpenStreetMap, data.gouv.fr), ODbL
 - Relief hors de France : EU-DEM v1.1, © Copernicus

@@ -37,6 +37,11 @@
       <section data-panel="routes">
         <div id="route-list" class="route-list"></div>
         <canvas id="menu-profile" class="menu-profile"></canvas>
+        <div id="spawn" class="spawn" hidden>
+          <p class="opt-note">Cliquez sur la carte pour choisir où apparaître, ou choisissez un village. Le vélo est posé sur la route, la rue ou la piste cyclable la plus proche.</p>
+          <canvas id="spawn-map" class="spawn-map"></canvas>
+          <div id="spawn-towns" class="spawn-towns"></div>
+        </div>
         <div id="opts-routes"></div>
       </section>
       <section data-panel="rider" hidden><div id="opts-rider"></div></section>
@@ -96,7 +101,7 @@
     <div class="grade" id="h-grade">0,0 %</div>
     <div class="stats">
       <div><small>Altitude</small><b id="h-alt">0 m</b></div>
-      <div><small>Reste</small><b id="h-left">0 km</b></div>
+      <div><small id="h-leftlabel">Reste</small><b id="h-left">0 km</b></div>
       <div><small>Temps</small><b id="h-time">0:00</b></div>
       <div><small id="h-poslabel">Place</small><b id="h-pos">–</b></div>
     </div>
@@ -112,6 +117,7 @@
     <h2>Pause</h2>
     <button id="resume" class="go">Reprendre</button>
     <button id="restart" class="ghost-btn">Recommencer</button>
+    <button id="relocate" class="ghost-btn" hidden>Changer de lieu</button>
     <button id="quit" class="ghost-btn">Retour au menu</button>
   </div>
 </div>

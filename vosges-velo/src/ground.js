@@ -9,108 +9,137 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-export const ROAD_HALF = 3.0; // demi-largeur de la chaussée
-export const VERGE = 4.6; // fin de l'accotement
-const BLEND = 22; // au-delà, relief naturel
-const CORR = 30; // largeur du ruban de sol de chaque côté
 export const MASK_RANGE = 64; // distance (m) codée dans le masque sur 0..255
+const VERGE_W = 1.6; // largeur d'accotement
+// discard du relief grossier quand la valeur du masque < DISCARD (voir main)
+export const DISCARD = 22;
 
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
+// Paramètres par type de voie : demi-largeur mini, distance de raccord au
+// relief (depuis le bord), largeur du ruban de sol (depuis l'axe), bande de
+// texture, surélévation de la chaussée
+export const CLASSES = {
+  route: { half: 3.0, blend: 17.4, corr: 30, tex: 0, lift: 0.06 },
+  0: { half: 3.0, blend: 14, extra: 16, tex: 0, lift: 0.07 }, // route principale
+  1: { half: 2.2, blend: 9, extra: 12, tex: 1, lift: 0.06 }, // rue, route locale
+  2: { half: 1.2, blend: 7, extra: 12, tex: 2, lift: 0.05 }, // piste cyclable, voie verte
+  3: { half: 1.5, blend: 7, extra: 12, tex: 3, lift: 0.04 }, // route empierrée
+};
+
+// ligne de route : { x, z, y, half, blend, corr, tex, lift, route, cls, name }
+export function routeLine(r) {
+  const c = CLASSES.route;
+  return { x: r.x, z: r.z, y: r.y, half: c.half, blend: c.blend, corr: c.corr, tex: c.tex, lift: c.lift, route: true, cls: -1, name: "" };
+}
+
+export function networkLine(cls, width, x, z, y, name, flags) {
+  const c = CLASSES[cls];
+  const half = Math.max(c.half, width / 2);
+  return { x, z, y, half, blend: c.blend, corr: half + c.extra, tex: c.tex, lift: c.lift, route: false, cls, name, flags };
+}
+
 export class Ground {
-  constructor(hf, routes) {
+  constructor(hf, lines) {
     this.hf = hf;
-    this.routes = routes;
+    this.lines = lines;
     this.cell = 16;
     this.map = new Map();
-    routes.forEach((r, ri) => {
+    this.maxHalf = 0;
+    lines.forEach((r, li) => {
+      this.maxHalf = Math.max(this.maxHalf, r.half);
       for (let k = 0; k < r.x.length - 1; k++) {
         const key = this.key(Math.floor((r.x[k] + r.x[k + 1]) / 2 / this.cell), Math.floor((r.z[k] + r.z[k + 1]) / 2 / this.cell));
         let a = this.map.get(key);
         if (!a) this.map.set(key, (a = []));
-        a.push(ri, k);
+        a.push(li, k);
       }
     });
-    this._q = { d: 0, y: 0, ri: 0, k: 0 };
+    this._q = { d: 0, edge: 0, y: 0, li: 0, k: 0, line: null };
   }
 
   key(i, j) { return i * 73856093 ^ j * 19349663; }
 
-  // segment de route le plus proche à moins de maxD (null sinon) ;
-  // maxRoute limite la recherche aux parcours d'indice inférieur
-  road(x, z, maxD, maxRoute = 1e9) {
+  // voie la plus proche par distance AU BORD (négative sur la chaussée),
+  // à moins de maxEdge ; maxLine limite la recherche aux lignes d'indice
+  // inférieur ; les parcours ont une légère priorité sur le réseau
+  road(x, z, maxEdge, maxLine = 1e9, minLine = 0) {
     const c = this.cell, ci = Math.floor(x / c), cj = Math.floor(z / c);
-    const rr = Math.ceil((maxD + 6) / c);
-    let best = maxD * maxD, found = false;
+    const rr = Math.ceil((maxEdge + this.maxHalf + 8) / c);
+    let best = maxEdge, found = false;
     const q = this._q;
     for (let j = cj - rr; j <= cj + rr; j++) {
       for (let i = ci - rr; i <= ci + rr; i++) {
         const a = this.map.get(this.key(i, j));
         if (!a) continue;
         for (let m = 0; m < a.length; m += 2) {
-          if (a[m] >= maxRoute) continue;
-          const r = this.routes[a[m]], k = a[m + 1];
+          if (a[m] >= maxLine || a[m] < minLine) continue;
+          const r = this.lines[a[m]], k = a[m + 1];
           const x0 = r.x[k], z0 = r.z[k];
           const ex = r.x[k + 1] - x0, ez = r.z[k + 1] - z0;
           const l2 = ex * ex + ez * ez || 1;
           let t = ((x - x0) * ex + (z - z0) * ez) / l2;
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const dx = x - x0 - ex * t, dz = z - z0 - ez * t;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < best) {
-            best = d2;
+          const d = Math.sqrt(dx * dx + dz * dz);
+          const score = d - r.half - (r.route ? 0.3 : 0);
+          if (score < best) {
+            best = score;
             found = true;
-            q.ri = a[m]; q.k = k;
+            q.li = a[m]; q.k = k; q.line = r; q.d = d; q.edge = d - r.half;
             q.y = r.y[k] + (r.y[k + 1] - r.y[k]) * t;
           }
         }
       }
     }
-    if (!found) return null;
-    q.d = Math.sqrt(best);
-    return q;
+    return found ? q : null;
   }
 
-  // compatibilité avec l'ancien index : { d, y } ou y = null si rien
+  // compatibilité : { d, y } (y = null si aucune voie à moins de maxD de l'axe)
   nearest(x, z, maxD) {
-    const q = this.road(x, z, maxD);
-    return q ? { d: q.d, y: q.y } : { d: maxD, y: null };
+    const q = this.road(x, z, maxD - 1);
+    return q && q.d < maxD ? { d: q.d, y: q.y } : { d: maxD, y: null };
   }
 
   // altitude du sol visible : chaussée, accotement, raccord, relief naturel
   height(x, z) {
-    const q = this.road(x, z, BLEND);
     const n = this.hf.height(x, z);
+    const q = this.road(x, z, 18);
     if (!q) return n;
-    if (q.d <= ROAD_HALF) return q.y + 0.06;
-    if (q.d <= VERGE) return q.y + 0.04 - ((q.d - ROAD_HALF) / (VERGE - ROAD_HALF)) * 0.08;
-    const t = smooth((q.d - VERGE) / (BLEND - VERGE));
+    const L = q.line;
+    if (q.edge <= 0) return q.y + L.lift;
+    if (q.edge <= VERGE_W) return q.y + L.lift - 0.02 - (q.edge / VERGE_W) * (L.lift + 0.02);
+    if (q.edge >= L.blend) return n;
+    const t = smooth((q.edge - VERGE_W) / (L.blend - VERGE_W));
     return (q.y - 0.04) * (1 - t) + n * t;
   }
 
-  // 0 chaussée, 1 accotement, 2 hors route
+  // 0 chaussée, 1 accotement ou chemin empierré, 2 hors route
   surface(x, z) {
-    const q = this.road(x, z, VERGE);
+    const q = this.road(x, z, VERGE_W);
     if (!q) return 2;
-    return q.d <= ROAD_HALF + 0.2 ? 0 : 1;
+    if (q.edge > 0.2) return 1;
+    return q.line.cls === 3 ? 1 : 0;
   }
 
-  // masque de distance à la route pour le shader du relief (sans les bouts
-  // arrondis aux extrémités des parcours, que le ruban ne couvre pas)
+  // masque de distance pour le shader du relief : valeur = d - (corr - 30),
+  // de sorte que le seuil unique DISCARD masque jusqu'à corr - 8 m de l'axe
+  // pour chaque voie (le ruban de sol va jusqu'à corr). Pas de bouts arrondis
+  // aux extrémités des lignes, que le ruban ne couvre pas.
   buildMask(size) {
     const hf = this.hf;
     const data = new Uint8Array(size * size).fill(255);
     const px = hf.w / size, pz = hf.d / size;
-    const R = CORR + 4;
-    for (const r of this.routes) {
+    for (const r of this.lines) {
       const n = r.x.length;
+      const shift = r.corr - 30;
+      const R = DISCARD + shift + 4;
       for (let k = 0; k < n - 1; k++) {
         const x0 = r.x[k], z0 = r.z[k];
         const ex = r.x[k + 1] - x0, ez = r.z[k + 1] - z0;
         const l2 = ex * ex + ez * ez || 1;
         const ia = Math.max(0, Math.floor((Math.min(x0, x0 + ex) - R - hf.x0) / px));
         const ib = Math.min(size - 1, Math.ceil((Math.max(x0, x0 + ex) + R - hf.x0) / px));
-        // ligne j <-> v = (j + 0.5) / size, z = z0 + (1 - v) * d
         const zMin = Math.min(z0, z0 + ez) - R, zMax = Math.max(z0, z0 + ez) + R;
         const ja = Math.max(0, Math.floor(size - 1 - (zMax - hf.z0) / pz));
         const jb = Math.min(size - 1, Math.ceil(size - 1 - (zMin - hf.z0) / pz));
@@ -121,8 +150,8 @@ export class Ground {
             let t = ((x - x0) * ex + (z - z0) * ez) / l2;
             if ((k === 0 && t < 0) || (k === n - 2 && t > 1)) continue;
             t = t < 0 ? 0 : t > 1 ? 1 : t;
-            const d = Math.hypot(x - x0 - ex * t, z - z0 - ez * t);
-            const v = Math.min(255, Math.round((d / MASK_RANGE) * 255));
+            const d = Math.hypot(x - x0 - ex * t, z - z0 - ez * t) - shift;
+            const v = Math.max(0, Math.min(255, Math.round((d / MASK_RANGE) * 255)));
             const idx = j * size + i;
             if (v < data[idx]) data[idx] = v;
           }
@@ -139,56 +168,78 @@ export class Ground {
 }
 
 // ------------------------------------------------------------ géométries
+// Atlas de 4 revêtements côte à côte (256 px chacun, 13 m de long) :
+// 0 route avec axe et rives, 1 rue sans marquage, 2 piste cyclable,
+// 3 route empierrée
 function roadTexture() {
-  // 6 m de large x 13 m de long : enrobé, réparations, fissures, marquages
   const W = 256, H = 1024;
   const c = document.createElement("canvas");
-  c.width = W; c.height = H;
+  c.width = W * 4; c.height = H;
   const g = c.getContext("2d");
-  g.fillStyle = "#58585a";
-  g.fillRect(0, 0, W, H);
   let seed = 7;
   const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 26000; i++) {
-    const v = 60 + r() * 60;
-    g.fillStyle = `rgba(${v},${v},${v + 2},${0.18 + r() * 0.35})`;
-    g.fillRect(r() * W, r() * H, 1 + r() * 2.2, 1 + r() * 2.2);
-  }
-  for (let i = 0; i < 3; i++) {
-    g.fillStyle = `rgba(35,35,38,${0.05 + r() * 0.05})`;
-    g.beginPath();
-    g.ellipse(r() * W, r() * H, 20 + r() * 40, 40 + r() * 90, 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  g.strokeStyle = "rgba(25,25,25,0.45)";
-  g.lineWidth = 1.2;
-  for (let i = 0; i < 9; i++) {
-    let x = r() * W, y = r() * H;
-    g.beginPath();
-    g.moveTo(x, y);
-    for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 18; y += r() * 14; g.lineTo(x, y); }
-    g.stroke();
-  }
-  const grd = g.createLinearGradient(0, 0, W, 0);
-  grd.addColorStop(0, "rgba(90,88,80,0.35)");
-  grd.addColorStop(0.08, "rgba(40,40,40,0)");
-  grd.addColorStop(0.3, "rgba(28,28,28,0.2)");
-  grd.addColorStop(0.42, "rgba(40,40,40,0)");
-  grd.addColorStop(0.58, "rgba(40,40,40,0)");
-  grd.addColorStop(0.7, "rgba(28,28,28,0.2)");
-  grd.addColorStop(0.92, "rgba(40,40,40,0)");
-  grd.addColorStop(1, "rgba(90,88,80,0.35)");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, W, H);
-  // ligne axiale discontinue (3 m de trait, 10 m de vide)
+  const asphalt = (x0, base, light) => {
+    g.fillStyle = base;
+    g.fillRect(x0, 0, W, H);
+    for (let i = 0; i < 22000; i++) {
+      const v = light + r() * 60;
+      g.fillStyle = `rgba(${v},${v},${v + 2},${0.18 + r() * 0.35})`;
+      g.fillRect(x0 + r() * W, r() * H, 1 + r() * 2.2, 1 + r() * 2.2);
+    }
+    g.strokeStyle = "rgba(25,25,25,0.4)";
+    g.lineWidth = 1.2;
+    for (let i = 0; i < 7; i++) {
+      let x = x0 + 10 + r() * (W - 20), y = r() * H;
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let k = 0; k < 8; k++) { x = Math.max(x0 + 2, Math.min(x0 + W - 2, x + (r() - 0.5) * 18)); y += r() * 14; g.lineTo(x, y); }
+      g.stroke();
+    }
+    const grd = g.createLinearGradient(x0, 0, x0 + W, 0);
+    grd.addColorStop(0, "rgba(90,88,80,0.35)");
+    grd.addColorStop(0.08, "rgba(40,40,40,0)");
+    grd.addColorStop(0.3, "rgba(28,28,28,0.18)");
+    grd.addColorStop(0.42, "rgba(40,40,40,0)");
+    grd.addColorStop(0.58, "rgba(40,40,40,0)");
+    grd.addColorStop(0.7, "rgba(28,28,28,0.18)");
+    grd.addColorStop(0.92, "rgba(40,40,40,0)");
+    grd.addColorStop(1, "rgba(90,88,80,0.35)");
+    g.fillStyle = grd;
+    g.fillRect(x0, 0, W, H);
+  };
+  // 0 : route départementale
+  asphalt(0, "#58585a", 60);
   g.fillStyle = "rgba(236,236,228,0.92)";
   g.fillRect(W / 2 - 4, 0, 8, Math.round((H * 3) / 13));
-  // lignes de rive
   g.fillStyle = "rgba(232,232,222,0.8)";
   g.fillRect(9, 0, 5, H);
   g.fillRect(W - 14, 0, 5, H);
+  // 1 : rue de village
+  asphalt(W, "#5d5c5c", 64);
+  // 2 : piste cyclable, enrobé plus clair, axe discontinu court
+  asphalt(2 * W, "#68676a", 76);
+  g.fillStyle = "rgba(236,236,228,0.85)";
+  for (let y = 0; y < H; y += H / 4) g.fillRect(2 * W + W / 2 - 3, y, 6, H / 10);
+  // 3 : route empierrée (graviers, ornières)
+  g.fillStyle = "#8a7e66";
+  g.fillRect(3 * W, 0, W, H);
+  for (let i = 0; i < 26000; i++) {
+    const v = r();
+    g.fillStyle = `rgba(${110 + v * 70},${100 + v * 60},${80 + v * 50},${0.35 + r() * 0.4})`;
+    g.fillRect(3 * W + r() * W, r() * H, 1 + r() * 3, 1 + r() * 3);
+  }
+  const rut = g.createLinearGradient(3 * W, 0, 4 * W, 0);
+  rut.addColorStop(0.2, "rgba(60,50,35,0)");
+  rut.addColorStop(0.3, "rgba(60,50,35,0.25)");
+  rut.addColorStop(0.4, "rgba(60,50,35,0)");
+  rut.addColorStop(0.6, "rgba(60,50,35,0)");
+  rut.addColorStop(0.7, "rgba(60,50,35,0.25)");
+  rut.addColorStop(0.8, "rgba(60,50,35,0)");
+  g.fillStyle = rut;
+  g.fillRect(3 * W, 0, W, H);
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -215,7 +266,7 @@ function vergeTexture() {
 
 // bande le long d'une portion de route ; cols = décalages latéraux,
 // hfun(x, z, off) = altitude, uvMode : "road" (u en travers, v en long) ou "world"
-function strip(r, a, b, cols, hfun, uvMode, hf, inner) {
+function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1]) {
   const nc = cols.length, nr = b - a + 1;
   const pos = new Float32Array(nr * nc * 3);
   const uv = new Float32Array(nr * nc * 2);
@@ -238,7 +289,7 @@ function strip(r, a, b, cols, hfun, uvMode, hf, inner) {
       const p = (k * nc + c) * 3;
       pos[p] = x; pos[p + 1] = hfun(x, z, off, i); pos[p + 2] = z;
       const q = (k * nc + c) * 2;
-      if (uvMode === "road") { uv[q] = c / (nc - 1); uv[q + 1] = s / 13; }
+      if (uvMode === "road") { uv[q] = uRange[0] + (uRange[1] - uRange[0]) * (c / (nc - 1)); uv[q + 1] = s / 13; }
       else { uv[q] = (x - hf.x0) / hf.w; uv[q + 1] = 1 - (z - hf.z0) / hf.d; }
     }
   }
@@ -281,23 +332,60 @@ function innerLimits(r) {
   return lim;
 }
 
-// Construit chaussées, accotements et rubans de sol de tous les parcours.
-// Les tronçons communs à plusieurs parcours ne sont construits qu'une fois.
-export function buildRoadsAndGround(ground, routes, groundMat) {
+const texU = (k) => [k / 4 + 0.004, (k + 1) / 4 - 0.004];
+
+// chaussée + accotements + ruban de sol d'une portion [a, b] de ligne
+function lineGeometry(ground, L, a, b, inner, out) {
   const hf = ground.hf;
-  const roadMat = new THREE.MeshLambertMaterial({ map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const vergeMat = new THREE.MeshLambertMaterial({ map: vergeTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
-  roadMat.map.anisotropy = 8;
-  const roads = [], verges = [], chunks = [];
-  const rowsH = (x, z) => ground.height(x, z);
-  const corrCols = [-CORR, -24, -18, -13, -8.5, -VERGE + 0.05];
-  const corrColsR = corrCols.map((c) => -c).reverse();
-  routes.forEach((r, ri) => {
+  const h = L.half, v = h + VERGE_W;
+  const lift = L.lift + (L.route ? 0 : ((a * 7 + L.x.length) % 5) * 0.004);
+  out.roads.push(strip(L, a, b, [-h, h], (x, z, o, k) => L.y[k] + lift, "road", hf, null, texU(L.tex)));
+  out.verges.push(strip(L, a, b, [-v, -h + 0.1], (x, z, o, k) => L.y[k] + (o < -h ? -0.03 : 0.03), "road", hf));
+  out.verges.push(strip(L, a, b, [h - 0.1, v], (x, z, o, k) => L.y[k] + (o > h ? -0.03 : 0.03), "road", hf));
+  const cr = L.corr;
+  const colsR = L.route ? [v - 0.05, 8.5, 13, 18, 24, cr] : [v - 0.05, v + 3, v + 6.5, cr];
+  const colsL = colsR.map((c) => -c).reverse();
+  const hfun = (x, z) => ground.height(x, z);
+  out.ground.push(strip(L, a, b, colsL, hfun, "world", hf, inner));
+  out.ground.push(strip(L, a, b, colsR, hfun, "world", hf, inner));
+}
+
+function finishMeshes(out, mats, chunked) {
+  const meshes = [];
+  const add = (list, mat, shadow) => {
+    if (!list.length) return;
+    const g = mergeGeometries(list);
+    list.forEach((x) => x.dispose());
+    g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, mat);
+    m.matrixAutoUpdate = false;
+    m.receiveShadow = shadow;
+    meshes.push(m);
+  };
+  add(out.roads, mats.road, true);
+  add(out.verges, mats.verge, true);
+  if (!chunked) add(out.ground, mats.ground, true);
+  return meshes;
+}
+
+export function makeRoadMaterials(groundMat, renderer) {
+  const road = new THREE.MeshLambertMaterial({ map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  road.map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const verge = new THREE.MeshLambertMaterial({ map: vergeTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  return { road, verge, ground: groundMat };
+}
+
+// Parcours : construits une fois pour toutes. Les tronçons communs à
+// plusieurs parcours ne sont construits qu'une fois.
+export function buildRoutes(ground, nRoutes, mats) {
+  const roads = { roads: [], verges: [], ground: [] };
+  const chunks = [];
+  for (let ri = 0; ri < nRoutes; ri++) {
+    const r = ground.lines[ri];
     const n = r.x.length;
-    // déjà construit par un parcours précédent (même route, même niveau) ?
     const covered = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
-      const q = ground.road(r.x[i], r.z[i], 1.6, ri);
+      const q = ground.road(r.x[i], r.z[i], -1.4, ri);
       covered[i] = q && Math.abs(q.y - r.y[i]) < 0.8 ? 1 : 0;
     }
     for (let i = 0; i < n; i++) {
@@ -315,41 +403,28 @@ export function buildRoadsAndGround(ground, routes, groundMat) {
       let j = i;
       while (j < n && !covered[j]) j++;
       const a0 = Math.max(0, i - 2), b0 = Math.min(n - 1, j + 1);
-      // découpe en tronçons de ~600 m pour pouvoir masquer ce qui est loin
+      // rubans de sol en tronçons de ~600 m, masqués quand ils sont loin
       for (let a = a0; a < b0; a += 120) {
         const b = Math.min(b0, a + 120);
         if (b - a < 1) continue;
-        roads.push(strip(r, a, b, [-ROAD_HALF, ROAD_HALF], (x, z, o, k) => r.y[k] + 0.06, "road", hf));
-        verges.push(strip(r, a, b, [-VERGE, -ROAD_HALF + 0.1], (x, z, o, k) => r.y[k] + (o < -3.5 ? -0.04 : 0.04), "road", hf));
-        verges.push(strip(r, a, b, [ROAD_HALF - 0.1, VERGE], (x, z, o, k) => r.y[k] + (o > 3.5 ? -0.04 : 0.04), "road", hf));
-        const gl = strip(r, a, b, corrCols, rowsH, "world", hf, inner);
-        const gr = strip(r, a, b, corrColsR, rowsH, "world", hf, inner);
-        const g = mergeGeometries([gl, gr]);
-        gl.dispose(); gr.dispose();
+        const out = { roads: roads.roads, verges: roads.verges, ground: [] };
+        lineGeometry(ground, r, a, b, inner, out);
+        const g = mergeGeometries(out.ground);
+        out.ground.forEach((x) => x.dispose());
         g.computeBoundingSphere();
-        const m = new THREE.Mesh(g, groundMat);
+        const m = new THREE.Mesh(g, mats.ground);
         m.matrixAutoUpdate = false;
         m.receiveShadow = true;
         chunks.push(m);
       }
       i = j;
     }
-  });
-  const group = new THREE.Group();
-  const roadMesh = new THREE.Mesh(mergeGeometries(roads), roadMat);
-  const vergeMesh = new THREE.Mesh(mergeGeometries(verges), vergeMat);
-  roads.forEach((g) => g.dispose());
-  verges.forEach((g) => g.dispose());
-  for (const m of [roadMesh, vergeMesh]) {
-    m.matrixAutoUpdate = false;
-    m.receiveShadow = true;
-    group.add(m);
   }
+  const group = new THREE.Group();
+  for (const m of finishMeshes(roads, mats, true)) group.add(m);
   for (const m of chunks) group.add(m);
   return {
     group,
-    roadMat,
-    // les rubans de sol ne servent que là où le relief grossier est masqué
     update(camPos, dist) {
       for (const m of chunks) {
         const sp = m.geometry.boundingSphere;
@@ -357,4 +432,61 @@ export function buildRoadsAndGround(ground, routes, groundMat) {
       }
     },
   };
+}
+
+// Réseau (rues, routes, pistes cyclables) : index des portions par case de
+// la grille, puis construction à la demande autour du cycliste.
+export class NetworkCells {
+  constructor(ground, firstNet, size) {
+    this.ground = ground;
+    this.size = size;
+    this.cells = new Map();
+    const lines = ground.lines;
+    for (let li = firstNet; li < lines.length; li++) {
+      const L = lines[li];
+      const n = L.x.length;
+      // portions déjà couvertes par un parcours (même chaussée)
+      const cov = new Uint8Array(n);
+      for (let i = 0; i < n; i++) {
+        const q = ground.road(L.x[i], L.z[i], -0.5, firstNet);
+        cov[i] = q && Math.abs(q.y - L.y[i]) < 1.5 ? 1 : 0;
+      }
+      let a = -1, key = null;
+      const flush = (b) => {
+        if (a >= 0 && b > a) {
+          let list = this.cells.get(key);
+          if (!list) this.cells.set(key, (list = []));
+          list.push([li, Math.max(0, a - 1), Math.min(n - 1, b + 1)]);
+        }
+        a = -1;
+      };
+      for (let k = 0; k < n - 1; k++) {
+        const kk = this.key((L.x[k] + L.x[k + 1]) / 2, (L.z[k] + L.z[k + 1]) / 2);
+        if (cov[k] && cov[k + 1]) { flush(k); continue; }
+        if (a >= 0 && kk !== key) flush(k);
+        if (a < 0) { a = k; key = kk; }
+      }
+      flush(n - 1);
+    }
+  }
+
+  key(x, z) { return `${Math.floor(x / this.size)},${Math.floor(z / this.size)}`; }
+
+  build(ci, cj, mats) {
+    const list = this.cells.get(`${ci},${cj}`);
+    if (!list) return null;
+    const out = { roads: [], verges: [], ground: [] };
+    const inner = new Map();
+    for (const [li, a, b] of list) {
+      const L = this.ground.lines[li];
+      if (!inner.has(li)) inner.set(li, innerLimits(L));
+      lineGeometry(this.ground, L, a, b, inner.get(li), out);
+    }
+    const group = new THREE.Group();
+    for (const m of finishMeshes(out, mats, false)) group.add(m);
+    return {
+      group,
+      dispose() { group.traverse((o) => o.geometry && o.geometry.dispose()); },
+    };
+  }
 }
