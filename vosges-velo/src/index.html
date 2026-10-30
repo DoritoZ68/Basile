@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vosges Vélo</title>
+<meta name="description" content="Simulateur de cyclisme sur les vraies routes des Vosges : Grand Ballon, Vieil Armand, Route des Crêtes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,800;1,800&family=Barlow:wght@400;600;700&display=swap">
+<style>/*__STYLE__*/</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="loading" class="screen">
+  <div class="load-box">
+    <h1 class="brand">Vosges <span>Vélo</span></h1>
+    <p class="tag">Grand Ballon · Vieil Armand · Route des Crêtes</p>
+    <div class="bar"><i id="loadbar"></i></div>
+    <p id="loadmsg">Chargement…</p>
+  </div>
+</div>
+
+<div id="menu" class="screen" hidden>
+  <div class="menu-panel glass">
+    <header>
+      <h1 class="brand">Vosges <span>Vélo</span></h1>
+      <p class="tag">Les vraies routes du Haut-Rhin, relief et photos aériennes IGN</p>
+    </header>
+    <nav class="tabs" id="tabs">
+      <button data-tab="routes" class="on">Parcours</button>
+      <button data-tab="rider">Coureur</button>
+      <button data-tab="world">Conditions</button>
+      <button data-tab="gfx">Réglages</button>
+    </nav>
+    <div class="tab-body">
+      <section data-panel="routes">
+        <div id="route-list" class="route-list"></div>
+        <canvas id="menu-profile" class="menu-profile"></canvas>
+        <div id="opts-routes"></div>
+      </section>
+      <section data-panel="rider" hidden><div id="opts-rider"></div></section>
+      <section data-panel="world" hidden><div id="opts-world"></div></section>
+      <section data-panel="gfx" hidden>
+        <div id="opts-gfx"></div>
+        <div class="keys">
+          <h3>Commandes</h3>
+          <dl>
+            <dt>↑ ↓ ou Z S</dt><dd>Doser l'effort (watts)</dd>
+            <dt>← → ou Q D</dt><dd>Se placer sur la route</dd>
+            <dt>Maj</dt><dd>Attaquer (puise dans la réserve)</dd>
+            <dt>Espace</dt><dd>Freiner</dd>
+            <dt>E</dt><dd>Position de descente</dd>
+            <dt>C</dt><dd>Changer de caméra</dd>
+            <dt>Échap / P</dt><dd>Pause</dd>
+            <dt>Manette</dt><dd>Gâchettes : effort / frein, stick : direction</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+    <button id="go" class="go">Partir</button>
+  </div>
+  <p class="credits" id="credits"></p>
+</div>
+
+<div id="hud" hidden>
+  <div class="hud-top glass">
+    <div class="route-title" id="h-route"></div>
+    <div class="road" id="h-road"></div>
+    <div class="town" id="h-town"></div>
+  </div>
+  <canvas id="minimap" class="minimap glass"></canvas>
+  <div id="toast" class="toast"></div>
+  <div id="warn" class="warn"></div>
+  <div id="countdown" class="countdown"></div>
+
+  <div class="hud-left glass">
+    <div class="big"><b id="h-speed">0</b><small>km/h</small></div>
+    <div class="power-row">
+      <div class="power"><b id="h-power">0</b><small>W</small></div>
+      <div class="zone" id="h-zone">Z1</div>
+    </div>
+    <div class="target">Consigne <b id="h-target">0</b> W · <span id="h-wkg">0</span> W/kg</div>
+    <div class="reserve"><span>Réserve</span><div class="gauge"><i id="h-wbal"></i></div></div>
+    <div class="minis">
+      <div><small>Cadence</small><b id="h-cad">0</b></div>
+      <div><small>Braquet</small><b id="h-gear">–</b></div>
+      <div><small>Cœur</small><b id="h-hr">0</b></div>
+    </div>
+  </div>
+
+  <div class="hud-right glass">
+    <div class="grade" id="h-grade">0,0 %</div>
+    <div class="stats">
+      <div><small>Altitude</small><b id="h-alt">0 m</b></div>
+      <div><small>Reste</small><b id="h-left">0 km</b></div>
+      <div><small>Temps</small><b id="h-time">0:00</b></div>
+      <div><small id="h-poslabel">Place</small><b id="h-pos">–</b></div>
+    </div>
+    <div class="draft" id="h-draft">Dans la roue</div>
+  </div>
+
+  <canvas id="profile" class="profile glass"></canvas>
+  <div class="cam-hint" id="h-cam"></div>
+</div>
+
+<div id="pause" class="screen dim" hidden>
+  <div class="glass dialog">
+    <h2>Pause</h2>
+    <button id="resume" class="go">Reprendre</button>
+    <button id="restart" class="ghost-btn">Recommencer</button>
+    <button id="quit" class="ghost-btn">Retour au menu</button>
+  </div>
+</div>
+
+<div id="results" class="screen dim" hidden>
+  <div class="glass dialog wide">
+    <h2 id="r-title">Arrivée !</h2>
+    <p id="r-sub" class="tag"></p>
+    <div id="r-stats" class="r-stats"></div>
+    <table id="r-table" class="r-table"></table>
+    <div class="r-actions">
+      <button id="r-again" class="go">Rejouer</button>
+      <button id="r-menu" class="ghost-btn">Menu</button>
+    </div>
+  </div>
+</div>
+
+<div id="touch" hidden>
+  <div class="t-left"><button data-k="left">◀</button><button data-k="right">▶</button></div>
+  <div class="t-right">
+    <button data-k="up">+</button><button data-k="down">−</button>
+    <button data-k="sprint">Attaque</button><button data-k="brake">Frein</button>
+  </div>
+  <button class="t-pause" data-k="pause">❚❚</button>
+</div>
+
+<script>/*__DATA__*/</script>
+<script>/*__APP__*/</script>
+</body>
+</html>
