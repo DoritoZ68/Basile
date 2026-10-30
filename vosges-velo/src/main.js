@@ -197,7 +197,7 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad };
+    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, rideCamera, poseRiders };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -810,9 +810,17 @@ addEventListener("keyup", (e) => {
   if (e.key && e.key.length === 1) letters.delete(e.key.toLowerCase());
 });
 addEventListener("blur", () => { keys.clear(); letters.clear(); });
-addEventListener("wheel", (e) => {
-  if (game.player && game.state !== "menu") game.player.target = Math.max(0, Math.min(1500, game.player.target - Math.sign(e.deltaY) * 10));
-}, { passive: true });
+// molette : zoom de la caméra active (distance, ou champ de vision en
+// première personne) ; chaque caméra garde son propre zoom
+const zoom = [1, 1, 1, 1];
+const ZOOM_LIM = [[0.45, 3.5], [0.45, 1.25], [0.5, 3], [0.4, 3]];
+canvas.addEventListener("wheel", (e) => {
+  if (!game.player || game.state === "menu") return;
+  e.preventDefault();
+  const m = game.camMode, [lo, hi] = ZOOM_LIM[m];
+  const d = Math.max(-200, Math.min(200, e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY));
+  zoom[m] = Math.max(lo, Math.min(hi, zoom[m] * Math.exp(d * 0.0015)));
+}, { passive: false });
 document.querySelectorAll("#touch button").forEach((b) => {
   const k = b.dataset.k;
   b.addEventListener("pointerdown", (e) => {
@@ -886,6 +894,8 @@ function placePlayerOnRoad(p, s, o) {
   p.o = o;
   p.y = q.y + 0.06;
   p.free = { y: p.y, grade: q.grade, dx: q.dx, dz: q.dz, curv: 0, crr: 0.0045 };
+  p.yS = p.y;
+  p.gradeS = q.grade;
 }
 
 const projTmp = {};
@@ -930,7 +940,12 @@ function movePlayer(p, dt) {
   p.ri = g0.i; p.s = g0.s; p.o = g0.d; p.y = g0.y; p.surface = g0.surf;
   const ga = ground.height(p.x + dx * 2, p.z + dz * 2), gb = ground.height(p.x - dx * 2, p.z - dz * 2);
   const grade = Math.max(-0.45, Math.min(0.45, (ga - gb) / 4));
-  p.free = { y: p.y, grade, dx, dz, curv: 0, crr: [0.0045, 0.01, 0.03][g0.surf] };
+  // altitude et pente lissées : le sol échantillonné a de petits sauts
+  // (jonctions de routes, accotements) qui faisaient tressauter la caméra
+  p.yS += (p.y - p.yS) * Math.min(1, dt * 10);
+  if (Math.abs(p.y - p.yS) > 1.5) p.yS = p.y;
+  p.gradeS += (grade - p.gradeS) * Math.min(1, dt * 2.5);
+  p.free = { y: p.y, grade: p.gradeS, dx, dz, curv: 0, crr: [0.0045, 0.01, 0.03][g0.surf] };
   p.offRoad = g0.surf > 0;
   // adhérence
   const mu = MU[g0.surf] * (settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1);
@@ -1127,10 +1142,10 @@ function poseRiders(dt) {
   for (const [x, m] of all) {
     const v = x.ghost ? 8 : x.v;
     if (x.isPlayer) {
-      m.root.position.set(x.x, x.y, x.z);
+      m.root.position.set(x.x, x.yS, x.z);
       m.root.rotation.y = x.yaw;
       const lean = x.crashed > 0 ? 1.35 * Math.sign(x.lean || 1) : x.lean;
-      m.animate(dt, v, x.cadence, x.posture, lean, Math.atan(x.free.grade));
+      m.animate(dt, v, x.cadence, x.posture, lean, Math.atan(x.gradeS));
       m.setFirstPerson(game.camMode === 1);
       if (m.shadow) m.shadow.visible = !renderer.shadowMap.enabled;
       continue;
@@ -1154,12 +1169,14 @@ function placeCameraImmediately() {
 
 const camEuler = new THREE.Euler(0, 0, 0, "YXZ");
 let camYaw = 0;
+let camY = 0;
 function rideCamera(dt, snap = false) {
   const p = game.player;
   const r = game.route;
   if (!p) return;
   const mode = game.camMode;
-  const px = p.x, py = p.y, pz = p.z;
+  const px = p.x, py = p.yS, pz = p.z;
+  const zm = zoom[mode];
   // cap de caméra lissé (évite les à-coups)
   let dy = p.yaw - camYaw;
   dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -1175,36 +1192,44 @@ function rideCamera(dt, snap = false) {
     // première personne : yeux du coureur, inclinaison du vélo comprise
     game.models[0].eyeWorld(camPos);
     camera.position.copy(camPos);
-    camEuler.set(-0.3 + look.pitch + Math.atan(p.free.grade) * 0.6, p.yaw + Math.PI + look.yaw, -(p.crashed > 0 ? 1.0 : p.lean) * 0.6);
+    camEuler.set(-0.3 + look.pitch + Math.atan(p.gradeS) * 0.6, p.yaw + Math.PI + look.yaw, -(p.crashed > 0 ? 1.0 : p.lean) * 0.6);
     camera.quaternion.setFromEuler(camEuler);
-    camera.fov = 78;
+    camera.fov = 78 * zm;
+    camY = camPos.y;
     camera.updateProjectionMatrix();
     return;
   }
   let want, lk;
   if (mode === 0) {
     const yaw = camYaw + look.yaw, pitch = 0.3 - look.pitch * 0.8;
-    const dist = 6.2;
+    const dist = 6.2 * zm;
     const c = Math.cos(Math.max(-0.2, Math.min(1.3, pitch)));
     want = tmpV.set(px - Math.sin(yaw) * dist * c, py + 1.1 + Math.sin(Math.max(-0.2, Math.min(1.3, pitch))) * dist, pz - Math.cos(yaw) * dist * c);
     lk = camLook.set(px + Math.sin(camYaw) * 3, py + 1.2, pz + Math.cos(camYaw) * 3);
   } else if (mode === 2) {
     // moto TV qui précède le coureur, de trois quarts
     const a = r.sample(p.s + 9);
-    want = tmpV.set(a.x + a.dz * 2.5, a.y + 1.8, a.z - a.dx * 2.5);
+    want = tmpV.set(px + (a.x + a.dz * 2.5 - px) * zm, py + 1.8 * zm, pz + (a.z - a.dx * 2.5 - pz) * zm);
     lk = camLook.set(px, py + 1.0, pz);
   } else {
-    const b = r.sample(Math.max(0, p.s - 45));
-    want = tmpV.set(b.x - b.dz * 25, Math.max(b.y, py) + 38, b.z + b.dx * 25);
+    const b = r.sample(Math.max(0, p.s - 45 * zm));
+    want = tmpV.set(b.x - b.dz * 25 * zm, Math.max(b.y, py) + 38 * zm, b.z + b.dx * 25 * zm);
     lk = camLook.set(px, py, pz);
   }
-  const floor = ground.height(want.x, want.z) + 1.2;
+  // garde au sol : on regarde le sol sous la caméra et un peu autour, pour
+  // ne pas suivre chaque bosse du talus
+  const floor = Math.max(
+    ground.height(want.x, want.z),
+    0.5 * (ground.height(want.x + 1.5, want.z) + ground.height(want.x - 1.5, want.z)),
+    0.5 * (ground.height(want.x, want.z + 1.5) + ground.height(want.x, want.z - 1.5)),
+  ) + 1.0;
   if (want.y < floor) want.y = floor;
-  if (snap || mode === 0) camPos.copy(want);
-  else camPos.lerp(want, 1 - Math.exp(-dt * (mode === 3 ? 2 : 6)));
-  const g2 = ground.height(camPos.x, camPos.z) + 1.2;
-  if (camPos.y < g2) camPos.y = g2;
-  if (camPos.distanceTo(want) > 60) camPos.copy(want);
+  if (snap || mode === 0) { camPos.x = want.x; camPos.z = want.z; }
+  else { camPos.x += (want.x - camPos.x) * (1 - Math.exp(-dt * (mode === 3 ? 2 : 6))); camPos.z += (want.z - camPos.z) * (1 - Math.exp(-dt * (mode === 3 ? 2 : 6))); }
+  // la hauteur est toujours amortie : plus de hauts et bas brusques
+  camY = snap ? want.y : camY + (want.y - camY) * (1 - Math.exp(-dt * (mode === 3 ? 2 : 4)));
+  camPos.y = Math.max(camY, floor - 0.6);
+  if (Math.hypot(camPos.x - want.x, camPos.z - want.z) > 60) { camPos.copy(want); camY = want.y; }
   camera.position.copy(camPos);
   camera.lookAt(lk);
   // léger roulis de la caméra de poursuite avec le vélo

@@ -20,7 +20,7 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 
 | Touche | Action |
 | --- | --- |
-| E / A ou ↑ ↓ | Augmenter / baisser l'effort de 20 W par pression (molette : 10 W) |
+| E / A ou ↑ ↓ | Augmenter / baisser l'effort de 20 W par pression |
 | ← → ou Q D | Pencher le vélo pour tourner : plus on maintient, plus on se penche ; relâché, le vélo se redresse en douceur |
 | Maj | Attaquer (puise dans la réserve anaérobie) |
 | S ou Espace | Freiner |
@@ -28,6 +28,7 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 | C | Changer de caméra : poursuite, première personne, moto TV, drone |
 | Souris | Regarder autour (clic pour capturer la souris, Échap pour la libérer) |
 | R / double-clic | Recentrer le regard |
+| Molette | Zoomer / dézoomer (chaque caméra garde son zoom) |
 | Échap / P | Pause |
 | M | Son |
 
