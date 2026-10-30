@@ -77,6 +77,18 @@ l'orientation de chaque portion de route), aspiration dans la roue,
 réserve anaérobie W′ (modèle de Skiba), fréquence cardiaque, braquets
 50/34 × 11-32, vitesse limite en virage selon la courbure réelle.
 
+## Rendu
+
+- Le relief IGN est une grille de 30 m, trop grossière pour une chaussée de
+  6 m. Un ruban de sol fin (une section tous les 5 m, ±30 m de part et
+  d'autre) accompagne donc chaque route et la raccorde au relief réel ;
+  sous ce ruban, la grille grossière est masquée par le shader
+  (`src/ground.js`).
+- Arbres en deux niveaux de détail (≈50 triangles près, 8 à 10 loin),
+  coureurs fusionnés en deux maillages chacun, relief en dalles de ~3 km
+  avec niveaux de détail : une image courante demande une centaine
+  d'appels de dessin et ~400 000 triangles en qualité « Bas ».
+
 ## Développer
 
 ```bash

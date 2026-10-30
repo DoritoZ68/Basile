@@ -33,67 +33,6 @@ export class Heightfield {
     return d + (c - d) * (1 - tx) + (b - d) * (1 - tz);
   }
 
-  // Aplanit le relief sous les routes (déblais / remblais) pour que la
-  // chaussée épouse le terrain.
-  flattenRoads(routes) {
-    // R0 couvre tout triangle de la grille (30 m) qui touche la chaussée :
-    // dessous, le sol est exactement au niveau de la route
-    const R0 = 34, R1 = 80, RMIN = 34;
-    const n = this.h.length;
-    const dist = new Float32Array(n).fill(1e9);
-    const rh = new Float32Array(n);
-    // altitude de la route la plus basse à proximité : dans les lacets, le
-    // relief ne doit jamais dépasser la chaussée inférieure
-    const minH = new Float32Array(n).fill(1e9);
-    const ri = Math.ceil(R1 / this.cx) + 1, rj = Math.ceil(R1 / this.cz) + 1;
-    for (const r of routes) {
-      for (let k = 0; k < r.x.length; k++) {
-        const x = r.x[k], z = r.z[k], y = r.y[k];
-        const ci = Math.round((x - this.x0) / this.cx), cj = Math.round((z - this.z0) / this.cz);
-        for (let j = cj - rj; j <= cj + rj; j++) {
-          if (j < 0 || j >= this.nz) continue;
-          const vz = this.z0 + j * this.cz;
-          for (let i = ci - ri; i <= ci + ri; i++) {
-            if (i < 0 || i >= this.nx) continue;
-            const vx = this.x0 + i * this.cx;
-            const d = Math.hypot(vx - x, vz - z);
-            const idx = j * this.nx + i;
-            if (d < dist[idx]) { dist[idx] = d; rh[idx] = y; }
-            if (d < RMIN && y < minH[idx]) minH[idx] = y;
-          }
-        }
-      }
-    }
-    this.roadMask = new Uint8Array(n);
-    for (let i = 0; i < n; i++) {
-      const d = dist[i];
-      if (d >= R1) continue;
-      this.roadMask[i] = 1;
-      let w = (d - R0) / (R1 - R0);
-      w = w <= 0 ? 0 : w * w * (3 - 2 * w);
-      const base = Math.min(rh[i], minH[i]) - 0.05;
-      this.h[i] = base * (1 - w) + this.h[i] * w;
-      if (d < RMIN) this.h[i] = Math.min(this.h[i], minH[i] - 0.05);
-      if (d < R0) this.roadMask[i] = 2;
-    }
-  }
-
-  // hauteur d'un sommet pour un niveau de détail grossier : près des routes,
-  // on prend le point le plus bas du bloc pour ne pas couper la chaussée
-  lodHeight(i, j, stride) {
-    if (stride === 1 || !this.roadMask) return this.at(i, j);
-    const r = stride >> 1;
-    let road = false, lo = 1e9;
-    for (let b = j - r; b <= j + r; b++) {
-      for (let a = i - r; a <= i + r; a++) {
-        const ai = Math.min(this.nx - 1, Math.max(0, a)), bj = Math.min(this.nz - 1, Math.max(0, b));
-        const k = bj * this.nx + ai;
-        // on ne garde que les points au niveau de la route, pas les creux voisins
-        if (this.roadMask[k] === 2) { road = true; if (this.h[k] < lo) lo = this.h[k]; }
-      }
-    }
-    return road ? Math.min(lo, this.at(i, j)) : this.at(i, j);
-  }
 }
 
 function makeDetailTexture() {
@@ -131,7 +70,12 @@ function makeDetailTexture() {
   return t;
 }
 
-export function makeTerrainMaterial(orthoImage, maxSize, renderer) {
+let detailTex = null;
+
+// opts.mask : masque de distance aux routes ; le relief grossier n'est pas
+// dessiné à moins de opts.discard m d'une route (le ruban de sol le remplace),
+// tant que la caméra est à moins de opts.discardDist.uniforme m
+export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
   let src = orthoImage;
   if (orthoImage.width > maxSize) {
     const c = document.createElement("canvas");
@@ -139,41 +83,62 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer) {
     c.getContext("2d").drawImage(orthoImage, 0, 0, maxSize, maxSize);
     src = c;
   }
-  const tex = new THREE.Texture(src);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.needsUpdate = true;
-  const detail = makeDetailTexture();
+  const tex = opts.texture || new THREE.Texture(src);
+  if (!opts.texture) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.needsUpdate = true;
+  }
+  if (!detailTex) detailTex = makeDetailTexture();
   const mat = new THREE.MeshLambertMaterial({ map: tex });
+  mat.userData.discardDist = opts.discardDist || { value: 0 };
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.detailMap = { value: detail };
+    sh.uniforms.detailMap = { value: detailTex };
+    if (opts.veg) sh.uniforms.vegMap = { value: opts.veg };
+    if (opts.mask) {
+      sh.uniforms.roadMask = { value: opts.mask };
+      sh.uniforms.discardDist = mat.userData.discardDist;
+    }
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
       .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;" + (opts.veg ? "\nuniform sampler2D vegMap;" : "") + (opts.mask ? "\nuniform sampler2D roadMask;\nuniform float discardDist;" : ""),
+      )
       .replace(
         "#include <map_fragment>",
-        `#include <map_fragment>
+        `${opts.mask ? `if (texture2D(roadMask, vMapUv).r * ${opts.maskRange.toFixed(1)} < ${opts.discard.toFixed(1)} && length(vWPos - cameraPosition) < discardDist) discard;` : ""}
+        #include <map_fragment>
         {
           float camD = length(vWPos - cameraPosition);
           float near = 1.0 - smoothstep(30.0, 600.0, camD);
           float d1 = texture2D(detailMap, vWPos.xz * 0.21).r;
           float d2 = texture2D(detailMap, vWPos.xz * 0.023).r;
-          float d3 = texture2D(detailMap, vWPos.xz * 0.0021).r;
-          float det = mix(1.0, (d1 * 0.5 + d2 * 0.5) * 2.0, near * 0.7) * mix(1.0, d3 * 2.0, 0.2);
+          float det = mix(1.0, (d1 * 0.5 + d2 * 0.5) * 2.0, near * 0.7);
           vec3 c = diffuseColor.rgb;
           float l = dot(c, vec3(0.299, 0.587, 0.114));
-          c = mix(vec3(l), c, 1.35);
-          diffuseColor.rgb = max(c, 0.0) * det * (1.45 - 0.55 * l);
+          c = mix(vec3(l), c, 1.3);
+          ${opts.veg ? `
+          // sous-bois : la photo aérienne y est grise ou trop claire (route,
+          // coupes) ; on la ramène vers un sol forestier brun-vert
+          vec3 vg = texture2D(vegMap, vMapUv).rgb;
+          float forest = clamp((vg.r + vg.g) * 1.2, 0.0, 1.0);
+          float amt = forest * (0.25 + 0.5 * smoothstep(0.28, 0.6, l));
+          c = mix(c, vec3(0.17, 0.21, 0.11) * (0.8 + 0.9 * l), amt);
+          l = dot(c, vec3(0.299, 0.587, 0.114));` : ""}
+          diffuseColor.rgb = max(c, 0.0) * det * (1.4 - 0.5 * l);
         }`,
       );
   };
+  // les deux variantes (masquée ou non) ne doivent pas partager leur programme
+  mat.customProgramCacheKey = () => `terrain-${opts.mask ? "m" : ""}${opts.veg ? "v" : ""}`;
   return mat;
 }
 
-const CHUNK = 64;
+const CHUNK = 96; // ~2,9 km : moins de dalles, donc moins d'appels de dessin
 
 export class Terrain {
   constructor(hf, material) {
@@ -207,7 +172,7 @@ export class Terrain {
     let p = 0;
     const put = (i, j, drop) => {
       const x = hf.x0 + i * hf.cx, z = hf.z0 + j * hf.cz;
-      pos[p * 3] = x; pos[p * 3 + 1] = hf.lodHeight(i, j, stride) - drop; pos[p * 3 + 2] = z;
+      pos[p * 3] = x; pos[p * 3 + 1] = hf.at(i, j) - drop; pos[p * 3 + 2] = z;
       const s = stride;
       const nx = (hf.at(i - s, j) - hf.at(i + s, j)) / (2 * s * hf.cx);
       const nz = (hf.at(i, j - s) - hf.at(i, j + s)) / (2 * s * hf.cz);
@@ -256,7 +221,7 @@ export class Terrain {
       const dx = Math.max(0, Math.abs(camPos.x - c.cx) - c.half);
       const dz = Math.max(0, Math.abs(camPos.z - c.cz) - c.half);
       const d = Math.hypot(dx, dz) / lodScale;
-      const stride = d < 1300 ? 1 : d < 3500 ? 2 : d < 7000 ? 4 : 8;
+      const stride = d < 900 ? 1 : d < 3000 ? 2 : d < 7000 ? 4 : 8;
       if (stride !== c.lod) {
         // une seule géométrie par dalle en mémoire graphique
         if (c.geos[c.lod]) { c.geos[c.lod].dispose(); delete c.geos[c.lod]; }

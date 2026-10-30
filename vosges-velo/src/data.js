@@ -44,5 +44,5 @@ export async function loadData(onProgress) {
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(vegetation, 0, 0);
   const veg = { w: c.width, h: c.height, px: ctx.getImageData(0, 0, c.width, c.height).data };
-  return { ...world, outerMeta: world.outer, terrain, outer, outerImg, buildings, ortho, orthoSmall, veg };
+  return { ...world, outerMeta: world.outer, terrain, outer, outerImg, buildings, ortho, orthoSmall, veg, vegImage: vegetation };
 }

@@ -49,7 +49,7 @@ const opts = {
   entryPoints: [join(root, "src", "main.js")],
   bundle: true,
   format: "iife",
-  minify: !watch,
+  minify: !watch && !process.env.NOMINIFY,
   target: ["es2020"],
   write: false,
   legalComments: "none",

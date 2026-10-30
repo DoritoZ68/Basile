@@ -16,6 +16,8 @@ export class Route {
       this.s[i] = this.s[i - 1] + Math.hypot(this.x[i] - this.x[i - 1], this.z[i] - this.z[i - 1]);
     }
     this.length = this.s[n - 1];
+    // la ligne d'arrivée laisse ~140 m de route réelle pour décélérer
+    this.finish = Math.max(this.length * 0.9, this.length - 140);
 
     // direction lissée (sur ±10 m)
     this.dx = new Float32Array(n);

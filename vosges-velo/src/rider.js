@@ -1,5 +1,6 @@
 // Cycliste low-poly animé (pédalage, inclinaison en virage, danseuse).
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpA = new THREE.Vector3();
@@ -49,8 +50,8 @@ export class RiderModel {
       if (ghost) { m.transparent = true; m.opacity = 0.35; m.depthWrite = false; }
       return m;
     };
-    const mJersey = mk(jersey), mShorts = mk(shorts), mBike = mk(bike), mSkin = mk(skin), mHelmet = mk(helmet);
-    const mTire = mk("#151515"), mMetal = mk("#9a9a9a"), mShoe = mk("#f0f0f0");
+    const mJersey = mk(jersey), mShorts = mk(shorts), mSkin = mk(skin);
+    const mShoe = mk("#f0f0f0");
 
     this.root = new THREE.Group(); // position / cap
     this.body = new THREE.Group(); // inclinaison
@@ -61,53 +62,56 @@ export class RiderModel {
       this.root.add(this.shadow);
     }
 
-    // --- vélo (avant = +z local)
-    const bikeG = new THREE.Group();
-    this.body.add(bikeG);
+    // --- vélo (avant = +z local). Les pièces fixes sont fusionnées en un seul
+    // maillage à couleurs par sommet (un seul appel de dessin), chaque roue aussi.
+    const vcMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    if (ghost) { vcMat.transparent = true; vcMat.opacity = 0.35; vcMat.depthWrite = false; }
+    const bake = (geo, color, matrix) => {
+      const g = (geo.index ? geo.toNonIndexed() : geo.clone());
+      if (matrix) g.applyMatrix4(matrix);
+      const c = new THREE.Color(color), n = g.attributes.position.count, a = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+      g.setAttribute("color", new THREE.BufferAttribute(a, 3));
+      if (g.attributes.uv) g.deleteAttribute("uv");
+      return g;
+    };
+    const tmpO = new THREE.Object3D();
+    const tube = (a, b, r, color) => {
+      const g = new THREE.CylinderGeometry(r, r * 0.85, 1, 6);
+      g.translate(0, 0.5, 0);
+      tmpO.position.copy(a);
+      tmpA.subVectors(b, a);
+      tmpO.scale.set(1, tmpA.length(), 1);
+      tmpO.quaternion.setFromUnitVectors(UP, tmpA.normalize());
+      tmpO.updateMatrix();
+      return bake(g, color, tmpO.matrix);
+    };
+    const at = (x, y, z, rx = 0, ry = 0, rz = 0) => { tmpO.position.set(x, y, z); tmpO.rotation.set(rx, ry, rz); tmpO.scale.set(1, 1, 1); tmpO.updateMatrix(); return tmpO.matrix.clone(); };
     this.wheels = [];
     for (const z of [-0.5, 0.5]) {
-      const w = new THREE.Group();
-      const tire = new THREE.Mesh(new THREE.TorusGeometry(0.335, 0.016, 6, 22), mTire);
-      tire.rotation.y = Math.PI / 2;
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.012, 4, 22), mMetal);
-      rim.rotation.y = Math.PI / 2;
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 8), mMetal);
-      hub.rotation.z = Math.PI / 2;
-      w.add(tire, rim, hub);
-      for (let k = 0; k < 3; k++) {
-        const sp = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.6, 0.02), mMetal);
-        sp.rotation.x = (k * Math.PI) / 3;
-        w.add(sp);
-      }
+      const parts = [
+        bake(new THREE.TorusGeometry(0.335, 0.016, 5, 20), "#151515", at(0, 0, 0, 0, Math.PI / 2)),
+        bake(new THREE.TorusGeometry(0.31, 0.012, 3, 20), "#9a9a9a", at(0, 0, 0, 0, Math.PI / 2)),
+        bake(new THREE.CylinderGeometry(0.03, 0.03, 0.1, 6), "#9a9a9a", at(0, 0, 0, 0, 0, Math.PI / 2)),
+      ];
+      for (let k = 0; k < 3; k++) parts.push(bake(new THREE.BoxGeometry(0.008, 0.6, 0.02), "#9a9a9a", at(0, 0, 0, (k * Math.PI) / 3)));
+      const w = new THREE.Mesh(mergeGeometries(parts), vcMat);
       w.position.set(0, 0.335, z);
-      bikeG.add(w);
+      this.body.add(w);
       this.wheels.push(w);
     }
     const P = (x, y, z) => new THREE.Vector3(x, y, z);
     const bb = P(0, 0.28, -0.04), seatTop = P(0, 0.86, -0.22), head = P(0, 0.82, 0.38), rear = P(0, 0.335, -0.5), front = P(0, 0.335, 0.5);
-    const tubes = [[bb, seatTop, 0.018], [bb, head, 0.022], [seatTop, head, 0.018], [bb, rear, 0.012], [seatTop, rear, 0.011], [head, front, 0.014]];
-    for (const [a, b, r] of tubes) {
-      const t = limb(r, mBike);
-      place(t, a, b);
-      bikeG.add(t);
-    }
-    const stem = limb(0.014, mMetal);
-    place(stem, head, P(0, 0.9, 0.46));
-    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 6), mMetal);
-    bar.rotation.z = Math.PI / 2;
-    bar.position.set(0, 0.9, 0.47);
-    const saddle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.26), mk("#111"));
-    saddle.position.set(0, 0.92, -0.2);
-    const seatpost = limb(0.012, mMetal);
-    place(seatpost, seatTop, P(0, 0.92, -0.22));
-    bikeG.add(stem, bar, saddle, seatpost);
-    this.crank = new THREE.Group();
-    this.crank.position.copy(bb);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 16), mMetal);
-    ring.rotation.z = Math.PI / 2;
-    ring.position.x = 0.05;
-    this.crank.add(ring);
-    bikeG.add(this.crank);
+    const frame = [
+      tube(bb, seatTop, 0.018, bike), tube(bb, head, 0.022, bike), tube(seatTop, head, 0.018, bike),
+      tube(bb, rear, 0.012, bike), tube(seatTop, rear, 0.011, bike), tube(head, front, 0.014, bike),
+      tube(head, P(0, 0.9, 0.46), 0.014, "#9a9a9a"), tube(seatTop, P(0, 0.92, -0.22), 0.012, "#9a9a9a"),
+      bake(new THREE.CylinderGeometry(0.012, 0.012, 0.42, 6), "#9a9a9a", at(0, 0.9, 0.47, 0, 0, Math.PI / 2)),
+      bake(new THREE.BoxGeometry(0.08, 0.03, 0.26), "#111111", at(0, 0.92, -0.2)),
+      bake(new THREE.CylinderGeometry(0.1, 0.1, 0.01, 14), "#9a9a9a", at(0.05, 0.28, -0.04, 0, 0, Math.PI / 2)),
+    ];
+    this.frame = new THREE.Mesh(mergeGeometries(frame), vcMat);
+    this.body.add(this.frame);
 
     // --- cycliste
     this.legs = [];
@@ -118,18 +122,48 @@ export class RiderModel {
     }
     this.torso = limb(0.13, mJersey);
     this.torso.scale.set(1, 1, 0.8);
-    this.headM = new THREE.Mesh(new THREE.SphereGeometry(0.105, 12, 8), mSkin);
-    this.helmet = new THREE.Mesh(new THREE.SphereGeometry(0.125, 12, 8, 0, Math.PI * 2, 0, Math.PI / 1.9), mHelmet);
-    this.helmet.scale.set(0.95, 0.9, 1.25);
+    // tête et casque fusionnés (repère : centre de la tête)
+    const helmetG = new THREE.SphereGeometry(0.125, 10, 6, 0, Math.PI * 2, 0, Math.PI / 1.9);
+    helmetG.scale(0.95, 0.9, 1.25);
+    this.headM = new THREE.Mesh(mergeGeometries([
+      bake(new THREE.SphereGeometry(0.105, 10, 7), skin),
+      bake(helmetG, helmet, at(0, 0.05, -0.02, 0.35)),
+    ]), vcMat);
     this.arms = [];
     for (const side of [-1, 1]) {
       const up = limb(0.045, mJersey), lo = limb(0.038, mSkin);
       this.body.add(up, lo);
       this.arms.push({ side, up, lo });
     }
-    this.body.add(this.torso, this.headM, this.helmet);
+    this.body.add(this.torso, this.headM);
 
     this.eye = new THREE.Vector3();
+
+    // Toutes les pièces mobiles (roues, jambes, bras, buste, tête) sont
+    // recopiées chaque image dans UN maillage dynamique : 2 appels de dessin
+    // par coureur au lieu de 16. Les objets d'origine ne servent plus que de
+    // repères (os) et ne sont pas dessinés.
+    const movers = [...this.wheels, ...this.legs.flatMap((L) => [L.thigh, L.shin, L.foot]), this.torso, this.headM, ...this.arms.flatMap((A) => [A.up, A.lo])];
+    this.parts = [];
+    let total = 0;
+    for (const m of movers) {
+      const g = m.geometry.attributes.color ? (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry) : bake(m.geometry, m.material.color);
+      this.parts.push({ obj: m, pos: g.attributes.position.array, nor: (g.attributes.normal || g.computeVertexNormals() || g.attributes.normal).array, col: g.attributes.color.array, start: total });
+      total += g.attributes.position.count;
+      this.body.remove(m);
+    }
+    const dg = new THREE.BufferGeometry();
+    this.dPos = new Float32Array(total * 3);
+    this.dNor = new Float32Array(total * 3);
+    const dCol = new Float32Array(total * 3);
+    for (const pt of this.parts) dCol.set(pt.col, pt.start * 3);
+    dg.setAttribute("position", new THREE.BufferAttribute(this.dPos, 3).setUsage(THREE.DynamicDrawUsage));
+    dg.setAttribute("normal", new THREE.BufferAttribute(this.dNor, 3).setUsage(THREE.DynamicDrawUsage));
+    dg.setAttribute("color", new THREE.BufferAttribute(dCol, 3));
+    dg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.8, 0), 1.6);
+    this.dyn = new THREE.Mesh(dg, vcMat);
+    this.body.add(this.dyn);
+    this.hideHead = false;
     this.root.traverse((o) => { if (o.isMesh && o !== this.shadow) o.castShadow = !ghost; });
     this.phase = 0;
     this.wheelAngle = 0;
@@ -139,8 +173,7 @@ export class RiderModel {
 
   // vue embarquée : on masque la tête pour voir à travers les yeux
   setFirstPerson(on) {
-    this.headM.visible = !on;
-    this.helmet.visible = !on;
+    this.hideHead = on;
     if (this.shadow) this.shadow.visible = true;
   }
 
@@ -154,7 +187,6 @@ export class RiderModel {
     this.wheelAngle += (speed / 0.335) * dt;
     for (const w of this.wheels) w.rotation.x = this.wheelAngle;
     this.phase += (cadence / 60) * Math.PI * 2 * dt;
-    this.crank.rotation.x = this.phase;
     this.standing += ((posture > 0 ? 1 : 0) - this.standing) * Math.min(1, dt * 4);
     const aero = posture < 0 ? 1 : 0;
     this.body.rotation.z = lean;
@@ -166,39 +198,66 @@ export class RiderModel {
     const shoulder = this._v[1].set(sway * 0.5, 1.38 + st * 0.12 - aero * 0.17, 0.2 + st * 0.12 + aero * 0.06);
     place(this.torso, hip, shoulder);
     this.headM.position.set(sway * 0.6, shoulder.y + 0.1 - aero * 0.02, shoulder.z + 0.12);
-    this.helmet.position.set(sway * 0.6, shoulder.y + 0.15 - aero * 0.02, shoulder.z + 0.1);
-    this.helmet.rotation.x = 0.35 + aero * 0.3;
     // position des yeux (repère du corps) pour la vue à la première personne
     this.eye.set(sway * 0.6, shoulder.y + 0.13 - aero * 0.02, shoulder.z + 0.19);
 
     for (const L of this.legs) {
       const ang = this.phase + (L.side > 0 ? 0 : Math.PI);
       const pedal = tmpB.set(L.side * 0.11, 0.28 - Math.sin(ang) * 0.17, -0.04 + Math.cos(ang) * 0.17);
-      const h = new THREE.Vector3(L.side * 0.1 + sway * 0.3, hip.y, hip.z);
-      const knee = ik(h, pedal, 0.46, 0.48);
+      const h = tH.set(L.side * 0.1 + sway * 0.3, hip.y, hip.z);
+      const knee = ik(h, pedal, 0.46, 0.48, tK);
       place(L.thigh, h, knee);
       place(L.shin, knee, pedal);
       L.foot.position.set(pedal.x, pedal.y - 0.02, pedal.z + 0.03);
     }
     for (const A of this.arms) {
-      const sh = new THREE.Vector3(A.side * 0.18 + sway * 0.5, shoulder.y - 0.04, shoulder.z);
-      const hand = new THREE.Vector3(A.side * 0.19, 0.9 - aero * 0.06, 0.45 + aero * 0.02);
-      const elbow = new THREE.Vector3((sh.x + hand.x) / 2 + A.side * 0.05, (sh.y + hand.y) / 2 - 0.03 - aero * 0.05, (sh.z + hand.z) / 2 - 0.02);
+      const sh = tH.set(A.side * 0.18 + sway * 0.5, shoulder.y - 0.04, shoulder.z);
+      const hand = tK.set(A.side * 0.19, 0.9 - aero * 0.06, 0.45 + aero * 0.02);
+      const elbow = tE.set((sh.x + hand.x) / 2 + A.side * 0.05, (sh.y + hand.y) / 2 - 0.03 - aero * 0.05, (sh.z + hand.z) / 2 - 0.02);
       place(A.up, sh, elbow);
       place(A.lo, elbow, hand);
     }
+    this.writeParts();
+  }
+
+  writeParts() {
+    const P = this.dPos, N = this.dNor, e = tM.elements;
+    for (const pt of this.parts) {
+      const o = pt.obj;
+      const n = pt.pos.length / 3;
+      if (o === this.headM && this.hideHead) { P.fill(0, pt.start * 3, (pt.start + n) * 3); continue; }
+      o.updateMatrix();
+      tM.copy(o.matrix);
+      const src = pt.pos, sn = pt.nor;
+      for (let i = 0, k = pt.start * 3; i < src.length; i += 3, k += 3) {
+        const x = src[i], y = src[i + 1], z = src[i + 2];
+        P[k] = e[0] * x + e[4] * y + e[8] * z + e[12];
+        P[k + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+        P[k + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+        const a = sn[i], b = sn[i + 1], c = sn[i + 2];
+        let nx = e[0] * a + e[4] * b + e[8] * c, ny = e[1] * a + e[5] * b + e[9] * c, nz = e[2] * a + e[6] * b + e[10] * c;
+        const l = Math.hypot(nx, ny, nz) || 1;
+        N[k] = nx / l; N[k + 1] = ny / l; N[k + 2] = nz / l;
+      }
+    }
+    this.dyn.geometry.attributes.position.needsUpdate = true;
+    this.dyn.geometry.attributes.normal.needsUpdate = true;
   }
 }
 
-// genou par cinématique inverse à deux segments (le genou part vers l'avant)
-function ik(hip, foot, l1, l2) {
-  const d = new THREE.Vector3().subVectors(foot, hip);
+const tM = new THREE.Matrix4();
+
+// genou par cinématique inverse à deux segments (le genou part vers l'avant) ;
+// sans allocation, pour ménager le ramasse-miettes
+const tH = new THREE.Vector3(), tK = new THREE.Vector3(), tE = new THREE.Vector3(), tD = new THREE.Vector3();
+function ik(hip, foot, l1, l2, out) {
+  const d = tD.subVectors(foot, hip);
   const dist = Math.min(d.length(), l1 + l2 - 1e-3);
   const a = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist);
   const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
-  const dir = d.clone().normalize();
+  d.normalize();
   // perpendiculaire dans le plan sagittal (y, z), orientée vers l'avant
-  const perp = new THREE.Vector3(0, -dir.z, dir.y);
-  if (perp.z < 0) perp.negate();
-  return hip.clone().addScaledVector(dir, a).addScaledVector(perp, h);
+  let py = -d.z, pz = d.y;
+  if (pz < 0) { py = -py; pz = -pz; }
+  return out.set(hip.x + d.x * a, hip.y + d.y * a + py * h, hip.z + d.z * a + pz * h);
 }

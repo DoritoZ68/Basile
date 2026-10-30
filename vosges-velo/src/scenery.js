@@ -210,20 +210,22 @@ function ribbon(r, a, b, edge, mat, uvs) {
 
 // ------------------------------------------------------------ arbres
 // sapin : étages de branches irréguliers, plus sombres vers le bas et l'intérieur
-function conifer() {
+function conifer(near) {
   const parts = [];
-  const trunk = new THREE.CylinderGeometry(0.008, 0.014, 0.3, 5);
-  trunk.translate(0, 0.15, 0);
-  paint(trunk, 0x4a3426);
-  parts.push(trunk);
+  if (near) {
+    const trunk = new THREE.CylinderGeometry(0.008, 0.014, 0.3, 5, 1, true);
+    trunk.translate(0, 0.15, 0);
+    paint(trunk, 0x4a3426);
+    parts.push(trunk);
+  }
   const R = rng(3);
-  const tiers = [[0.16, 0.3, 0.1], [0.14, 0.28, 0.27], [0.115, 0.26, 0.43], [0.09, 0.24, 0.58], [0.06, 0.25, 0.72]];
+  const tiers = near ? [[0.155, 0.36, 0.12], [0.12, 0.33, 0.37], [0.08, 0.32, 0.6]] : [[0.14, 0.86, 0.14]];
   for (const [rad, h, y] of tiers) {
-    const c = new THREE.ConeGeometry(rad, h, 8, 1, true);
-    // bords de branches dentelés
+    const c = new THREE.ConeGeometry(rad, h, near ? 7 : 5, 1, false);
+    // bords de branches irréguliers
     const pa = c.attributes.position;
     for (let i = 0; i < pa.count; i++) {
-      if (pa.getY(i) < 0) {
+      if (pa.getY(i) < 0 && near) {
         const k = 0.85 + R() * 0.3;
         pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * k); pa.setY(i, pa.getY(i) - R() * 0.03);
       }
@@ -233,25 +235,27 @@ function conifer() {
     paintGrad(c, 0x1f3a22, 0x3c6338);
     parts.push(c);
   }
-  return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p));
+  return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
 }
 
-// feuillu (hêtre, chêne) : houppier en plusieurs masses, éclairé par le haut
-function broadleaf() {
+// feuillu (hêtre, chêne) : houppier en deux masses, éclairé par le haut
+function broadleaf(near) {
   const parts = [];
-  const trunk = new THREE.CylinderGeometry(0.014, 0.024, 0.5, 5);
-  trunk.translate(0, 0.25, 0);
-  paint(trunk, 0x5a4636);
-  parts.push(trunk);
-  const crowns = [[0, 0.58, 0, 0.21], [0.11, 0.72, 0.05, 0.16], [-0.09, 0.76, -0.06, 0.15], [0.02, 0.86, -0.02, 0.12], [-0.06, 0.62, 0.12, 0.13]];
+  if (near) {
+    const trunk = new THREE.CylinderGeometry(0.014, 0.024, 0.5, 5, 1, true);
+    trunk.translate(0, 0.25, 0);
+    paint(trunk, 0x5a4636);
+    parts.push(trunk);
+  }
+  const crowns = near ? [[0, 0.6, 0, 0.23], [0.06, 0.8, -0.03, 0.16]] : [[0, 0.66, 0, 0.26]];
   for (const [x, y, z, r] of crowns) {
-    const sp = new THREE.IcosahedronGeometry(r, 1);
-    sp.scale(1, 0.95, 1);
+    const sp = near ? new THREE.IcosahedronGeometry(r, 0) : new THREE.OctahedronGeometry(r, 0);
+    sp.scale(1, near ? 0.95 : 1.15, 1);
     sp.translate(x, y, z);
     paintGrad(sp, 0x34502a, 0x6f8f45);
     parts.push(sp);
   }
-  return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p));
+  return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
 }
 
 function vine() {
@@ -290,8 +294,10 @@ export class Forest {
     this.veg = data.veg;
     this.meta = data.meta;
     this.roadIndex = roadIndex;
-    this.geos = { conifer: conifer(), broadleaf: broadleaf(), vine: vine() };
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    // deux niveaux de détail : près (~50 triangles) et loin (8 à 10 triangles)
+    this.geos = { conifer: conifer(true), broadleaf: broadleaf(true), vine: vine() };
+    this.far = { conifer: conifer(false), broadleaf: broadleaf(false) };
+    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.group = new THREE.Group();
     this.chunks = [];
   }
@@ -303,11 +309,6 @@ export class Forest {
     if (px < 0 || py < 0 || px >= v.w || py >= v.h) return [0, 0, 0];
     const k = (py * v.w + px) * 4;
     return [v.px[k], v.px[k + 1], v.px[k + 2]];
-  }
-
-  clear() {
-    for (const c of this.chunks) for (const m of c.meshes) { m.dispose(); this.group.remove(m); }
-    this.chunks = [];
   }
 
   // plante les arbres dans un couloir autour du parcours
@@ -383,12 +384,12 @@ export class Forest {
           lists[type].push([tmp.matrix.clone(), 0.75 + R() * 0.45]);
         }
       }
-      const chunk = { x: cx / Math.max(1, cnt), z: cz / Math.max(1, cnt), meshes: [] };
+      const chunk = { x: cx / Math.max(1, cnt), z: cz / Math.max(1, cnt), near: [], far: [], vines: [] };
       for (const type of Object.keys(lists)) {
         const L = lists[type];
         if (!L.length) continue;
         const im = new THREE.InstancedMesh(this.geos[type], this.mat, L.length);
-        im.castShadow = true;
+        im.castShadow = type !== "vine";
         L.forEach(([m, shade], i) => {
           im.setMatrixAt(i, m);
           col.setRGB(shade, shade * (0.95 + R() * 0.1), shade * (0.9 + R() * 0.15));
@@ -398,17 +399,40 @@ export class Forest {
         im.computeBoundingSphere();
         im.matrixAutoUpdate = false;
         this.group.add(im);
-        chunk.meshes.push(im);
+        if (type === "vine") { chunk.vines.push(im); continue; }
+        chunk.near.push(im);
+        // version simplifiée qui partage positions et couleurs
+        const fm = new THREE.InstancedMesh(this.far[type], this.mat, L.length);
+        fm.instanceMatrix = im.instanceMatrix;
+        fm.instanceColor = im.instanceColor;
+        fm.boundingSphere = im.boundingSphere;
+        fm.matrixAutoUpdate = false;
+        fm.visible = false;
+        this.group.add(fm);
+        chunk.far.push(fm);
       }
       this.chunks.push(chunk);
     }
   }
 
-  update(camPos, dist) {
+  // dist : distance d'affichage ; nearDist : en deçà, arbres détaillés
+  update(camPos, dist, nearDist = 150) {
     for (const c of this.chunks) {
-      const vis = Math.hypot(c.x - camPos.x, c.z - camPos.z) < dist + 200;
-      for (const m of c.meshes) m.visible = vis;
+      const d = Math.hypot(c.x - camPos.x, c.z - camPos.z) - 140;
+      const vis = d < dist;
+      const near = d < nearDist;
+      for (const m of c.near) m.visible = vis && near;
+      for (const m of c.far) m.visible = vis && !near;
+      for (const m of c.vines) m.visible = d < nearDist * 1.6;
     }
+  }
+
+  clear() {
+    for (const c of this.chunks) {
+      for (const m of [...c.near, ...c.vines]) { m.dispose(); this.group.remove(m); }
+      for (const m of c.far) this.group.remove(m);
+    }
+    this.chunks = [];
   }
 }
 
