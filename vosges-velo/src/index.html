@@ -38,8 +38,17 @@
         <div id="route-list" class="route-list"></div>
         <canvas id="menu-profile" class="menu-profile"></canvas>
         <div id="spawn" class="spawn" hidden>
-          <p class="opt-note">Cliquez sur la carte pour choisir où apparaître, ou choisissez un village. Le vélo est posé sur la route, la rue ou la piste cyclable la plus proche.</p>
-          <canvas id="spawn-map" class="spawn-map"></canvas>
+          <p class="opt-note">Zoomez (molette ou +/−), déplacez la carte en la glissant, puis cliquez à l'endroit exact où partir. Le vélo est posé sur la route, la rue ou la piste cyclable la plus proche, dans son sens.</p>
+          <div class="map-wrap">
+            <canvas id="spawn-map" class="spawn-map"></canvas>
+            <div class="map-btns" id="spawn-btns">
+              <button data-z="in" title="Zoomer">+</button>
+              <button data-z="out" title="Dézoomer">−</button>
+              <button data-z="pin" title="Revenir au point de départ">⌖</button>
+              <button data-z="all" title="Toute la zone">⤢</button>
+            </div>
+          </div>
+          <p id="spawn-info" class="spawn-info"></p>
           <div id="spawn-towns" class="spawn-towns"></div>
         </div>
         <div id="opts-routes"></div>
@@ -59,7 +68,8 @@
             <dt>C</dt><dd>Changer de caméra</dd>
             <dt>Souris</dt><dd>Regarder autour (clic pour capturer, Échap pour libérer)</dd>
             <dt>R / double-clic</dt><dd>Recentrer le regard</dd>
-            <dt>Molette</dt><dd>Zoomer / dézoomer la caméra</dd>
+            <dt>Molette</dt><dd>Zoomer / dézoomer la caméra (ou la carte sous la souris)</dd>
+            <dt>M</dt><dd>Carte : petite → grande → masquée</dd>
             <dt>Échap / P</dt><dd>Pause</dd>
             <dt>Manette</dt><dd>Gâchettes : effort / frein, stick : direction</dd>
           </dl>
@@ -77,7 +87,17 @@
     <div class="road" id="h-road"></div>
     <div class="town" id="h-town"></div>
   </div>
-  <canvas id="minimap" class="minimap glass"></canvas>
+  <canvas id="minimap" class="minimap glass" title="Agrandir la carte (M)"></canvas>
+  <div id="bigmap" class="bigmap glass" hidden>
+    <canvas id="bigmap-cv"></canvas>
+    <div class="map-btns">
+      <button data-z="in" title="Zoomer">+</button>
+      <button data-z="out" title="Dézoomer">−</button>
+      <button data-z="me" title="Recentrer sur moi">⌖</button>
+      <button data-z="close" title="Réduire (M)">✕</button>
+    </div>
+    <p class="map-hint" id="bigmap-hint">Molette : zoom · glisser : se déplacer · M : réduire / masquer</p>
+  </div>
   <div id="toast" class="toast"></div>
   <div id="warn" class="warn"></div>
   <div id="countdown" class="countdown"></div>

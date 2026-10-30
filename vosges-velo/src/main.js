@@ -7,6 +7,7 @@ import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
 import { makeRider, step, computeDrafts, aiThink, gearLabel, G } from "./physics.js";
 import { Sound } from "./audio.js";
+import { MapView } from "./map.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt1 = (v) => v.toFixed(1).replace(".", ",");
@@ -126,6 +127,7 @@ addEventListener("resize", () => {
 const sound = new Sound();
 sound.setEnabled(settings.sound);
 
+let spawnMap, miniMap, bigMap;
 let D, hf, ground, roads, roadMats, terrain, forest, roadIndex, netStream, buildStream, treeStream, signs = new THREE.Group();
 // distance (m) jusqu'à laquelle le relief grossier est masqué le long des routes
 const discardU = { value: 1600 };
@@ -377,13 +379,41 @@ function buildMenu() {
     b.onclick = () => { settings.spawn = { x: t.x, z: t.z, name: t.name }; saveSettings(); drawSpawn(); };
     towns.appendChild(b);
   }
-  const sm = $("spawn-map");
-  sm.addEventListener("click", (e) => {
-    const rect = sm.getBoundingClientRect(), m = D.meta;
-    const u = (e.clientX - rect.left) / rect.width, v = (e.clientY - rect.top) / rect.height;
-    settings.spawn = { x: m.x_min + u * (m.x_max - m.x_min), z: m.z_min + v * (m.z_max - m.z_min), name: "" };
-    saveSettings();
-    drawSpawn();
+  const mapWorld = { meta: D.meta, ortho: D.ortho, lines: ground.lines, towns: D.towns };
+  spawnMap = new MapView($("spawn-map"), mapWorld, {
+    onPick: (x, z) => { settings.spawn = { x, z, name: "" }; saveSettings(); drawSpawn(); },
+    onChange: () => drawSpawn(),
+  });
+  $("spawn-btns").querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      const sp = settings.spawn || D.towns[0];
+      if (b.dataset.z === "in") spawnMap.zoomAt(0.5);
+      else if (b.dataset.z === "out") spawnMap.zoomAt(2);
+      else if (b.dataset.z === "pin") { spawnMap.center(sp.x, sp.z); spawnMap.span = Math.min(spawnMap.span, 1500); }
+      else { spawnMap.span = spawnMap.maxSpan; spawnMap.center(D.meta.x_min + spawnMap.W / 2, D.meta.z_min + spawnMap.D / 2); }
+      drawSpawn();
+    };
+  });
+  // cartes pendant la sortie : petite (suit le coureur) et grande
+  miniMap = new MapView($("minimap"), mapWorld, { onPick: () => setMapSize(2) });
+  miniMap.span = 1400;
+  bigMap = new MapView($("bigmap-cv"), mapWorld, {
+    onDouble: (x, z) => {
+      if (!game.free || !game.player) return;
+      placePlayerFree(game.player, x, z);
+      game.player.v = 0;
+      toast(`Téléporté${placeNames(game.player.x, game.player.z).town ? " à " + placeNames(game.player.x, game.player.z).town : ""}`, 2.5);
+    },
+  });
+  bigMap.span = 4000;
+  $("bigmap").querySelectorAll(".map-btns button").forEach((b) => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      if (b.dataset.z === "in") bigMap.zoomAt(0.5);
+      else if (b.dataset.z === "out") bigMap.zoomAt(2);
+      else if (b.dataset.z === "me") bigMap.follow = true;
+      else setMapSize(1);
+    };
   });
   game.sensRow = sens;
   updateModeUi();
@@ -451,8 +481,49 @@ function buildMenu() {
 
 function drawSpawn() {
   const sp = settings.spawn || D.towns[0];
-  drawFreeMap($("spawn-map"), sp.x, sp.z, 0, false);
+  spawnMap.draw([{ x: sp.x, z: sp.z, color: "#ff8a1c", size: 7, pin: true }]);
   $("spawn-towns").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.textContent === sp.name));
+  // nom de la voie où le vélo sera posé
+  const q = ground.road(sp.x, sp.z, 80);
+  let label = "aucune voie à moins de 80 m : la plus proche sera choisie";
+  if (q) {
+    const L = q.line, px = L.x[q.k], pz = L.z[q.k];
+    label = placeNames(px, pz).name || "voie sans nom";
+  }
+  const town = q ? placeNames(q.line.x[q.k], q.line.z[q.k]).town : "";
+  $("spawn-info").textContent = `Départ : ${[label, town].filter(Boolean).join(" · ")}`;
+}
+
+// carte en course : 0 masquée, 1 petite, 2 grande
+function setMapSize(n) {
+  game.mapSize = n;
+  $("minimap").hidden = n !== 1;
+  $("bigmap").hidden = n !== 2;
+  $("bigmap-hint").textContent = game.free
+    ? "Molette : zoom · glisser : se déplacer · double-clic : s'y téléporter · M : masquer"
+    : "Molette : zoom · glisser : se déplacer · M : masquer";
+  if (n === 2) { bigMap.follow = true; bigMap.span = Math.min(bigMap.span, 6000); }
+}
+
+function drawRideMaps() {
+  const p = game.player;
+  if (!p) return;
+  const marks = [];
+  if (game.ghost) { const g = game.route.sample(game.ghost.s); marks.push({ x: g.x, z: g.z, color: "rgba(255,255,255,0.6)", size: 4 }); }
+  for (const r of game.riders) {
+    if (r.isPlayer) continue;
+    const q = game.route.sample(Math.min(r.s, game.route.length));
+    marks.push({ x: q.x - q.dz * r.o, z: q.z + q.dx * r.o, color: r.color, size: 4 });
+  }
+  marks.push({ x: p.x, z: p.z, color: "#fff", size: 6, heading: p.yaw });
+  const routeLine = game.free ? null : game.route;
+  if (game.mapSize === 1) {
+    miniMap.center(p.x, p.z);
+    miniMap.draw(marks, routeLine);
+  } else if (game.mapSize === 2) {
+    if (bigMap.follow) bigMap.center(p.x, p.z);
+    bigMap.draw(marks, routeLine);
+  }
 }
 
 function updateModeUi() {
@@ -505,7 +576,6 @@ function selectRoute(id, reverse) {
   buildRouteSigns();
   renderRouteList();
   drawProfile($("menu-profile"), game.route, null);
-  prepareMinimap();
   game.menuT = 0;
   game.menuSnap = true;
 }
@@ -658,160 +728,6 @@ function drawProfileMarkers(g, route, riders, X, Y) {
   }
 }
 
-// fond de carte de toute la zone : photo aérienne + réseau routier et cyclable
-let areaMap = null;
-function areaMapCanvas() {
-  if (areaMap) return areaMap;
-  const S = 1400, m = D.meta;
-  const c = document.createElement("canvas");
-  c.width = c.height = S;
-  const g = c.getContext("2d");
-  g.drawImage(D.orthoSmall, 0, 0, S, S);
-  g.fillStyle = "rgba(0,0,0,0.25)";
-  g.fillRect(0, 0, S, S);
-  const W = m.x_max - m.x_min, Dd = m.z_max - m.z_min;
-  const X = (x) => ((x - m.x_min) / W) * S, Z = (z) => ((z - m.z_min) / Dd) * S;
-  const styles = { 0: ["#f2c230", 1.6], 1: ["rgba(255,255,255,0.75)", 0.8], 2: ["#3ddc84", 1.8], 3: ["rgba(205,170,120,0.7)", 0.7] };
-  for (const cls of [3, 1, 0, 2]) {
-    g.strokeStyle = styles[cls][0];
-    g.lineWidth = styles[cls][1];
-    g.beginPath();
-    for (const L of ground.lines) {
-      if (L.route || L.cls !== cls) continue;
-      g.moveTo(X(L.x[0]), Z(L.z[0]));
-      for (let k = 1; k < L.x.length; k++) g.lineTo(X(L.x[k]), Z(L.z[k]));
-    }
-    g.stroke();
-  }
-  areaMap = { canvas: c, S, X, Z, W, Dd };
-  return areaMap;
-}
-
-// dessine la carte de la zone : entière, ou centrée sur (x, z) sur span m
-function drawFreeMap(cv, x, z, span, centered) {
-  const A = areaMapCanvas(), m = D.meta;
-  const dpr = Math.min(2, devicePixelRatio);
-  const w = cv.clientWidth, h = cv.clientHeight || w;
-  if (!w) return;
-  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const g = cv.getContext("2d");
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, cv.width, cv.height);
-  g.save();
-  g.beginPath();
-  g.roundRect ? g.roundRect(0, 0, cv.width, cv.height, 12 * dpr) : g.rect(0, 0, cv.width, cv.height);
-  g.clip();
-  let sx = 0, sy = 0, sw = A.S, sh = A.S;
-  if (centered) {
-    sw = sh = (span / A.W) * A.S;
-    sx = A.X(x) - sw / 2; sy = A.Z(z) - sh / 2;
-  }
-  g.fillStyle = "#1c2a22";
-  g.fillRect(0, 0, cv.width, cv.height);
-  g.drawImage(A.canvas, sx, sy, sw, sh, 0, 0, cv.width, cv.height);
-  const k = cv.width / sw;
-  const P = (wx, wz) => [(A.X(wx) - sx) * k, (A.Z(wz) - sy) * k];
-  // noms des villages à taille fixe
-  g.font = `600 ${11 * dpr}px system-ui, sans-serif`;
-  g.fillStyle = "#fff";
-  g.shadowColor = "#000";
-  g.shadowBlur = 3 * dpr;
-  for (const t of D.towns) {
-    const [tx, ty] = P(t.x, t.z);
-    if (tx > -60 && ty > -20 && tx < cv.width + 60 && ty < cv.height + 20) g.fillText(t.name, tx - g.measureText(t.name).width / 2, ty);
-  }
-  g.shadowBlur = 0;
-  if (x !== undefined) {
-    const [mx, my] = P(x, z);
-    g.fillStyle = "#fff";
-    g.strokeStyle = "#000";
-    g.lineWidth = 2 * dpr;
-    g.beginPath();
-    if (centered && game.player) {
-      const dx = Math.sin(game.player.yaw), dz = Math.cos(game.player.yaw);
-      g.moveTo(mx + dx * 10 * dpr, my + dz * 10 * dpr);
-      g.lineTo(mx - dz * 6 * dpr - dx * 5 * dpr, my + dx * 6 * dpr - dz * 5 * dpr);
-      g.lineTo(mx + dz * 6 * dpr - dx * 5 * dpr, my - dx * 6 * dpr - dz * 5 * dpr);
-      g.closePath();
-    } else g.arc(mx, my, 7 * dpr, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-  }
-  g.restore();
-  return { sx, sy, sw, k };
-}
-
-const mini = { img: null, x0: 0, z0: 0, size: 1 };
-function prepareMinimap() {
-  const r = game.route, m = D.meta;
-  let xa = 1e9, xb = -1e9, za = 1e9, zb = -1e9;
-  for (let i = 0; i < r.n; i++) { xa = Math.min(xa, r.x[i]); xb = Math.max(xb, r.x[i]); za = Math.min(za, r.z[i]); zb = Math.max(zb, r.z[i]); }
-  const size = Math.max(xb - xa, zb - za) * 1.15 + 600;
-  const cx = (xa + xb) / 2, cz = (za + zb) / 2;
-  mini.x0 = cx - size / 2; mini.z0 = cz - size / 2; mini.size = size;
-  const c = document.createElement("canvas");
-  c.width = c.height = 380;
-  const g = c.getContext("2d");
-  const W = m.x_max - m.x_min, Dd = m.z_max - m.z_min;
-  const sx = ((mini.x0 - m.x_min) / W) * D.orthoSmall.width, sy = ((mini.z0 - m.z_min) / Dd) * D.orthoSmall.height;
-  g.drawImage(D.orthoSmall, sx, sy, (size / W) * D.orthoSmall.width, (size / Dd) * D.orthoSmall.height, 0, 0, 380, 380);
-  g.fillStyle = "rgba(0,0,0,0.2)";
-  g.fillRect(0, 0, 380, 380);
-  const P = (x, z) => [((x - mini.x0) / size) * 380, ((z - mini.z0) / size) * 380];
-  g.lineJoin = "round";
-  g.lineWidth = 7;
-  g.strokeStyle = "rgba(0,0,0,0.55)";
-  const path = () => { g.beginPath(); for (let i = 0; i < r.n; i += 3) { const [x, y] = P(r.x[i], r.z[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); };
-  path();
-  g.lineWidth = 3.5;
-  g.strokeStyle = "#e8b730";
-  path();
-  g.font = "bold 15px system-ui, sans-serif";
-  g.fillStyle = "#fff";
-  g.shadowColor = "#000";
-  g.shadowBlur = 4;
-  for (const t of D.towns) {
-    const [x, y] = P(t.x, t.z);
-    if (x > 10 && y > 14 && x < 370 && y < 370) g.fillText(t.name, x - 20, y);
-  }
-  g.fillText("N ↑", 340, 22);
-  mini.img = c;
-}
-
-function drawMinimap() {
-  const cv = $("minimap");
-  const dpr = Math.min(2, devicePixelRatio);
-  const w = cv.clientWidth;
-  if (cv.width !== Math.round(w * dpr)) { cv.width = cv.height = Math.round(w * dpr); }
-  const g = cv.getContext("2d");
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.clearRect(0, 0, cv.width, cv.height);
-  g.save();
-  g.beginPath();
-  g.roundRect ? g.roundRect(0, 0, cv.width, cv.height, 14 * dpr) : g.rect(0, 0, cv.width, cv.height);
-  g.clip();
-  g.drawImage(mini.img, 0, 0, cv.width, cv.height);
-  const k = cv.width / mini.size;
-  for (const r of [...game.riders].reverse()) {
-    const p = game.route.sample(r.s);
-    const x = (p.x - mini.x0) * k, y = (p.z - mini.z0) * k;
-    g.fillStyle = r.isPlayer ? "#fff" : r.color;
-    g.beginPath();
-    g.arc(x, y, (r.isPlayer ? 5 : 3.5) * dpr, 0, Math.PI * 2);
-    g.fill();
-    if (r.isPlayer) {
-      g.strokeStyle = "#000"; g.lineWidth = 2 * dpr; g.stroke();
-      g.beginPath();
-      g.moveTo(x + p.dx * 12 * dpr, y + p.dz * 12 * dpr);
-      g.lineTo(x - p.dz * 5 * dpr, y + p.dx * 5 * dpr);
-      g.lineTo(x + p.dz * 5 * dpr, y - p.dx * 5 * dpr);
-      g.fillStyle = "#fff";
-      g.fill();
-    }
-  }
-  g.restore();
-}
-
 // ------------------------------------------------------------ course
 function clearRiders() {
   for (const m of game.models) scene.remove(m.root);
@@ -880,6 +796,7 @@ function startRide() {
   game.state = "countdown";
   game.countdown = settings.mode === "free" || game.free ? 0.01 : 3.99;
   $("relocate").hidden = !game.free;
+  setMapSize(game.mapSize ?? 1);
   $("profile").hidden = game.free;
   $("h-leftlabel").textContent = game.free ? "Distance" : "Reste";
   if (game.free) {
@@ -985,7 +902,7 @@ addEventListener("keydown", (e) => {
   const L = (e.key || "").toLowerCase();
   if (L === "x" && p) p.tuck = !p.tuck;
   if (e.code === "KeyR") { look.yaw = 0; look.pitch = 0; }
-  if (e.code === "KeyM") { settings.sound = !settings.sound; sound.setEnabled(settings.sound); saveSettings(); }
+  if (L === "m" && p && game.state !== "menu") setMapSize({ 1: 2, 2: 0, 0: 1 }[game.mapSize ?? 1]);
   if ((e.code === "ArrowUp" || L === "e") && p) p.target = Math.min(1500, p.target + EFFORT_STEP);
   if ((e.code === "ArrowDown" || L === "a") && p) p.target = Math.max(0, p.target - EFFORT_STEP);
 });
@@ -1577,14 +1494,14 @@ function updateHud(dt) {
     const nm = placeNames(p.x, p.z);
     $("h-road").textContent = nm.name;
     $("h-town").textContent = nm.town;
-    drawFreeMap($("minimap"), p.x, p.z, 1400, true);
+    drawRideMaps();
   } else {
     $("h-road").textContent = r.roadName(p.s) || "";
     const town = townAt(r, game.crossings, p.s);
     $("h-town").textContent = town ? town : "";
     const list = game.ghost ? [...game.riders, game.ghost] : game.riders;
     drawProfile($("profile"), r, list);
-    drawMinimap();
+    drawRideMaps();
   }
   const air = p.v - (game.env.windX * p.free.dx + game.env.windZ * p.free.dz);
   sound.update(0.1, air, p.power < 5, p.v);

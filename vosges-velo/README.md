@@ -30,7 +30,7 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 | R / double-clic | Recentrer le regard |
 | Molette | Zoomer / dézoomer (chaque caméra garde son zoom) |
 | Échap / P | Pause |
-| M | Son |
+| M | Carte : petite → grande → masquée (molette pour zoomer, glisser pour se déplacer ; en mode libre, double-clic pour s'y téléporter) |
 
 Manette : gâchette droite pour l'effort, gauche pour freiner, stick pour
 l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
@@ -49,7 +49,7 @@ Chaque parcours se joue aussi en sens inverse (descentes).
 
 Modes : course contre 5 adversaires, contre-la-montre face au fantôme de son
 record, balade sur un parcours, et mode **libre** : on choisit son point de
-départ sur la carte (ou un village) et on roule où l'on veut sur les
+départ sur la carte (zoom à la molette ou aux boutons, déplacement en glissant, clic à l'endroit exact) ou par village, et on roule où l'on veut sur les
 24 000 tronçons de routes, rues, routes empierrées, pistes cyclables et
 voies vertes de la zone ; rues, arbres et bâtiments se construisent autour
 du cycliste au fil du trajet. Pause > « Changer de lieu » pour repartir
