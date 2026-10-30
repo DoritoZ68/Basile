@@ -138,7 +138,7 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer) {
           vec3 c = diffuseColor.rgb;
           float l = dot(c, vec3(0.299, 0.587, 0.114));
           c = mix(vec3(l), c, 1.35);
-          diffuseColor.rgb = max(c, 0.0) * det * 1.3;
+          diffuseColor.rgb = max(c, 0.0) * det * (1.45 - 0.55 * l);
         }`,
       );
   };
@@ -239,4 +239,39 @@ export class Terrain {
   dispose() {
     for (const c of this.chunks) for (const g of Object.values(c.geos)) g.dispose();
   }
+}
+
+// Grand paysage autour de la zone de jeu (~120 x 95 km, maille 500 m).
+// À l'intérieur de la zone détaillée, il passe juste sous le relief fin.
+export function buildOuterTerrain(meta, raw, hf, material) {
+  const { nx, nz } = meta;
+  const w = meta.x_max - meta.x_min, d = meta.z_max - meta.z_min;
+  const pos = new Float32Array(nx * nz * 3);
+  const uv = new Float32Array(nx * nz * 2);
+  const h = new Float32Array(nx * nz);
+  const inside = (x, z, m) => x > hf.x0 + m && x < hf.x0 + hf.w - m && z > hf.z0 + m && z < hf.z0 + hf.d - m;
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      const x = meta.x_min + (w * i) / (nx - 1), z = meta.z_min + (d * j) / (nz - 1);
+      h[k] = inside(x, z, 0) ? hf.height(x, z) - (inside(x, z, 400) ? 60 : 12) : raw[k] / 10;
+      pos[k * 3] = x; pos[k * 3 + 1] = h[k]; pos[k * 3 + 2] = z;
+      uv[k * 2] = i / (nx - 1); uv[k * 2 + 1] = 1 - j / (nz - 1);
+    }
+  }
+  const idx = [];
+  for (let j = 0; j < nz - 1; j++) {
+    for (let i = 0; i < nx - 1; i++) {
+      const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1;
+      idx.push(a, c, b, b, c, e);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, material);
+  m.matrixAutoUpdate = false;
+  return m;
 }

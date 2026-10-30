@@ -17,6 +17,8 @@ function dataScript() {
   const data = {
     world: gz("world.json"),
     terrain: gz("terrain.bin"),
+    outer: gz("outer.bin"),
+    outerImg: img("outer.jpg", "image/jpeg"),
     buildings: gz("buildings.json"),
     ortho: img("ortho.jpg", "image/jpeg"),
     orthoSmall: img("ortho-1k.jpg", "image/jpeg"),

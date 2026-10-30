@@ -27,13 +27,15 @@ export async function loadData(onProgress) {
   const world = JSON.parse(new TextDecoder().decode(await gunzip(raw.world)));
   onProgress(0.2, "Relief IGN RGE ALTI…");
   const terrain = new Uint16Array(await gunzip(raw.terrain));
+  const outer = new Uint16Array(await gunzip(raw.outer));
   onProgress(0.35, "Bâtiments BD TOPO…");
   const buildings = JSON.parse(new TextDecoder().decode(await gunzip(raw.buildings)));
   onProgress(0.5, "Photographies aériennes…");
-  const [ortho, orthoSmall, vegetation] = await Promise.all([
+  const [ortho, orthoSmall, vegetation, outerImg] = await Promise.all([
     loadImage(raw.ortho),
     loadImage(raw.orthoSmall),
     loadImage(raw.vegetation),
+    loadImage(raw.outerImg),
   ]);
   // la carte de végétation est lue pixel par pixel pour planter les arbres
   const c = document.createElement("canvas");
@@ -42,5 +44,5 @@ export async function loadData(onProgress) {
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(vegetation, 0, 0);
   const veg = { w: c.width, h: c.height, px: ctx.getImageData(0, 0, c.width, c.height).data };
-  return { ...world, terrain, buildings, ortho, orthoSmall, veg };
+  return { ...world, outerMeta: world.outer, terrain, outer, outerImg, buildings, ortho, orthoSmall, veg };
 }

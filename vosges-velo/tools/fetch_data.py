@@ -168,7 +168,7 @@ class Proj:
         return (self.lat0 - z / self.kz, self.lon0 + x / self.kx)
 
 
-def elevations(points, resource="ign_rge_alti_wld"):
+def elevations(points, resource="ign_rge_alti_wld", fill=True):
     """points: liste de (lat, lon) -> altitudes (m)."""
     chunks = [points[i:i + 2000] for i in range(0, len(points), 2000)]
 
@@ -192,7 +192,7 @@ def elevations(points, resource="ign_rge_alti_wld"):
             if i % 20 == 0:
                 print(f"  altitudes {len(out)}/{len(points)}")
     # trous éventuels (-99999) : on reprend la valeur voisine
-    for i, z in enumerate(out):
+    for i, z in enumerate(out if fill else []):
         if z is None or z < -1000:
             out[i] = out[i - 1] if i else 0
     return out

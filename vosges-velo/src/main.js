@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { loadData } from "./data.js";
-import { Heightfield, Terrain, makeTerrainMaterial } from "./terrain.js";
-import { RoadIndex, buildRoads, Forest, buildBuildings, buildLandmarks, buildSky, textSign, signPost, gantry } from "./scenery.js";
+import { Heightfield, Terrain, makeTerrainMaterial, buildOuterTerrain } from "./terrain.js";
+import { RoadIndex, buildRoads, Forest, buildBuildings, buildLandmarks, buildSky, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
 import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
 import { makeRider, step, computeDrafts, aiThink, gearLabel, G } from "./physics.js";
@@ -20,7 +20,7 @@ const fmtTime = (t) => {
 const DEFAULTS = {
   route: "grand-ballon-willer", reverse: false, mode: "race",
   mass: 72, ftp: 230, jersey: "#d8323c", level: "amateur", assist: true,
-  time: "matin", weather: "beau", wind: "none",
+  time: "matin", weather: "beau", wind: "none", timescale: 1,
   quality: "auto", sound: true,
 };
 const settings = { ...DEFAULTS, ...readLS("vv-settings", {}) };
@@ -84,6 +84,8 @@ sound.setEnabled(settings.sound);
 
 let D, hf, terrain, forest, buildings, roadIndex, signs = new THREE.Group();
 scene.add(signs);
+const crowd = new Crowd();
+scene.add(crowd.group);
 
 // ------------------------------------------------------------ état de jeu
 const game = {
@@ -107,6 +109,7 @@ const game = {
   env: { windX: 0, windZ: 0 },
   fogBase: { near: 2000, far: 16000 },
 };
+const START_S = 12;
 const CAMS = ["Poursuite", "Embarquée", "Moto TV", "Drone"];
 
 // ------------------------------------------------------------ chargement
@@ -121,6 +124,7 @@ const CAMS = ["Poursuite", "Embarquée", "Moto TV", "Drone"];
     const mat = makeTerrainMaterial(D.ortho, QUALITY[qKey()].ortho, renderer);
     terrain = new Terrain(hf, mat);
     scene.add(terrain.group);
+    scene.add(buildOuterTerrain(D.outerMeta, D.outer, hf, makeTerrainMaterial(D.outerImg, 2048, renderer)));
     $("loadbar").style.width = "70%";
     $("loadmsg").textContent = "Routes et bâtiments…";
     await frame();
@@ -169,14 +173,14 @@ function applyConditions() {
   u.horizon.value.set(T.hor);
   u.haze.value = 0;
   let fogCol = new THREE.Color(T.hor);
-  game.fogBase = { near: 2500, far: 17000 };
+  game.fogBase = { near: 3000, far: 42000 };
   if (settings.weather === "voile") {
     u.haze.value = 0.55;
     sun.intensity *= 0.6;
     hemi.intensity *= 1.1;
     fogCol.lerp(new THREE.Color(0xc9ced3), 0.6);
     u.horizon.value.copy(fogCol);
-    game.fogBase = { near: 800, far: 8000 };
+    game.fogBase = { near: 800, far: 14000 };
   } else if (settings.weather === "brouillard") {
     u.haze.value = 1;
     sun.intensity *= 0.35;
@@ -286,10 +290,11 @@ function buildMenu() {
   const w = $("opts-world");
   seg(w, "Heure", "time", [["matin", "Matin"], ["midi", "Midi"], ["soir", "Soir"]], applyConditions);
   seg(w, "Météo", "weather", [["beau", "Grand beau"], ["voile", "Voilé"], ["brouillard", "Brouillard sur les crêtes"]], applyConditions);
+  seg(w, "Temps", "timescale", [[1, "Réel"], [2, "Accéléré ×2"], [4, "×4"]]);
   seg(w, "Vent", "wind", [["none", "Nul"], ["ouest", "Ouest 13 km/h"], ["ouest-fort", "Ouest 27 km/h"], ["bise", "Bise de NE"]], applyConditions);
   const wn = document.createElement("p");
   wn.className = "opt-note";
-  wn.textContent = "Le vent agit selon l'orientation réelle de chaque portion de route. L'air plus léger en altitude réduit aussi la traînée.";
+  wn.textContent = "Une vraie montée du Grand Ballon dure environ une heure : le temps accéléré la ramène à 15-30 minutes sans changer la physique. Le vent agit selon l'orientation réelle de chaque portion de route. L'air plus léger en altitude réduit aussi la traînée.";
   w.appendChild(wn);
 
   const g = $("opts-gfx");
@@ -365,7 +370,7 @@ function buildRouteSigns() {
   signs = new THREE.Group();
   scene.add(signs);
   const r = game.route;
-  const p0 = r.sample(2), p1 = r.sample(r.length - 2);
+  const p0 = r.sample(START_S + 1), p1 = r.sample(r.length - 2);
   signs.add(gantry("DÉPART", p0, "#1d5c3b"));
   signs.add(gantry("ARRIVÉE", p1, "#c8102e"));
   const dest = settings.reverse ? ORIGIN[r.id] : DEST[r.id];
@@ -419,6 +424,17 @@ function buildRouteSigns() {
   }
   for (const c of game.crossings) if (c.enter && c.s > 1) game.events.push({ s: c.s, text: `Bienvenue à ${c.town}` });
   game.events.sort((a, b) => a.s - b.s);
+  // public : départ, arrivée et, en montée, les deux derniers kilomètres
+  const spots = [{ s0: 0, s1: 60, density: 0.9 }, { s0: r.length - 140, s1: r.length + 20, density: 1 }];
+  if (climbing) spots.push({ s0: r.length - 2000, s1: r.length - 140, density: 0.35 });
+  crowd.build(r, spots);
+  if (climbing) {
+    const words = ["HOPP !", "ALLEZ", "HOPP HOPP", "COURAGE", "ALLEZ !", "HOPP !", "PLUS QUE 1 KM"];
+    words.forEach((w, i) => {
+      const s = w === "PLUS QUE 1 KM" ? r.length - 1000 : r.length - 1900 + i * 230;
+      if (s > 50) signs.add(roadPaint(w, r.sample(s), (i % 2 ? -1 : 1) * 0.9));
+    });
+  }
   signs.traverse((o) => { if (o.isMesh) { o.updateMatrix(); } });
 }
 
@@ -564,7 +580,7 @@ function startRide() {
   $("results").hidden = true;
   $("hud").hidden = false;
   $("touch").hidden = !matchMedia("(pointer: coarse)").matches;
-  const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, o: 1.3 });
+  const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, o: 1.3, s: START_S });
   player.target = Math.round(settings.ftp * 0.7 / 5) * 5;
   player.color = settings.jersey;
   game.player = player;
@@ -578,7 +594,7 @@ function startRide() {
       const ftp = Math.round(rv.mass * base * rv.wkg);
       const row = Math.floor((i + 1) / 3), col = (i + 1) % 3;
       const a = makeRider({
-        name: rv.name, mass: rv.mass, ftp, s: -row * 2.2, o: -1 + col * 1.15,
+        name: rv.name, mass: rv.mass, ftp, s: START_S - row * 2.2, o: -1 + col * 1.15,
         ai: { climb: rv.climb, flat: rv.flat, aggr: rv.aggr, mood: 1, t: 0, attack: 0, lane: 0.3 + (i % 3) * 0.6, mu: 0.5 + Math.random() * 0.1 },
       });
       a.color = rv.jersey;
@@ -587,7 +603,6 @@ function startRide() {
       game.models.push(m);
       scene.add(m.root);
     });
-    player.s = 0; player.o = 1.3;
   }
   // fantôme du record
   const rec = readLS("vv-records", {})[recordKey(r.id, settings.reverse)];
@@ -646,7 +661,7 @@ function finish() {
   game.state = "finished";
   const r = game.route;
   const avgP = p.sumP / Math.max(1, p.time);
-  const avgV = r.length / Math.max(1, p.time);
+  const avgV = (r.length - START_S) / Math.max(1, p.time);
   const climb = Math.max(0, r.y[r.n - 1] - r.y[0]);
   const vam = (climb / Math.max(1, p.time)) * 3600;
   const key = recordKey(r.id, settings.reverse);
@@ -659,7 +674,7 @@ function finish() {
     writeLS("vv-records", recs);
   }
   $("r-title").textContent = isRecord ? "Nouveau record !" : "Arrivée !";
-  $("r-sub").textContent = `${r.def.name} · ${fmt1(r.length / 1000)} km · ${old && !isRecord ? `record : ${fmtTime(old.time)}` : ""}`;
+  $("r-sub").textContent = [r.def.name, `${fmt1(r.length / 1000)} km`, old && !isRecord ? `record : ${fmtTime(old.time)}` : ""].filter(Boolean).join(" · ");
   const stats = [
     ["Temps", fmtTime(p.time)],
     ["Vitesse moy.", `${fmt1(avgV * 3.6)} km/h`],
@@ -784,11 +799,13 @@ function loop(now) {
     rideCamera(dt);
     updateHud(dt);
   } else if (game.state === "ride" || game.state === "finished") {
-    simulate(dt);
-    poseRiders(dt);
+    const k = game.state === "ride" ? settings.timescale : 1;
+    for (let i = 0; i < k; i++) simulate(dt);
+    poseRiders(dt * k);
     rideCamera(dt);
     updateHud(dt);
   }
+  crowd.update(game.player && game.state !== "menu" ? game.player.s : -1e9, now / 1000);
   if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) $("toast").classList.remove("on"); }
 
   const q = QUALITY[qKey()];
@@ -837,7 +854,7 @@ function simulate(dt) {
     }
     // pas de traversée des autres coureurs
     for (const o of game.riders) {
-      if (o === x) continue;
+      if (o === x || o.finished || o.crashed > 0) continue;
       const gap = o.s - x.s;
       if (gap > 0 && gap < 1.9 && Math.abs(o.o - x.o) < 0.55 && x.v > o.v) {
         x.v = o.v;
@@ -1021,7 +1038,7 @@ function updateHud(dt) {
     $("h-pos").textContent = `${d >= 0 ? "+" : "−"}${fmtInt(Math.abs(d))} m`;
     $("h-pos").style.color = d >= 0 ? "#7fdc8f" : "#ff8a8a";
   } else {
-    $("h-pos").textContent = `${fmt1((p.s / Math.max(1, p.time)) * 3.6)} km/h`;
+    $("h-pos").textContent = p.time > 5 ? `${fmt1(((p.s - START_S) / p.time) * 3.6)} km/h` : "–";
   }
   $("h-draft").classList.toggle("on", p.draft > 0.08);
   $("h-draft").textContent = `Dans la roue · −${Math.round(p.draft * 100)} % d'effort aéro`;

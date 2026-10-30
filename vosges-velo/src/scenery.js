@@ -280,7 +280,11 @@ export class Forest {
             }
             continue;
           }
-          sc = type === "conifer" ? 18 + R() * 16 : 13 + R() * 11;
+          if (type === "broadleaf" && this.roadIndex.nearest(x, z, 8.5).y !== null) continue;
+          sc = type === "conifer" ? 18 + R() * 16 : 10 + R() * 9;
+          // hêtres rabougris et sapins plus bas sur les crêtes
+          const alt = Math.min(1, Math.max(0, (y - 1050) / 300));
+          sc *= 1 - 0.55 * alt * alt * (3 - 2 * alt);
           tmp.position.set(x, y - 0.4, z);
           tmp.rotation.set((R() - 0.5) * 0.06, R() * 6.28, (R() - 0.5) * 0.06);
           tmp.scale.set(sc * (0.85 + R() * 0.3), sc, sc * (0.85 + R() * 0.3));
@@ -400,6 +404,31 @@ export function buildBuildings(list, hf) {
     for (let i = 0; i < col.length; i++) bk.col.push(col[i]);
   }
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+  // fenêtres dessinées dans le shader : étages de 3 m, travées de 2,7 m
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        if (abs(vWNor.y) < 0.3) {
+          vec2 t = normalize(vec2(-vWNor.z, vWNor.x));
+          float u = dot(vWPos.xz, t) / 2.7;
+          float v = vWPos.y / 3.0;
+          float wx = step(0.32, fract(u)) * step(fract(u), 0.7);
+          float wy = step(0.38, fract(v)) * step(fract(v), 0.8);
+          float d = length(vWPos - cameraPosition);
+          float k = wx * wy * (1.0 - smoothstep(150.0, 600.0, d));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.19, 0.22), k * 0.85);
+          // volets en bois de part et d'autre
+          float sh = (step(0.22, fract(u)) * step(fract(u), 0.31) + step(0.71, fract(u)) * step(fract(u), 0.8)) * wy;
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.42, 0.3), sh * 0.6 * (1.0 - smoothstep(150.0, 400.0, d)));
+        }`,
+      );
+  };
   const group = new THREE.Group();
   const chunks = [];
   for (const bk of buckets.values()) {
@@ -598,5 +627,100 @@ export function buildSky() {
   const m = new THREE.Mesh(geo, mat);
   m.frustumCulled = false;
   m.renderOrder = -1;
+  return m;
+}
+
+// ------------------------------------------------------------ public et inscriptions
+const SHIRTS = [0xd8323c, 0xf2c230, 0x1f6fd1, 0xffffff, 0x2f9e57, 0xff7a1a, 0xe85d9a, 0x222222, 0x7fd3ff, 0x9b59b6];
+
+function personGeos() {
+  const shirt = mergeGeometries([
+    new THREE.CylinderGeometry(0.2, 0.17, 0.62, 7).translate(0, 1.18, 0),
+    new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5).rotateZ(2.6).translate(0.32, 1.55, 0),
+    new THREE.CylinderGeometry(0.05, 0.05, 0.6, 5).rotateZ(-2.6).translate(-0.32, 1.55, 0),
+  ]);
+  const legs = new THREE.CylinderGeometry(0.17, 0.13, 0.86, 7).translate(0, 0.43, 0);
+  paint(legs, 0x2d3540);
+  const head = new THREE.SphereGeometry(0.13, 8, 6).translate(0, 1.64, 0);
+  paint(head, 0xe0b293);
+  return { shirt, rest: mergeGeometries([legs.toNonIndexed(), head.toNonIndexed()]) };
+}
+
+export class Crowd {
+  constructor() {
+    this.geos = personGeos();
+    this.group = new THREE.Group();
+    this.list = [];
+  }
+
+  build(route, spots) {
+    for (const m of this.group.children) m.dispose?.();
+    this.group.clear();
+    const R = rng(77);
+    const people = [];
+    for (const { s0, s1, density } of spots) {
+      for (let s = Math.max(0, s0); s < Math.min(route.length, s1); s += 2.2) {
+        if (R() > density) continue;
+        const p = route.sample(s);
+        const side = R() < 0.5 ? -1 : 1;
+        const off = side * (4.4 + R() * 2.6);
+        const x = p.x - p.dz * off, z = p.z + p.dx * off;
+        people.push({ x, z, y: p.y + (Math.abs(off) - 4) * 0.05, rot: Math.atan2(p.dz * side, -p.dx * side) + (R() - 0.5), s, phase: R() * 6.28, h: 0.92 + R() * 0.16, col: SHIRTS[Math.floor(R() * SHIRTS.length)] });
+      }
+    }
+    this.people = people;
+    if (!people.length) return;
+    const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const matShirt = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    this.shirts = new THREE.InstancedMesh(this.geos.shirt, matShirt, people.length);
+    this.rest = new THREE.InstancedMesh(this.geos.rest, mat, people.length);
+    const c = new THREE.Color();
+    people.forEach((q, i) => this.shirts.setColorAt(i, c.setHex(q.col)));
+    this.group.add(this.shirts, this.rest);
+    this.update(-1e9, 0);
+  }
+
+  // le public saute au passage du coureur
+  update(sPlayer, t) {
+    if (!this.people || !this.people.length) return;
+    const o = new THREE.Object3D();
+    this.people.forEach((q, i) => {
+      const near = Math.abs(q.s - sPlayer) < 35;
+      const bob = near ? Math.abs(Math.sin(t * 7 + q.phase)) * 0.22 : 0;
+      o.position.set(q.x, q.y + bob, q.z);
+      o.rotation.set(0, q.rot, 0);
+      o.scale.setScalar(q.h);
+      o.updateMatrix();
+      this.shirts.setMatrixAt(i, o.matrix);
+      this.rest.setMatrixAt(i, o.matrix);
+    });
+    this.shirts.instanceMatrix.needsUpdate = true;
+    this.rest.instanceMatrix.needsUpdate = true;
+    this.shirts.computeBoundingSphere();
+    this.rest.computeBoundingSphere();
+  }
+}
+
+// inscription peinte à même la chaussée
+export function roadPaint(text, p, offset = 0) {
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 128;
+  const g = c.getContext("2d");
+  g.font = '900 96px "Arial Black", Impact, Arial, sans-serif';
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillStyle = "rgba(245,245,240,0.88)";
+  g.fillText(text, 256, 68, 500);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.2, 1.05),
+    new THREE.MeshLambertMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }),
+  );
+  // lisible par le cycliste qui arrive : le haut du texte vers l'avant
+  m.rotation.order = "YXZ";
+  m.rotation.set(-Math.PI / 2, Math.atan2(p.dx, p.dz) + Math.PI, 0);
+  m.position.set(p.x - p.dz * offset, p.y + 0.16, p.z + p.dx * offset);
   return m;
 }
