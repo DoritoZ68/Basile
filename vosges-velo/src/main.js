@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { loadData } from "./data.js";
 import { Heightfield, Terrain, makeTerrainMaterial, buildOuterTerrain } from "./terrain.js";
-import { Ground, routeLine, networkLine, makeRoadMaterials, buildRoutes, NetworkCells, MASK_RANGE, DISCARD } from "./ground.js";
+import { Ground, routeLine, networkLine, makeRoadMaterials, buildRoutes, NetworkCells, onRoute, MASK_RANGE, DISCARD } from "./ground.js";
 import { RoadIndex, Forest, Streamer, buildBuildings, buildLandmarks, buildSky, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
 import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
@@ -32,9 +32,9 @@ const saveSettings = () => writeLS("vv-settings", settings);
 // bas : pensé pour les cartes graphiques anciennes à 512 Mo (Radeon HD 6000,
 // Intel HD 3000/4000…) : textures réduites, pas d'ombres, horizon plus proche
 const QUALITY = {
-  bas: { netR: 700, budget: 5, treeNear: 90, mask: 4096, discard: 450, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
-  moyen: { netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 850, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
-  eleve: { netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1250, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
+  bas: { netR: 750, budget: 5, treeNear: 90, mask: 4096, discard: 520, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
+  moyen: { netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 880, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
+  eleve: { netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
 };
 
 // carte graphique : les modèles anciens ou à peu de mémoire passent en « bas »
@@ -166,7 +166,12 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     await frame();
     hf = new Heightfield(D.meta, D.terrain);
     // sol fin le long des routes ; le relief grossier y est masqué
-    const routeLines = D.routes.map(routeLine);
+    // parcours : portions en agglomération (trottoirs plutôt qu'accotements)
+    const routeLines = D.routes.map((r) => {
+      const urbanV = new Uint8Array(r.x.length);
+      for (let k = 0; k < r.x.length; k++) for (const t of D.towns) if (Math.hypot(r.x[k] - t.x, r.z[k] - t.z) < t.r * 0.75) { urbanV[k] = 1; break; }
+      return routeLine({ ...r, urbanV });
+    });
     const netLines = prepareNetwork(D.network, hf, new Ground(hf, routeLines));
     ground = new Ground(hf, [...routeLines, ...netLines]);
     roadIndex = ground;
@@ -224,36 +229,33 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
 
 function frame() { return new Promise((r) => requestAnimationFrame(() => r())); }
 
-// Réseau BD TOPO / pistes cyclables : points tous les 8 m au plus, altitude
-// manquante prise sur le relief, raccord exact aux parcours qui empruntent
-// la même chaussée, léger lissage du profil
+// Réseau BD TOPO / pistes cyclables (altitudes IGN déjà calculées tous les
+// 10 m par tools/fetch_network.py) : raccord exact aux parcours qui empruntent
+// la même chaussée, pour qu'il n'y ait ni marche ni double route
 function prepareNetwork(list, hf, routeGround) {
   const out = [];
   for (const n of list) {
-    const xs = [], zs = [], ys = [];
-    for (let k = 0; k < n.x.length; k++) {
-      const y = Number.isNaN(n.y[k]) ? hf.height(n.x[k], n.z[k]) : n.y[k];
-      if (k) {
-        const px = xs[xs.length - 1], pz = zs[zs.length - 1], py = ys[ys.length - 1];
-        const d = Math.hypot(n.x[k] - px, n.z[k] - pz);
-        const m = Math.floor(d / 8);
-        for (let t = 1; t <= m; t++) {
-          const f = t / (m + 1);
-          xs.push(px + (n.x[k] - px) * f); zs.push(pz + (n.z[k] - pz) * f); ys.push(py + (y - py) * f);
-        }
-        if (d < 0.3) continue;
-      }
-      xs.push(n.x[k]); zs.push(n.z[k]); ys.push(y);
+    if (n.x.length < 2) continue;
+    const y = Float32Array.from(n.y, (v, k) => (Number.isNaN(v) ? hf.height(n.x[k], n.z[k]) : v));
+    const L = networkLine(n.cls, n.w, n.x, n.z, y, n.name, n.flags);
+    const n2 = L.x.length, cov = new Uint8Array(n2);
+    for (let k = 0; k < n2; k++) {
+      const q = routeGround.road(L.x[k], L.z[k], 6);
+      if (q && Math.abs(q.y - y[k]) < 4 && (q.edge < 0 || onRoute(routeGround, L, k, 1e9))) y[k] = q.y;
+      cov[k] = onRoute(routeGround, L, k, 1e9) ? 1 : 0;
     }
-    if (xs.length < 2) continue;
-    const y = Float32Array.from(ys), snapped = new Uint8Array(xs.length);
-    for (let k = 0; k < xs.length; k++) {
-      const q = routeGround.road(xs[k], zs[k], 0.5);
-      if (q && Math.abs(q.y - y[k]) < 5) { y[k] = q.y; snapped[k] = 1; }
+    // les portions qui doublent un parcours sont retirées du réseau : la
+    // chaussée du parcours les remplace (ni double route, ni sol fantôme)
+    let a = 0;
+    while (a < n2) {
+      while (a < n2 && cov[a]) a++;
+      if (a >= n2) break;
+      let b = a;
+      while (b < n2 && !cov[b]) b++;
+      const i0 = Math.max(0, a - 1), i1 = Math.min(n2, b + 1);
+      if (i1 - i0 >= 2) out.push(i0 === 0 && i1 === n2 ? L : networkLine(n.cls, n.w, n.x.slice(i0, i1), n.z.slice(i0, i1), y.slice(i0, i1), n.name, n.flags));
+      a = b;
     }
-    const sm = Float32Array.from(y);
-    for (let k = 1; k < xs.length - 1; k++) if (!snapped[k]) sm[k] = (y[k - 1] + 2 * y[k] + y[k + 1]) / 4;
-    out.push(networkLine(n.cls, n.w, Float32Array.from(xs), Float32Array.from(zs), sm, n.name, n.flags));
   }
   return out;
 }
@@ -1186,8 +1188,13 @@ function placePlayerFree(p, x, z, yaw) {
 
 // nom de la voie et du village sous les roues (mode libre)
 function placeNames(x, z) {
-  const q = ground.road(x, z, 6, 1e9, D.routes.length) || ground.road(x, z, 6);
+  const q = ground.road(x, z, 6);
   let name = q ? q.line.name : "";
+  if (q && q.line.route) {
+    // nom de la voie le long d'un parcours (points tous les 5 m)
+    const sAt = q.k * 5;
+    for (const [d, label] of D.routes[q.li].names) if (d <= sAt + 1) name = label;
+  }
   if (q && q.line.cls === 2) name = name || (q.line.flags & 1 ? "Voie verte" : "Piste cyclable");
   if (q && q.line.cls === 3 && !name) name = "Route empierrée";
   let town = "";

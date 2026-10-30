@@ -10,7 +10,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 export const MASK_RANGE = 64; // distance (m) codée dans le masque sur 0..255
-const VERGE_W = 1.6; // largeur d'accotement
+const VERGE_W = 1.6; // largeur d'accotement ou de trottoir
+const SIDEWALK = 0.15; // hauteur des trottoirs
 // discard du relief grossier quand la valeur du masque < DISCARD (voir main)
 export const DISCARD = 22;
 
@@ -30,13 +31,15 @@ export const CLASSES = {
 // ligne de route : { x, z, y, half, blend, corr, tex, lift, route, cls, name }
 export function routeLine(r) {
   const c = CLASSES.route;
-  return { x: r.x, z: r.z, y: r.y, half: c.half, blend: c.blend, corr: c.corr, tex: c.tex, lift: c.lift, route: true, cls: -1, name: "" };
+  return { x: r.x, z: r.z, y: r.y, half: c.half, blend: c.blend, corr: c.corr, tex: c.tex, lift: c.lift, route: true, cls: -1, name: "", urbanV: r.urbanV || null };
 }
 
 export function networkLine(cls, width, x, z, y, name, flags) {
   const c = CLASSES[cls];
   const half = Math.max(c.half, width / 2);
-  return { x, z, y, half, blend: c.blend, corr: half + c.extra, tex: c.tex, lift: c.lift, route: false, cls, name, flags };
+  // rue d'agglomération : trottoirs au lieu d'accotements herbeux
+  const urban = !!(flags & 8) && cls <= 1;
+  return { x, z, y, half, blend: c.blend, corr: half + c.extra, tex: c.tex, lift: c.lift, route: false, cls, name, flags, urban };
 }
 
 export class Ground {
@@ -108,7 +111,10 @@ export class Ground {
     if (!q) return n;
     const L = q.line;
     if (q.edge <= 0) return q.y + L.lift;
-    if (q.edge <= VERGE_W) return q.y + L.lift - 0.02 - (q.edge / VERGE_W) * (L.lift + 0.02);
+    if (q.edge <= VERGE_W) {
+      if (L.urban || (L.urbanV && L.urbanV[q.k])) return q.edge < 0.04 ? q.y + L.lift : q.y + SIDEWALK;
+      return q.y + L.lift - 0.02 - (q.edge / VERGE_W) * (L.lift + 0.02);
+    }
     if (q.edge >= L.blend) return n;
     const t = smooth((q.edge - VERGE_W) / (L.blend - VERGE_W));
     return (q.y - 0.04) * (1 - t) + n * t;
@@ -244,22 +250,36 @@ function roadTexture() {
   return t;
 }
 
+// accotement (herbe et gravillons) | trottoir (enrobé clair et bordure)
 function vergeTexture() {
   const c = document.createElement("canvas");
-  c.width = 64; c.height = 256;
+  c.width = 128; c.height = 256;
   const g = c.getContext("2d");
-  g.fillStyle = "#6a6b52";
-  g.fillRect(0, 0, 64, 256);
   let seed = 11;
   const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  g.fillStyle = "#6a6b52";
+  g.fillRect(0, 0, 64, 256);
   for (let i = 0; i < 5000; i++) {
     const grass = r() < 0.6;
     const v = r();
     g.fillStyle = grass ? `rgba(${70 + v * 40},${95 + v * 45},${45 + v * 20},0.7)` : `rgba(${110 + v * 50},${108 + v * 50},${100 + v * 45},0.6)`;
     g.fillRect(r() * 64, r() * 256, 1 + r() * 2, 1 + r() * 3);
   }
+  g.fillStyle = "#8e8c88";
+  g.fillRect(64, 0, 64, 256);
+  for (let i = 0; i < 4000; i++) {
+    const v = 120 + r() * 50;
+    g.fillStyle = `rgba(${v},${v - 2},${v - 6},0.35)`;
+    g.fillRect(64 + r() * 64, r() * 256, 1 + r() * 2, 1 + r() * 2);
+  }
+  // bordure de trottoir en granit côté chaussée (colonne de droite)
+  g.fillStyle = "#b8b6b0";
+  g.fillRect(118, 0, 10, 256);
+  g.fillStyle = "rgba(60,60,60,0.5)";
+  for (let y = 0; y < 256; y += 32) g.fillRect(118, y, 10, 1);
   const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -277,9 +297,16 @@ function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1]) {
     let dx = r.x[i1] - r.x[i0], dz = r.z[i1] - r.z[i0];
     const l = Math.hypot(dx, dz) || 1;
     dx /= l; dz /= l;
+    // onglet : dans un angle, on écarte les bords pour garder la largeur
+    let miter = 1;
+    if (i > 0 && i < r.x.length - 1) {
+      let ax = r.x[i] - r.x[i - 1], az = r.z[i] - r.z[i - 1];
+      const la = Math.hypot(ax, az) || 1;
+      miter = 1 / Math.max(0.5, (ax * dx + az * dz) / la);
+    }
     if (k) s += Math.hypot(r.x[i] - r.x[i - 1], r.z[i] - r.z[i - 1]);
     for (let c = 0; c < nc; c++) {
-      let off = cols[c];
+      let off = cols[c] * (Math.abs(cols[c]) < 6 ? miter : Math.min(miter, 1.3));
       // côté intérieur d'un virage serré : on ne dépasse pas le centre
       if (inner) {
         const lim = inner[i];
@@ -339,9 +366,22 @@ function lineGeometry(ground, L, a, b, inner, out) {
   const hf = ground.hf;
   const h = L.half, v = h + VERGE_W;
   const lift = L.lift + (L.route ? 0 : ((a * 7 + L.x.length) % 5) * 0.004);
+  const urban = L.urban || (L.urbanV && L.urbanV[(a + b) >> 1]);
   out.roads.push(strip(L, a, b, [-h, h], (x, z, o, k) => L.y[k] + lift, "road", hf, null, texU(L.tex)));
-  out.verges.push(strip(L, a, b, [-v, -h + 0.1], (x, z, o, k) => L.y[k] + (o < -h ? -0.03 : 0.03), "road", hf));
-  out.verges.push(strip(L, a, b, [h - 0.1, v], (x, z, o, k) => L.y[k] + (o > h ? -0.03 : 0.03), "road", hf));
+  // là où l'accotement ou le trottoir passe sur la chaussée d'une autre voie
+  // (carrefours), on l'abaisse sous cet enrobé pour ne pas barrer la rue
+  const under = (x, z, y) => {
+    const q = ground.road(x, z, 0.05);
+    return q && q.line !== L ? Math.min(y, q.y + q.line.lift - 0.04) : y;
+  };
+  if (urban) {
+    const top = SIDEWALK;
+    out.verges.push(strip(L, a, b, [-v, -h - 0.04, -h + 0.02], (x, z, o, k) => under(x, z, L.y[k] + (o > -h ? lift - 0.01 : top)), "road", hf, null, [0.5, 1]));
+    out.verges.push(strip(L, a, b, [h - 0.02, h + 0.04, v], (x, z, o, k) => under(x, z, L.y[k] + (o < h ? lift - 0.01 : top)), "road", hf, null, [1, 0.5]));
+  } else {
+    out.verges.push(strip(L, a, b, [-v, -h + 0.1], (x, z, o, k) => under(x, z, L.y[k] + (o < -h ? -0.03 : 0.03)), "road", hf, null, [0, 0.5]));
+    out.verges.push(strip(L, a, b, [h - 0.1, v], (x, z, o, k) => under(x, z, L.y[k] + (o > h ? -0.03 : 0.03)), "road", hf, null, [0.5, 0]));
+  }
   const cr = L.corr;
   const colsR = L.route ? [v - 0.05, 8.5, 13, 18, 24, cr] : [v - 0.05, v + 3, v + 6.5, cr];
   const colsL = colsR.map((c) => -c).reverse();
@@ -434,6 +474,19 @@ export function buildRoutes(ground, nRoutes, mats) {
   };
 }
 
+// le point i de la ligne L est-il sur la chaussée d'un parcours (même route,
+// géométries OSM et IGN décalées de quelques mètres) ?
+export function onRoute(ground, L, i, firstNet) {
+  const q = ground.road(L.x[i], L.z[i], 3.5, firstNet);
+  if (!q || Math.abs(q.y - L.y[i]) > 3) return false;
+  const R = q.line, k = q.k;
+  const rx = R.x[k + 1] - R.x[k], rz = R.z[k + 1] - R.z[k];
+  const j = Math.min(L.x.length - 1, i + 1), j0 = Math.max(0, j - 1);
+  const lx = L.x[j] - L.x[j0], lz = L.z[j] - L.z[j0];
+  const dot = Math.abs(rx * lx + rz * lz) / ((Math.hypot(rx, rz) * Math.hypot(lx, lz)) || 1);
+  return dot > 0.85 || q.edge < -1.5;
+}
+
 // Réseau (rues, routes, pistes cyclables) : index des portions par case de
 // la grille, puis construction à la demande autour du cycliste.
 export class NetworkCells {
@@ -448,8 +501,7 @@ export class NetworkCells {
       // portions déjà couvertes par un parcours (même chaussée)
       const cov = new Uint8Array(n);
       for (let i = 0; i < n; i++) {
-        const q = ground.road(L.x[i], L.z[i], -0.5, firstNet);
-        cov[i] = q && Math.abs(q.y - L.y[i]) < 1.5 ? 1 : 0;
+        cov[i] = onRoute(ground, L, i, firstNet) ? 1 : 0;
       }
       let a = -1, key = null;
       const flush = (b) => {

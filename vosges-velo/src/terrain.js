@@ -121,6 +121,10 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
           vec3 c = diffuseColor.rgb;
           float l = dot(c, vec3(0.299, 0.587, 0.114));
           c = mix(vec3(l), c, 1.3);
+          // surfaces claires et grises (enrobés, champs labourés, toits vus
+          // de dessus) : ramenées vers un gris plus sombre, sinon effet « neige »
+          float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+          c = mix(c, c * vec3(0.64, 0.66, 0.62), smoothstep(0.34, 0.62, l) * (1.0 - smoothstep(0.06, 0.16, sat)));
           ${opts.veg ? `
           // sous-bois : la photo aérienne y est grise ou trop claire (route,
           // coupes) ; on la ramène vers un sol forestier brun-vert

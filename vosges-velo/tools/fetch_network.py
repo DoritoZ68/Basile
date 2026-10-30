@@ -9,7 +9,7 @@ Sorties (après fetch_data.py) :
 
 Format de network.bin (petit-boutiste) : uint32 nombre de tronçons, puis
 pour chacun : uint8 classe, uint8 largeur (dm), uint16 nom (0xFFFF = aucun),
-uint8 drapeaux (1 voie verte, 2 pont, 4 tunnel), uint16 nb de points,
+uint8 drapeaux (1 voie verte, 2 pont, 4 tunnel, 8 en agglomération), uint16 nb de points,
 int32 x0, int32 z0 (dm), uint16 y0 (dm, 0 = inconnue),
 puis (n - 1) x [int16 dx, int16 dz, int16 dy] (dm).
 
@@ -72,26 +72,57 @@ def cycleways(meta, proj):
         if not any(b["lon_min"] < lon < b["lon_max"] and b["lat_min"] < lat < b["lat_max"] for lon, lat in pts):
             continue
         xz = [proj.xz(lat, lon) for lon, lat in pts]
-        # points tous les 10 m au plus pour l'altitude
-        dense = [xz[0]]
-        for a, c in zip(xz, xz[1:]):
-            d = math.hypot(c[0] - a[0], c[1] - a[1])
-            k = max(1, int(d // 10))
-            for j in range(1, k + 1):
-                dense.append((a[0] + (c[0] - a[0]) * j / k, a[1] + (c[1] - a[1]) * j / k))
-        segs.append({"xz": dense, "green": "VOIE VERTE" in ame, "w": r["largeur_d"]})
-    allp = [proj.ll(x, z) for s in segs for x, z in s["xz"]]
-    hs = F.elevations(allp) if allp else []
-    out, k = [], 0
-    for s in segs:
-        pts = []
-        for x, z in s["xz"]:
-            pts.append((round(x * 10), round(z * 10), max(0, min(65535, round(hs[k] * 10)))))
-            k += 1
-        w = s["w"] or (3.0 if s["green"] else 2.5)
-        out.append((2, round(max(2.0, min(5.0, w)) * 10), 0xFFFF, 1 if s["green"] else 0, pts))
-    print("pistes cyclables / voies vertes :", len(out))
+        w = r["largeur_d"] or (3.0 if "VOIE VERTE" in ame else 2.5)
+        segs.append({"cls": 2, "w": max(2.0, min(5.0, w)), "ni": 0xFFFF, "flags": 1 if "VOIE VERTE" in ame else 0, "xz": xz})
+    print("pistes cyclables / voies vertes :", len(segs))
+    return segs
+
+
+def densify(xz, step):
+    out = [xz[0]]
+    for a, c in zip(xz, xz[1:]):
+        d = math.hypot(c[0] - a[0], c[1] - a[1])
+        k = max(1, int(math.ceil(d / step)))
+        for j in range(1, k + 1):
+            out.append((a[0] + (c[0] - a[0]) * j / k, a[1] + (c[1] - a[1]) * j / k))
     return out
+
+
+def drop_road_duplicates(roads, cycles):
+    """Pistes cyclables d'OpenStreetMap déjà présentes dans la BD TOPO :
+    - tracées sur la chaussée d'une rue ou d'une route (aménagement attaché à
+      la voie) : retirées, elles doublaient la route ;
+    - confondues avec un chemin empierré ou une petite route de la BD TOPO
+      (voie verte, chemin de halage) : ce tronçon devient piste cyclable ;
+    on garde les pistes en site propre."""
+    from shapely.geometry import LineString, Point
+    from shapely.strtree import STRtree
+    geoms = [LineString(r["xz"]) for r in roads]
+    tree = STRtree(geoms)
+    kept, converted = [], 0
+    for c in cycles:
+        line = LineString(c["xz"])
+        idx = list(tree.query(line.buffer(8)))
+        if not idx:
+            kept.append(c)
+            continue
+        near = [geoms[i] for i in idx]
+        pts = densify(c["xz"], 10)
+        on = sum(1 for x, z in pts if any(g.distance(Point(x, z)) < 4.5 for g in near))
+        if on / len(pts) < 0.5:
+            kept.append(c)
+            continue
+        # tronçons BD TOPO qui suivent la piste sur la majeure partie de leur longueur
+        buf = line.buffer(5)
+        for i in idx:
+            r = roads[i]
+            if r["cls"] in (1, 3) and geoms[i].length > 0 and geoms[i].intersection(buf).length / geoms[i].length > 0.7 and not (r["flags"] & 8 and r["cls"] == 1):
+                r["cls"] = 2
+                r["flags"] |= c["flags"] & 1
+                r["w"] = min(r["w"], 3.5)
+                converted += 1
+    print("pistes cyclables : en site propre", len(kept), "/", len(cycles), "· tronçons BD TOPO devenus pistes :", converted)
+    return kept
 
 
 def main():
@@ -101,7 +132,7 @@ def main():
     names, name_idx = [], {}
     segs = []
     seen = set()
-    props = "nature,importance,largeur_de_chaussee,nom_voie_ban_gauche,nom_collaboratif_gauche,cpx_numero,position_par_rapport_au_sol,etat_de_l_objet"
+    props = "nature,importance,largeur_de_chaussee,nom_voie_ban_gauche,nom_collaboratif_gauche,cpx_numero,position_par_rapport_au_sol,etat_de_l_objet,urbain"
     for t in F.tiles(meta, 5):
         for f in F.wfs_all("BDTOPO_V3:troncon_de_route", t, props):
             fid = f.get("id")
@@ -136,32 +167,42 @@ def main():
                 flags |= 2
             if flags & 4:
                 continue  # tunnels : non roulables ici
+            if p.get("urbain"):
+                flags |= 8
             for line in lines:
-                pts = []
-                for c in line:
-                    x, z = proj.xz(c[1], c[0])
-                    y = c[2] if len(c) > 2 and c[2] > -100 else 0
-                    pts.append((round(x * 10), round(z * 10), max(0, min(65535, round(y * 10)))))
-                # découpe si un écart dépasse l'int16
-                cur = [pts[0]]
-                for q in pts[1:]:
-                    a = cur[-1]
-                    if abs(q[0] - a[0]) > 32000 or abs(q[1] - a[1]) > 32000:
-                        if len(cur) > 1:
-                            segs.append((cls, round(width * 10), ni, flags, cur))
-                        cur = [q]
-                    else:
-                        cur.append(q)
-                if len(cur) > 1:
-                    segs.append((cls, round(width * 10), ni, flags, cur))
-    segs += cycleways(meta, proj)
+                xz = [proj.xz(c[1], c[0]) for c in line]
+                if len(xz) > 1:
+                    segs.append({"cls": cls, "w": width, "ni": ni, "flags": flags, "xz": xz})
+    segs += drop_road_duplicates(segs, cycleways(meta, proj))
+    # Altitudes : les Z de la BD TOPO contiennent des valeurs aberrantes (jusqu'à
+    # 600 m d'écart) ; on prend le relief IGN RGE ALTI sous l'axe, un point tous
+    # les 10 m, lissé. Les ponts gardent un tablier droit entre leurs culées.
+    for sg in segs:
+        sg["xz"] = densify(sg["xz"], 10)
+    allp = [proj.ll(x, z) for sg in segs for x, z in sg["xz"]]
+    print("altitudes à calculer :", len(allp))
+    hs = F.elevations(allp)
+    k = 0
+    for sg in segs:
+        n = len(sg["xz"])
+        ys = hs[k:k + n]
+        k += n
+        if sg["flags"] & 2 and n > 1:
+            ys = [ys[0] + (ys[-1] - ys[0]) * i / (n - 1) for i in range(n)]
+        else:
+            ys = [sum(ys[max(0, i - 2):i + 3]) / len(ys[max(0, i - 2):i + 3]) for i in range(n)]
+        sg["pts"] = [(round(x * 10), round(z * 10), max(1, min(65535, round(y * 10)))) for (x, z), y in zip(sg["xz"], ys)]
+    # découpe si un écart dépasse l'int16 (ne devrait pas arriver après densification)
+    out_segs = []
+    for sg in segs:
+        out_segs.append((sg["cls"], round(sg["w"] * 10), sg["ni"], sg["flags"], sg["pts"]))
+    segs = out_segs
     out = bytearray(struct.pack("<I", len(segs)))
     total = 0
     for cls, w, ni, flags, pts in segs:
         out += struct.pack("<BBHBHiiH", cls, min(255, w), ni, flags, len(pts), pts[0][0], pts[0][1], pts[0][2])
         for a, b in zip(pts, pts[1:]):
-            dy = max(-32000, min(32000, b[2] - a[2])) if a[2] and b[2] else 0
-            out += struct.pack("<hhh", b[0] - a[0], b[1] - a[1], dy if b[2] else -32768)
+            out += struct.pack("<hhh", b[0] - a[0], b[1] - a[1], max(-32000, min(32000, b[2] - a[2])))
             total += 1
     with open(os.path.join(F.OUT, "network.bin"), "wb") as f:
         f.write(out)
