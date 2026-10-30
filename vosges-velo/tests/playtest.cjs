@@ -51,7 +51,7 @@ async function drive(page, opts) {
       if (!g.free) {
         const safe = r.safeSpeedAhead(p.s, 70, 0.55);
         if (p.v > safe.v) keys.add("Space");
-      } else if (p.v > 13) keys.add("Space");
+      } else if (p.v > Math.max(5, 12 - Math.abs(err) * 14)) keys.add("Space");
       p.target = opts.watts;
       // ravitaillement comme un joueur prudent
       if (p.fuel) {
@@ -63,9 +63,10 @@ async function drive(page, opts) {
       // --- contrôles
       if (!Number.isFinite(p.x + p.z + p.y + p.v)) { add("nan", "position ou vitesse invalide"); break; }
       if (p.crashed > 0 && !wasC) { crashes++; add("chute", document.getElementById("toast").textContent.split("\n")[0] + ` (avant : ${(pre.v * 3.6).toFixed(0)} km/h, angle ${(pre.lean * 57.3).toFixed(0)}°, écart ${pre.o.toFixed(1)} m, surface ${pre.surf}, courbure ${pre.curv.toFixed(3)}, voisins ${pre.near})`); }
+      const justUp = wasC && p.crashed <= 0;
       wasC = p.crashed > 0;
       const dy = Math.abs(p.y - prevY);
-      if (dy > 0.6 && p.crashed <= 0 && !wasC) add("saut", `saut d'altitude de ${dy.toFixed(2)} m en une image (surface ${p.surface})`);
+      if (dy > 0.6 && p.crashed <= 0 && !wasC && !justUp) add("saut", `saut d'altitude de ${dy.toFixed(2)} m en une image (surface ${p.surface})`);
       prevY = p.y;
       if (Math.abs(p.gradeS) > 0.22 && p.surface === 0) add("pente", `pente lissée de ${(p.gradeS * 100).toFixed(0)} % sur la chaussée`);
       if (p.surface === 2) offroad++; else offroad = 0;

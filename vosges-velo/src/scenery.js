@@ -259,8 +259,9 @@ function broadleaf(near) {
 }
 
 function vine() {
-  const g = new THREE.BoxGeometry(0.5, 1.2, 9.6);
-  g.translate(0, 0.6, 0);
+  // rang de vigne : feuillage étroit sur piquets (0,35 m de large, 1,4 m de haut)
+  const g = new THREE.BoxGeometry(0.35, 1.1, 9.6);
+  g.translate(0, 0.75, 0);
   paint(g, 0x5f7a2e);
   return g;
 }

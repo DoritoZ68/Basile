@@ -228,6 +228,24 @@ function frame() { return new Promise((r) => requestAnimationFrame(() => r())); 
 // Réseau BD TOPO / pistes cyclables (altitudes IGN déjà calculées tous les
 // 10 m par tools/fetch_network.py) : raccord exact aux parcours qui empruntent
 // la même chaussée, pour qu'il n'y ait ni marche ni double route
+// borne la pente entre points voisins (aller puis retour), sans toucher aux
+// points fixés : une marche se transforme en rampe régulière
+function limitGrade(xs, zs, y, fixed, maxG) {
+  const n = y.length;
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 1; i < n; i++) {
+      if (fixed[i]) continue;
+      const m = maxG * Math.hypot(xs[i] - xs[i - 1], zs[i] - zs[i - 1]);
+      y[i] = Math.max(y[i - 1] - m, Math.min(y[i - 1] + m, y[i]));
+    }
+    for (let i = n - 2; i >= 0; i--) {
+      if (fixed[i]) continue;
+      const m = maxG * Math.hypot(xs[i] - xs[i + 1], zs[i] - zs[i + 1]);
+      y[i] = Math.max(y[i + 1] - m, Math.min(y[i + 1] + m, y[i]));
+    }
+  }
+}
+
 function prepareNetwork(list, hf, routeGround) {
   const out = [];
   // les tronçons qui se rejoignent à un carrefour reçoivent la même altitude
@@ -249,6 +267,7 @@ function prepareNetwork(list, hf, routeGround) {
       const e = nodes.get(key(n.x[k], n.z[k]));
       if (!e || e.c < 2 || Number.isNaN(n.y[k])) continue;
       const delta = e.sum / e.c - n.y[k];
+      if (k === 0) n.joined0 = true; else n.joined1 = true;
       for (let j = 0; j < 5 && j < m; j++) {
         const i = k + dir * j;
         if (!Number.isNaN(n.y[i])) n.y[i] += delta * (1 - j / 5);
@@ -259,12 +278,17 @@ function prepareNetwork(list, hf, routeGround) {
     if (n.x.length < 2) continue;
     const y = Float32Array.from(n.y, (v, k) => (Number.isNaN(v) ? hf.height(n.x[k], n.z[k]) : v));
     const L = networkLine(n.cls, n.w, n.x, n.z, y, n.name, n.flags);
-    const n2 = L.x.length, cov = new Uint8Array(n2);
+    const n2 = L.x.length, cov = new Uint8Array(n2), fixed = new Uint8Array(n2);
     for (let k = 0; k < n2; k++) {
       const q = routeGround.road(L.x[k], L.z[k], 6);
-      if (q && Math.abs(q.y - y[k]) < 4 && (q.edge < 0 || onRoute(routeGround, L, k, 1e9))) y[k] = q.y;
+      if (q && Math.abs(q.y - y[k]) < 4 && (q.edge < 0 || onRoute(routeGround, L, k, 1e9))) { y[k] = q.y; fixed[k] = 1; }
       cov[k] = onRoute(routeGround, L, k, 1e9) ? 1 : 0;
     }
+    // un raccord (parcours, carrefour) ne doit pas créer de marche : la
+    // différence d'altitude est étalée sur les points voisins, pente bornée
+    fixed[0] = fixed[0] || (n.joined0 ? 1 : 0);
+    fixed[n2 - 1] = fixed[n2 - 1] || (n.joined1 ? 1 : 0);
+    limitGrade(L.x, L.z, y, fixed, 0.16);
     // les portions qui doublent un parcours sont retirées du réseau : la
     // chaussée du parcours les remplace (ni double route, ni sol fantôme)
     let a = 0;
@@ -1126,8 +1150,16 @@ function movePlayer(p, dt) {
     p.ri = g0.i; p.s = g0.s; p.o = g0.d;
   }
   p.y = g0.y; p.surface = g0.surf;
-  const ga = ground.height(p.x + dx * 2, p.z + dz * 2, p.y), gb = ground.height(p.x - dx * 2, p.z - dz * 2, p.y);
-  const grade = Math.max(-0.45, Math.min(0.45, (ga - gb) / 4));
+  // pente : celle de la voie empruntée (et non un mélange de voies proches
+  // à des hauteurs différentes) ; hors route, celle du terrain
+  let grade;
+  const qr = ground.road(p.x, p.z, 1.6, 1e9, 0, p.y);
+  if (qr) {
+    const L = qr.line, k = qr.k;
+    const ex = L.x[k + 1] - L.x[k], ez = L.z[k + 1] - L.z[k], len = Math.hypot(ex, ez) || 1;
+    grade = ((L.y[k + 1] - L.y[k]) / len) * ((ex * dx + ez * dz) / len);
+  } else grade = (hf.height(p.x + dx * 2, p.z + dz * 2) - hf.height(p.x - dx * 2, p.z - dz * 2)) / 4;
+  grade = Math.max(-0.45, Math.min(0.45, grade));
   // altitude et pente lissées : le sol échantillonné a de petits sauts
   // (jonctions de routes, accotements) qui faisaient tressauter la caméra
   p.yS += (p.y - p.yS) * Math.min(1, dt * 10);
@@ -1323,14 +1355,19 @@ function simulate(dt) {
       if (o === x || o.finished || o.crashed > 0) continue;
       const gap = o.s - x.s;
       if (gap > 0 && gap < 1.9 && Math.abs(o.o - x.o) < 0.55 && x.v > o.v) {
-        x.v = o.v;
-        if (!x.isPlayer) x.s = Math.min(x.s, o.s - 1.9 + 0.01);
+        // roue dans la roue : on ralentit fortement mais sans à-coup
+        // (une vitesse imposée brutalement déstabilisait la direction)
+        x.v = Math.max(o.v, x.v - (gap < 1.2 ? 9 : 5) * dt);
+        if (!x.isPlayer) x.s = Math.min(x.s, o.s - 1.2);
       }
       // côte à côte : les coureurs s'écartent l'un de l'autre (épaules)
       if (Math.abs(gap) < 1.6 && Math.abs(o.o - x.o) < 0.6 && !x.isPlayer) {
-        const push = (0.6 - Math.abs(o.o - x.o)) * (x.o >= o.o ? 1 : -1);
-        x.o = Math.max(-2.6, Math.min(2.6, x.o + push * Math.min(1, dt * 6)));
-        if (!o.isPlayer) o.o = Math.max(-2.6, Math.min(2.6, o.o - push * Math.min(1, dt * 6)));
+        const side = x.o >= o.o ? 1 : -1;
+        const push = (0.6 - Math.abs(o.o - x.o)) * side;
+        // presque l'un sur l'autre : on les sépare tout de suite
+        const k = Math.abs(gap) < 0.9 ? 0.5 : Math.min(1, dt * 12);
+        x.o = Math.max(-2.6, Math.min(2.6, x.o + push * k));
+        if (!o.isPlayer) o.o = Math.max(-2.6, Math.min(2.6, o.o - push * k));
       }
     }
     if (!game.free && !x.finished && x.s >= r.finish) {
@@ -1513,7 +1550,8 @@ function rideCamera(dt, snap = false) {
   // la hauteur est toujours amortie : plus de hauts et bas brusques
   camY = snap ? want.y : camY + (want.y - camY) * (1 - Math.exp(-dt * (mode === 3 ? 2 : 4)));
   camPos.y = Math.max(camY, floor - 0.6);
-  if (Math.hypot(camPos.x - want.x, camPos.z - want.z) > 60) { camPos.copy(want); camY = want.y; }
+  // téléportation, relève après une chute : pas de longue glissade de caméra
+  if (Math.hypot(camPos.x - want.x, camPos.z - want.z) > 60 || Math.abs(camY - want.y) > 20) { camPos.copy(want); camY = want.y; }
   camera.position.copy(camPos);
   camera.lookAt(lk);
   // léger roulis de la caméra de poursuite avec le vélo
@@ -1581,7 +1619,8 @@ function updateHud(dt) {
     const shown = game.groups.slice(0, 4);
     gEl2.innerHTML = shown.map((g, i) => {
       const me = g.riders.includes(p);
-      const label = i === 0 ? (g.riders.length <= 6 && game.groups.length > 1 ? "Tête" : "Peloton") : g.riders.length > 12 ? "Peloton" : `Groupe ${i + 1}`;
+      const biggest = game.groups.reduce((a, b) => (b.riders.length > a.riders.length ? b : a));
+      const label = g === biggest && g.riders.length > 6 ? "Peloton" : i === 0 ? "Tête de course" : `Groupe ${i + 1}`;
       return `<span class="${me ? "me" : ""}">${label} (${g.riders.length})${i ? " +" + fmtTime(g.gapTime) : ""}</span>`;
     }).join("") + (game.groups.length > 4 ? `<span>+${game.groups.length - 4} groupes</span>` : "");
   } else gEl2.innerHTML = "";
