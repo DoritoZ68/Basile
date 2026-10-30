@@ -31,6 +31,11 @@ export class Sound {
     this.tickAcc = 0;
   }
 
+  // menu, pause, onglet caché : plus aucun son jusqu'au prochain start()
+  stop() {
+    if (this.ctx && this.ctx.state === "running") this.ctx.suspend();
+  }
+
   setEnabled(on) {
     this.enabled = on;
     if (this.master) this.master.gain.value = on ? 0.8 : 0;

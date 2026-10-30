@@ -854,6 +854,7 @@ function startRide() {
   }
   game.ghostRec = [];
   game.recT = 0;
+  sound.start();
   // messages de la sortie précédente
   toastTimer = 0;
   $("toast").classList.remove("on");
@@ -888,6 +889,7 @@ function showMenu() {
   clearRiders();
   game.state = "menu";
   game.menuSnap = true;
+  sound.stop();
   $("hud").hidden = true;
   $("touch").hidden = true;
   $("menu").hidden = false;
@@ -900,9 +902,11 @@ function setPaused(p) {
     game.prevState = game.state;
     game.state = "paused";
     $("pause").hidden = false;
+    sound.stop();
   } else if (!p && game.state === "paused") {
     game.state = game.prevState;
     $("pause").hidden = true;
+    sound.start();
   }
 }
 
@@ -1021,6 +1025,10 @@ addEventListener("keyup", (e) => {
   if (e.key && e.key.length === 1) letters.delete(e.key.toLowerCase());
 });
 addEventListener("blur", () => { keys.clear(); letters.clear(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) sound.stop();
+  else if (game.state !== "menu" && game.state !== "paused") sound.start();
+});
 // molette : zoom de la caméra active (distance, ou champ de vision en
 // première personne) ; chaque caméra garde son propre zoom
 const zoom = [1, 1, 1, 1];
