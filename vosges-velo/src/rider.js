@@ -129,10 +129,23 @@ export class RiderModel {
     }
     this.body.add(this.torso, this.headM, this.helmet);
 
+    this.eye = new THREE.Vector3();
     this.phase = 0;
     this.wheelAngle = 0;
     this.standing = 0;
     this._v = [P(0, 0, 0), P(0, 0, 0), P(0, 0, 0), P(0, 0, 0)];
+  }
+
+  // vue embarquée : on masque la tête pour voir à travers les yeux
+  setFirstPerson(on) {
+    this.headM.visible = !on;
+    this.helmet.visible = !on;
+    if (this.shadow) this.shadow.visible = true;
+  }
+
+  eyeWorld(out) {
+    this.root.updateMatrixWorld(true);
+    return this.body.localToWorld(out.copy(this.eye));
   }
 
   // cadence en tr/min, vitesse en m/s, posture : 0 assis, 1 danseuse, -1 position aéro
@@ -154,10 +167,12 @@ export class RiderModel {
     this.headM.position.set(sway * 0.6, shoulder.y + 0.1 - aero * 0.02, shoulder.z + 0.12);
     this.helmet.position.set(sway * 0.6, shoulder.y + 0.15 - aero * 0.02, shoulder.z + 0.1);
     this.helmet.rotation.x = 0.35 + aero * 0.3;
+    // position des yeux (repère du corps) pour la vue à la première personne
+    this.eye.set(sway * 0.6, shoulder.y + 0.13 - aero * 0.02, shoulder.z + 0.19);
 
     for (const L of this.legs) {
       const ang = this.phase + (L.side > 0 ? 0 : Math.PI);
-      const pedal = tmpB.set(L.side * 0.11, 0.28 + Math.sin(ang) * 0.17, -0.04 + Math.cos(ang) * 0.17);
+      const pedal = tmpB.set(L.side * 0.11, 0.28 - Math.sin(ang) * 0.17, -0.04 + Math.cos(ang) * 0.17);
       const h = new THREE.Vector3(L.side * 0.1 + sway * 0.3, hip.y, hip.z);
       const knee = ik(h, pedal, 0.46, 0.48);
       place(L.thigh, h, knee);

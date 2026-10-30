@@ -18,16 +18,18 @@ pour rester fluides sur un petit portable.
 | Touche | Action |
 | --- | --- |
 | ↑ ↓ ou Z S (molette) | Doser l'effort, en watts |
-| ← → ou Q D | Se placer sur la route (corde des virages, aspiration) |
+| ← → ou Q D | Pencher le vélo pour tourner : plus on maintient, plus on se penche ; relâché, le vélo se redresse |
 | Maj | Attaquer (puise dans la réserve anaérobie) |
 | Espace | Freiner |
 | E | Position de descente |
-| C (ou clic) | Changer de caméra : poursuite, embarquée, moto TV, drone |
+| C | Changer de caméra : poursuite, première personne, moto TV, drone |
+| Souris | Regarder autour (clic pour capturer la souris, Échap pour la libérer) |
+| R / double-clic | Recentrer le regard |
 | Échap / P | Pause |
 | M | Son |
 
-Manette : gâchette droite pour l'effort, gauche pour freiner, stick pour la
-direction, A pour attaquer. Sur écran tactile, des boutons s'affichent.
+Manette : gâchette droite pour l'effort, gauche pour freiner, stick pour
+l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
 
 ## Parcours
 
@@ -43,7 +45,7 @@ Chaque parcours se joue aussi en sens inverse (descentes).
 
 Modes : course contre 5 adversaires, contre-la-montre face au fantôme de son
 record, balade libre. Options : poids, puissance seuil (FTP), maillot,
-niveau des adversaires, freinage assisté, heure (matin, midi, soir), météo
+niveau des adversaires, heure (matin, midi, soir), météo
 (dont le brouillard qui s'épaissit sur les crêtes), vent, temps accéléré.
 
 ## Ce qui est réel
@@ -61,6 +63,10 @@ niveau des adversaires, freinage assisté, heure (matin, midi, soir), météo
 - **Lieux** : radar et monument des Diables Bleus au Grand Ballon, croix
   sommitale et nécropole du Silberloch au Vieil Armand, panneaux de cols,
   bornes kilométriques façon panneaux de col, panneaux d'agglomération.
+
+Conduite : aucune aide pour suivre la route. Le vélo va où on le dirige ;
+l'inclinaison impose le rayon du virage (tan φ = v² / g·R). Au-delà de
+l'adhérence (asphalte, accotement, herbe), la roue glisse et c'est la chute.
 
 Physique : puissance → vitesse avec gravité, résistance au roulement,
 traînée aérodynamique (densité de l'air selon l'altitude, vent selon

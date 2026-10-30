@@ -90,23 +90,38 @@ export function buildRoads(routes, renderer) {
   const tex = roadTexture();
   tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const mat = new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const vergeMat = new THREE.MeshLambertMaterial({ color: 0x6b6a58, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const vergeMat = new THREE.MeshLambertMaterial({ color: 0x5f6448, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const group = new THREE.Group();
   const done = new RoadIndex([], 6);
   routes.forEach((r, ri) => {
     const n = r.x.length;
+    // un point est déjà couvert s'il se trouve sur la chaussée d'une route
+    // déjà construite, au même niveau (sinon c'est un croisement ou un lacet)
     const covered = new Uint8Array(n);
-    for (let i = 0; i < n; i++) covered[i] = done.nearest(r.x[i], r.z[i], 4).y !== null ? 1 : 0;
+    for (let i = 0; i < n; i++) {
+      const q = done.nearest(r.x[i], r.z[i], 1.6);
+      covered[i] = q.y !== null && Math.abs(q.y - r.y[i]) < 0.8 ? 1 : 0;
+    }
+    // un court passage commun (croisement) ne doit pas couper la chaussée
+    for (let i = 0; i < n; i++) {
+      if (!covered[i]) continue;
+      let j = i;
+      while (j < n && covered[j]) j++;
+      if (j - i < 10) for (let k = i; k < j; k++) covered[k] = 0;
+      i = j;
+    }
     let i = 0;
     while (i < n) {
       while (i < n && covered[i]) i++;
       if (i >= n) break;
       let j = i;
       while (j < n && !covered[j]) j++;
-      const a = Math.max(0, i - 1), b = Math.min(n - 1, j);
+      // chevauchement de 3 points avec la route existante : pas de jour
+      const a = Math.max(0, i - 3), b = Math.min(n - 1, j + 2);
       if (b - a >= 1) {
-        group.add(ribbon(r, a, b, 3.0, 0.1 + ri * 0.004, mat, true));
-        group.add(ribbon(r, a, b, 4.3, -0.12, vergeMat, false));
+        group.add(ribbon(r, a, b, [[-3.0, 0.1], [3.0, 0.1]], mat, true));
+        group.add(ribbon(r, a, b, [[-5.6, -1.25], [-3.0, 0.05]], vergeMat, false));
+        group.add(ribbon(r, a, b, [[3.0, 0.05], [5.6, -1.25]], vergeMat, false));
       }
       i = j;
     }
@@ -115,7 +130,9 @@ export function buildRoads(routes, renderer) {
   return group;
 }
 
-function ribbon(r, a, b, half, dy, mat, uvs) {
+// bande le long du parcours ; edge = [[décalage gauche, dy], [décalage droit, dy]]
+function ribbon(r, a, b, edge, mat, uvs) {
+  const [[o0, y0], [o1, y1]] = edge;
   const cnt = b - a + 1;
   const pos = new Float32Array(cnt * 2 * 3);
   const uv = new Float32Array(cnt * 2 * 2);
@@ -128,7 +145,7 @@ function ribbon(r, a, b, half, dy, mat, uvs) {
     dx /= l; dz /= l;
     const rx = -dz, rz = dx;
     if (k) s += Math.hypot(r.x[i] - r.x[i - 1], r.z[i] - r.z[i - 1]);
-    pos.set([r.x[i] - rx * half, r.y[i] + dy, r.z[i] - rz * half, r.x[i] + rx * half, r.y[i] + dy, r.z[i] + rz * half], k * 6);
+    pos.set([r.x[i] + rx * o0, r.y[i] + y0, r.z[i] + rz * o0, r.x[i] + rx * o1, r.y[i] + y1, r.z[i] + rz * o1], k * 6);
     uv.set([0, s / 13, 1, s / 13], k * 4);
   }
   const idx = [];
@@ -285,6 +302,8 @@ export class Forest {
           // hêtres rabougris et sapins plus bas sur les crêtes
           const alt = Math.min(1, Math.max(0, (y - 1050) / 300));
           sc *= 1 - 0.55 * alt * alt * (3 - 2 * alt);
+          // la couronne ne doit pas surplomber la chaussée
+          if (this.roadIndex.nearest(x, z, 4 + sc * (type === "conifer" ? 0.16 : 0.27)).y !== null) continue;
           tmp.position.set(x, y - 0.4, z);
           tmp.rotation.set((R() - 0.5) * 0.06, R() * 6.28, (R() - 0.5) * 0.06);
           tmp.scale.set(sc * (0.85 + R() * 0.3), sc, sc * (0.85 + R() * 0.3));

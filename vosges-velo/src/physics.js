@@ -62,8 +62,10 @@ export function maxPower(r) {
 const sm = {};
 
 // avance le coureur de dt secondes
-export function step(r, route, env, dt, assist) {
-  const p = route.sample(r.s, sm);
+// r.free (joueur en mouvement libre) fournit sa propre géométrie :
+// { y, grade, dx, dz, curv, crr } ; sa position est alors intégrée par l'appelant.
+export function step(r, route, env, dt) {
+  const p = r.free || route.sample(r.s, sm);
   const theta = Math.atan(p.grade);
   const m = r.mass + r.bikeMass;
 
@@ -104,28 +106,21 @@ export function step(r, route, env, dt, assist) {
   const vAir = r.v - head;
   const fAero = 0.5 * rho * cda * vAir * Math.abs(vAir);
   const fGrav = m * G * Math.sin(theta);
-  const fRoll = (r.offRoad ? 0.02 : CRR) * m * G * Math.cos(theta);
+  const fRoll = (r.free ? r.free.crr : r.offRoad ? 0.02 : CRR) * m * G * Math.cos(theta);
   const fPedal = (r.power * ETA) / Math.max(r.v, 1.5);
   let fBrake = r.brake * m * 6.5;
 
   // virages : accélération latérale
   const kappa = p.curv;
   r.latG = (r.v * r.v * Math.abs(kappa)) / G;
-  if (assist && !r.isPlayer) {
-    /* l'IA gère son freinage elle-même */
-  }
-  if (assist && r.isPlayer) {
-    const safe = route.safeSpeedAhead(r.s, 60, 0.6);
-    if (r.v > safe.v) fBrake = Math.max(fBrake, Math.min(1, (r.v - safe.v) * 0.8) * m * 6.5);
-  }
-
   const acc = (fPedal - fAero - fGrav - fRoll - (r.v > 0.05 ? fBrake : 0)) / (m + 1.5);
   r.v = Math.max(0, r.v + acc * dt);
 
   // progression : on coupe les virages à la corde
-  const denom = Math.max(0.4, 1 - kappa * r.o);
-  const ds = (r.v * dt) / denom;
-  r.s += ds;
+  if (!r.free) {
+    const denom = Math.max(0.4, 1 - kappa * r.o);
+    r.s += (r.v * dt) / denom;
+  }
   r.time += dt;
   r.energy += (r.power * dt) / 1000;
   r.sumP += r.power * dt;

@@ -19,7 +19,7 @@ const fmtTime = (t) => {
 // ------------------------------------------------------------ réglages
 const DEFAULTS = {
   route: "grand-ballon-willer", reverse: false, mode: "race",
-  mass: 72, ftp: 230, jersey: "#d8323c", level: "amateur", assist: true,
+  mass: 72, ftp: 230, jersey: "#d8323c", level: "amateur",
   time: "matin", weather: "beau", wind: "none", timescale: 1,
   quality: "auto", sound: true,
 };
@@ -110,7 +110,7 @@ const game = {
   fogBase: { near: 2000, far: 16000 },
 };
 const START_S = 12;
-const CAMS = ["Poursuite", "Embarquée", "Moto TV", "Drone"];
+const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
 
 // ------------------------------------------------------------ chargement
 (async function boot() {
@@ -144,7 +144,7 @@ const CAMS = ["Poursuite", "Embarquée", "Moto TV", "Drone"];
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, terrain, renderer, settings };
+    window.__vv = { THREE, scene, camera, game, hf, terrain, renderer, settings, simulate, keys, look };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -281,10 +281,9 @@ function buildMenu() {
   }
   rd.appendChild(sw);
   seg(rd, "Adversaires", "level", [["cyclo", "Cyclosportifs"], ["amateur", "Amateurs"], ["elite", "Élite"]]);
-  seg(rd, "Freinage assisté", "assist", [[true, "Oui"], [false, "Non"]]);
   const an = document.createElement("p");
   an.className = "opt-note";
-  an.textContent = "Sans assistance, c'est à vous de freiner avant les virages : trop vite, c'est la chute.";
+  an.textContent = "Aucune assistance : vous dirigez le vélo en le penchant. Trop penché pour l'adhérence, ou trop vite dans un virage, c'est la chute.";
   rd.appendChild(an);
 
   const w = $("opts-world");
@@ -583,6 +582,7 @@ function startRide() {
   const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, o: 1.3, s: START_S });
   player.target = Math.round(settings.ftp * 0.7 / 5) * 5;
   player.color = settings.jersey;
+  placePlayerOnRoad(player, START_S, 1.3);
   game.player = player;
   game.riders.push(player);
   const pm = new RiderModel({ jersey: settings.jersey, helmet: settings.jersey === "#ffffff" ? "#222" : "#ffffff" });
@@ -710,6 +710,7 @@ addEventListener("keydown", (e) => {
   if (e.code === "KeyC" && game.player) { game.camMode = (game.camMode + 1) % CAMS.length; showCamHint(); }
   if ((e.code === "Escape" || e.code === "KeyP") && game.state !== "menu") setPaused(game.state !== "paused");
   if (e.code === "KeyE" && p) p.tuck = !p.tuck;
+  if (e.code === "KeyR") { look.yaw = 0; look.pitch = 0; }
   if (e.code === "KeyM") { settings.sound = !settings.sound; sound.setEnabled(settings.sound); saveSettings(); }
   if ((e.code === "ArrowUp" || e.code === "KeyW") && p) p.target = Math.min(1500, p.target + 10);
   if ((e.code === "ArrowDown" || e.code === "KeyS") && p) p.target = Math.max(0, p.target - 10);
@@ -734,7 +735,24 @@ document.querySelectorAll("#touch button").forEach((b) => {
   b.addEventListener("pointercancel", up);
   b.addEventListener("pointerleave", up);
 });
-canvas.addEventListener("click", () => { if (game.state === "ride" && game.player) { game.camMode = (game.camMode + 1) % CAMS.length; showCamHint(); } });
+// regard à la souris : capture du pointeur (ou glisser si elle est refusée)
+const look = { yaw: 0, pitch: 0, idle: 0 };
+let dragging = false;
+canvas.addEventListener("mousedown", () => {
+  if (!game.player || game.state === "menu") return;
+  dragging = true;
+  if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+    try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* refusé : on glisse */ }
+  }
+});
+addEventListener("mouseup", () => (dragging = false));
+addEventListener("mousemove", (e) => {
+  if (!game.player || (document.pointerLockElement !== canvas && !dragging)) return;
+  look.yaw = Math.max(-2.6, Math.min(2.6, look.yaw - e.movementX * 0.0028));
+  look.pitch = Math.max(-1.35, Math.min(0.9, look.pitch - e.movementY * 0.0028));
+  look.idle = 0;
+});
+canvas.addEventListener("dblclick", () => { look.yaw = 0; look.pitch = 0; });
 
 function showCamHint() { $("h-cam").textContent = `Caméra : ${CAMS[game.camMode]} (C)`; }
 
@@ -760,13 +778,90 @@ function readControls(dt) {
     if (Math.abs(pad.axes[0]) > 0.15) steer = pad.axes[0];
     if (pad.buttons[0]?.pressed) p.sprint = true;
   }
-  p.oTarget = Math.max(-3.4, Math.min(3.4, p.o + steer * 1.8));
-  p.o += steer * 1.8 * dt;
-  if (settings.assist && !p.brake) {
-    const g = game.route.sample(p.s).grade;
-    if (g < -0.045 && p.target < settings.ftp * 0.3 && p.v > 10) p.tuck = true;
-    else if (g > -0.02 && p.tuck && !keys.has("KeyE")) p.tuck = false;
+  p.steer = steer;
+  p.steerAnalog = !!(pad && Math.abs(pad.axes[0]) > 0.15);
+}
+
+// ------------------------------------------------------------ conduite libre
+// Le vélo n'est pas guidé : on le penche, et l'inclinaison impose le rayon
+// du virage (tan φ = v² / (g·R)). Trop penché pour l'adhérence : chute.
+function placePlayerOnRoad(p, s, o) {
+  const r = game.route;
+  const q = r.sample(s);
+  p.x = q.x - q.dz * o;
+  p.z = q.z + q.dx * o;
+  p.yaw = Math.atan2(q.dx, q.dz);
+  p.lean = 0;
+  p.ri = q.i;
+  p.s = s;
+  p.o = o;
+  p.y = q.y + 0.1;
+  p.free = { y: p.y, grade: q.grade, dx: q.dx, dz: q.dz, curv: 0, crr: 0.0045 };
+}
+
+const projTmp = {};
+function groundAt(x, z, p) {
+  const r = game.route;
+  const q = r.project(x, z, p.ri, 30, projTmp);
+  const ad = Math.abs(q.d);
+  let y, surf;
+  if (ad < 3.3) { y = q.y + 0.1; surf = 0; }
+  else if (ad < 5.6) { y = q.y + 0.05 - ((ad - 3) / 2.6) * 1.3; surf = 1; }
+  else { y = hf.height(x, z); surf = 2; }
+  if (surf) {
+    // autre route (croisement, autre parcours)
+    const o = roadIndex.nearest(x, z, 3.2);
+    if (o.y !== null && Math.abs(o.y - y) < 2.5) { y = o.y + 0.1; surf = 0; }
   }
+  return { y, surf, s: q.s, d: q.d, i: q.i };
+}
+
+const MU = [0.9, 0.72, 0.55]; // asphalte, accotement, herbe/terre
+function movePlayer(p, dt) {
+  if (p.crashed > 0) { p.wasDown = true; return; }
+  if (p.wasDown) {
+    // on se relève, remis sur la route
+    p.wasDown = false;
+    placePlayerOnRoad(p, Math.max(START_S, p.s), 1.3);
+  }
+  const v = p.v;
+  const maxLean = v < 4 ? 0.45 : 0.87;
+  if (p.steerAnalog) {
+    const want = p.steer * maxLean;
+    p.lean += Math.max(-1.6 * dt, Math.min(1.6 * dt, want - p.lean));
+  } else if (p.steer) {
+    const against = p.lean && Math.sign(p.steer) !== Math.sign(p.lean);
+    p.lean += p.steer * (against ? 1.6 : 0.6) * dt;
+  } else {
+    p.lean *= Math.exp(-dt * 2.0); // le vélo se redresse seul
+  }
+  p.lean = Math.max(-maxLean, Math.min(maxLean, p.lean || 0));
+  // lacet : rayon imposé par l'inclinaison ; à l'arrêt, on tourne le guidon
+  let yawRate = (-G * Math.tan(p.lean)) / Math.max(v, 2.5);
+  if (v < 2.5) yawRate *= v / 2.5;
+  p.yaw += yawRate * dt;
+  const dx = Math.sin(p.yaw), dz = Math.cos(p.yaw);
+  p.x += dx * v * dt;
+  p.z += dz * v * dt;
+  const g0 = groundAt(p.x, p.z, p);
+  p.ri = g0.i; p.s = g0.s; p.o = g0.d; p.y = g0.y; p.surface = g0.surf;
+  const ga = groundAt(p.x + dx * 2, p.z + dz * 2, p).y, gb = groundAt(p.x - dx * 2, p.z - dz * 2, p).y;
+  const grade = Math.max(-0.45, Math.min(0.45, (ga - gb) / 4));
+  p.free = { y: p.y, grade, dx, dz, curv: 0, crr: [0.0045, 0.01, 0.03][g0.surf] };
+  p.offRoad = g0.surf > 0;
+  // adhérence
+  const mu = MU[g0.surf] * (settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1);
+  p.latG = v > 3 ? Math.abs(Math.tan(p.lean)) : 0;
+  if (p.latG > mu) crash(p, g0.surf ? "Chute ! Le vélo a glissé hors de la route" : "Chute ! Trop penché, la roue a glissé");
+  else if (p.latG > mu * 0.8) warn(`Limite d'adhérence · ${Math.round((Math.abs(p.lean) * 180) / Math.PI)}°`, "red");
+  if (g0.surf === 2 && v > 3) warn("Hors de la route", "amber");
+  // trop loin du parcours : retour sur la route
+  if (Math.abs(g0.d) > 60) {
+    crash(p, "Hors parcours");
+  }
+  // dans le mauvais sens
+  const rq = game.route.sample(p.s);
+  p.wrongWay = dx * rq.dx + dz * rq.dz < -0.3 && v > 2;
 }
 
 // ------------------------------------------------------------ boucle
@@ -834,31 +929,20 @@ function simulate(dt) {
   const r = game.route;
   const p = game.player;
   if (game.state === "ride") readControls(dt);
-  else { p.target = 60; p.brake = p.v > 4 ? 0.4 : 0; p.sprint = false; }
+  else { p.target = 60; p.brake = p.v > 4 ? 0.4 : 0; p.sprint = false; p.steer = 0; }
   computeDrafts(game.riders);
   for (const x of game.riders) {
     if (x.finished && !x.isPlayer) { x.v *= 0.98; x.s += x.v * dt; continue; }
     if (x.ai) aiThink(x, r, game.riders, dt);
-    const sp = step(x, r, game.env, dt, settings.assist);
-    // dérapage en virage trop rapide
-    const lim = x.isPlayer ? 1.0 : 2;
-    if (x.latG > 0.75 && x.isPlayer && !settings.assist) {
-      x.o -= Math.sign(sp.curv) * (x.latG - 0.75) * 3 * dt;
-      warn("Trop vite ! Freinez", "red");
-    }
-    if (x.isPlayer && x.latG > lim && !settings.assist) crash(x, "Chute ! Trop vite dans le virage");
-    x.offRoad = Math.abs(x.o) > 3.3;
-    if (x.isPlayer && Math.abs(x.o) > 4.2) {
-      if (x.v > 9) crash(x, "Chute ! Sortie de route");
-      x.o = Math.sign(x.o) * 4.2;
-    }
+    step(x, r, game.env, dt);
+    if (x.isPlayer) movePlayer(x, dt);
     // pas de traversée des autres coureurs
     for (const o of game.riders) {
       if (o === x || o.finished || o.crashed > 0) continue;
       const gap = o.s - x.s;
       if (gap > 0 && gap < 1.9 && Math.abs(o.o - x.o) < 0.55 && x.v > o.v) {
         x.v = o.v;
-        x.s = Math.min(x.s, o.s - 1.9 + 0.01);
+        if (!x.isPlayer) x.s = Math.min(x.s, o.s - 1.9 + 0.01);
       }
     }
     if (!x.finished && x.s >= r.length) {
@@ -892,6 +976,7 @@ function simulate(dt) {
       toast(`Kilomètre ${km}\nprochain km : ${fmt1(g)} %`, 3);
     }
     if (p.wbal < p.wPrime * 0.08 && p.power > p.cp * 0.9) warn("Dans le dur ! Réserve vide", "amber");
+    if (p.wrongWay) warn("Mauvais sens !", "red");
   }
 }
 
@@ -907,7 +992,7 @@ function crash(x, msg) {
   if (x.crashed > 0) return;
   x.crashed = 3.5;
   x.v = 0;
-  x.o = 1.3;
+  if (!x.isPlayer) x.o = 1.3;
   x.brake = 0;
   x.tuck = false;
   toast(`${msg}\n(3 secondes perdues)`, 3);
@@ -920,14 +1005,21 @@ function poseRiders(dt) {
   const all = [...game.riders.map((x, i) => [x, game.models[i]])];
   if (game.ghost && game.ghostModel) all.push([game.ghost, game.ghostModel]);
   for (const [x, m] of all) {
+    const v = x.ghost ? 8 : x.v;
+    if (x.isPlayer) {
+      m.root.position.set(x.x, x.y, x.z);
+      m.root.rotation.y = x.yaw;
+      const lean = x.crashed > 0 ? 1.35 * Math.sign(x.lean || 1) : x.lean;
+      m.animate(dt, v, x.cadence, x.posture, lean, Math.atan(x.free.grade));
+      m.setFirstPerson(game.camMode === 1);
+      continue;
+    }
     const p = r.sample(Math.max(0, Math.min(r.length, x.s)), pose);
     const rx = -p.dz, rz = p.dx;
     m.root.position.set(p.x + rx * x.o, p.y + 0.1, p.z + rz * x.o);
     m.root.rotation.y = Math.atan2(p.dx, p.dz);
-    const v = x.ghost ? 8 : x.v;
     const lean = x.crashed > 0 ? 1.35 : Math.atan((v * v * p.curv) / G) * 0.9;
     m.animate(dt, v, x.ghost ? 85 : x.cadence, x.ghost ? 0 : x.posture, lean, Math.atan(p.grade));
-    m.root.visible = !(x.isPlayer && game.camMode === 1);
   }
 }
 
@@ -935,44 +1027,62 @@ function placeCameraImmediately() {
   rideCamera(1, true);
 }
 
+const camEuler = new THREE.Euler(0, 0, 0, "YXZ");
+let camYaw = 0;
 function rideCamera(dt, snap = false) {
   const p = game.player;
   const r = game.route;
   if (!p) return;
-  const me = r.sample(Math.max(0, p.s));
-  const rx = -me.dz, rz = me.dx;
-  const px = me.x + rx * p.o, pz = me.z + rz * p.o, py = me.y + 0.1;
   const mode = game.camMode;
-  let want, look;
+  const px = p.x, py = p.y, pz = p.z;
+  // cap de caméra lissé (évite les à-coups)
+  let dy = p.yaw - camYaw;
+  dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  camYaw = snap ? p.yaw : camYaw + dy * (1 - Math.exp(-dt * 5));
+  // en poursuite, le regard revient doucement derrière le coureur
+  look.idle += dt;
+  if (mode === 0 && look.idle > 1.5 && !dragging && document.pointerLockElement !== canvas) {
+    look.yaw *= Math.exp(-dt * 2);
+    look.pitch *= Math.exp(-dt * 2);
+  }
+  camera.near = mode === 1 ? 0.06 : 0.5;
+  if (mode === 1) {
+    // première personne : yeux du coureur, inclinaison du vélo comprise
+    game.models[0].eyeWorld(camPos);
+    camera.position.copy(camPos);
+    camEuler.set(-0.3 + look.pitch + Math.atan(p.free.grade) * 0.6, p.yaw + Math.PI + look.yaw, -(p.crashed > 0 ? 1.2 : p.lean) * 0.9);
+    camera.quaternion.setFromEuler(camEuler);
+    camera.fov = 78;
+    camera.updateProjectionMatrix();
+    return;
+  }
+  let want, lk;
   if (mode === 0) {
-    const b = r.sample(Math.max(0, p.s - 6.5));
-    want = tmpV.set(b.x + (-b.dz) * p.o * 0.8, b.y + 2.4, b.z + b.dx * p.o * 0.8);
-    const a = r.sample(p.s + 12);
-    look = camLook.set((px * 2 + a.x) / 3, py + 1.2 + (a.y - me.y) * 0.3, (pz * 2 + a.z) / 3);
-  } else if (mode === 1) {
-    want = tmpV.set(px + me.dx * 0.25, py + 1.55 + (p.posture < 0 ? -0.2 : 0), pz + me.dz * 0.25);
-    const a = r.sample(p.s + 25);
-    look = camLook.set(a.x + (-a.dz) * p.o, a.y + 1.2, a.z + a.dx * p.o);
+    const yaw = camYaw + look.yaw, pitch = 0.3 - look.pitch * 0.8;
+    const dist = 6.2;
+    const c = Math.cos(Math.max(-0.2, Math.min(1.3, pitch)));
+    want = tmpV.set(px - Math.sin(yaw) * dist * c, py + 1.1 + Math.sin(Math.max(-0.2, Math.min(1.3, pitch))) * dist, pz - Math.cos(yaw) * dist * c);
+    lk = camLook.set(px + Math.sin(camYaw) * 3, py + 1.2, pz + Math.cos(camYaw) * 3);
   } else if (mode === 2) {
     // moto TV qui précède le coureur, de trois quarts
     const a = r.sample(p.s + 9);
-    want = tmpV.set(a.x + (-a.dz) * -2.5, a.y + 1.8, a.z + a.dx * -2.5);
-    look = camLook.set(px, py + 1.0, pz);
+    want = tmpV.set(a.x + a.dz * 2.5, a.y + 1.8, a.z - a.dx * 2.5);
+    lk = camLook.set(px, py + 1.0, pz);
   } else {
     const b = r.sample(Math.max(0, p.s - 45));
-    want = tmpV.set(b.x - b.dz * 25, Math.max(b.y, me.y) + 38, b.z + b.dx * 25);
-    look = camLook.set(px, py, pz);
+    want = tmpV.set(b.x - b.dz * 25, Math.max(b.y, py) + 38, b.z + b.dx * 25);
+    lk = camLook.set(px, py, pz);
   }
   const ground = hf.height(want.x, want.z) + 1.2;
   if (want.y < ground) want.y = ground;
-  if (snap || mode === 1) camPos.copy(want);
+  if (snap || mode === 0) camPos.copy(want);
   else camPos.lerp(want, 1 - Math.exp(-dt * (mode === 3 ? 2 : 6)));
   const g2 = hf.height(camPos.x, camPos.z) + 1.2;
   if (camPos.y < g2) camPos.y = g2;
   if (camPos.distanceTo(want) > 60) camPos.copy(want);
   camera.position.copy(camPos);
-  camera.lookAt(look);
-  camera.fov = mode === 1 ? 75 : 62;
+  camera.lookAt(lk);
+  camera.fov = 62;
   camera.updateProjectionMatrix();
 }
 
@@ -1023,11 +1133,12 @@ function updateHud(dt) {
   $("h-cad").textContent = Math.round(p.cadence);
   $("h-gear").textContent = gearLabel(p);
   $("h-hr").textContent = Math.round(p.hr);
-  const g = sp.grade * 100;
+  const g = p.free.grade * 100;
   const gEl = $("h-grade");
   gEl.textContent = `${g > 0 ? "+" : ""}${fmt1(g)} %`;
-  gEl.style.color = gradeColor(sp.grade);
-  $("h-alt").textContent = `${fmtInt(sp.y)} m`;
+  gEl.style.color = gradeColor(p.free.grade);
+  $("h-alt").textContent = `${fmtInt(p.y)} m`;
+  $("h-lean").textContent = `${Math.round((Math.abs(p.lean) * 180) / Math.PI)}°`;
   $("h-left").textContent = `${fmt1(Math.max(0, r.length - p.s) / 1000)} km`;
   $("h-time").textContent = fmtTime(p.time);
   if (settings.mode === "race") {

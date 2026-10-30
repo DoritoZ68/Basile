@@ -40,6 +40,9 @@ export class Heightfield {
     const n = this.h.length;
     const dist = new Float32Array(n).fill(1e9);
     const rh = new Float32Array(n);
+    // altitude de la route la plus basse à proximité : dans les lacets, le
+    // relief ne doit jamais dépasser la chaussée inférieure
+    const minH = new Float32Array(n).fill(1e9);
     const ri = Math.ceil(R1 / this.cx) + 1, rj = Math.ceil(R1 / this.cz) + 1;
     for (const r of routes) {
       for (let k = 0; k < r.x.length; k++) {
@@ -54,17 +57,39 @@ export class Heightfield {
             const d = Math.hypot(vx - x, vz - z);
             const idx = j * this.nx + i;
             if (d < dist[idx]) { dist[idx] = d; rh[idx] = y; }
+            if (d < R0 + 12 && y < minH[idx]) minH[idx] = y;
           }
         }
       }
     }
+    this.roadMask = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const d = dist[i];
       if (d >= R1) continue;
+      this.roadMask[i] = 1;
       let w = (d - R0) / (R1 - R0);
       w = w <= 0 ? 0 : w * w * (3 - 2 * w);
-      this.h[i] = (rh[i] - 0.35) * (1 - w) + this.h[i] * w;
+      const base = Math.min(rh[i], minH[i]) - 1.0;
+      this.h[i] = base * (1 - w) + this.h[i] * w;
+      if (d < R0 + 12) this.h[i] = Math.min(this.h[i], minH[i] - 1.0);
     }
+  }
+
+  // hauteur d'un sommet pour un niveau de détail grossier : près des routes,
+  // on prend le point le plus bas du bloc pour ne pas couper la chaussée
+  lodHeight(i, j, stride) {
+    if (stride === 1 || !this.roadMask) return this.at(i, j);
+    const r = stride >> 1;
+    let road = false, lo = 1e9;
+    for (let b = j - r; b <= j + r; b++) {
+      for (let a = i - r; a <= i + r; a++) {
+        const ai = Math.min(this.nx - 1, Math.max(0, a)), bj = Math.min(this.nz - 1, Math.max(0, b));
+        const k = bj * this.nx + ai;
+        if (this.roadMask[k]) road = true;
+        if (this.h[k] < lo) lo = this.h[k];
+      }
+    }
+    return road ? lo : this.at(i, j);
   }
 }
 
@@ -178,7 +203,7 @@ export class Terrain {
     let p = 0;
     const put = (i, j, drop) => {
       const x = hf.x0 + i * hf.cx, z = hf.z0 + j * hf.cz;
-      pos[p * 3] = x; pos[p * 3 + 1] = hf.at(i, j) - drop; pos[p * 3 + 2] = z;
+      pos[p * 3] = x; pos[p * 3 + 1] = hf.lodHeight(i, j, stride) - drop; pos[p * 3 + 2] = z;
       const s = stride;
       const nx = (hf.at(i - s, j) - hf.at(i + s, j)) / (2 * s * hf.cx);
       const nz = (hf.at(i, j - s) - hf.at(i, j + s)) / (2 * s * hf.cz);

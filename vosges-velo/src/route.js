@@ -116,6 +116,33 @@ export class Route {
     return { v: vmin, dist };
   }
 
+  // projection d'un point sur le parcours, cherchée autour de l'indice hint
+  // -> { s, d (écart latéral, + = droite), i, y }
+  project(x, z, hint, win = 80, out = {}) {
+    const a = Math.max(0, hint - win), b = Math.min(this.n - 2, hint + win);
+    let best = 1e18;
+    for (let i = a; i <= b; i++) {
+      const x0 = this.x[i], z0 = this.z[i];
+      const ex = this.x[i + 1] - x0, ez = this.z[i + 1] - z0;
+      const l2 = ex * ex + ez * ez || 1;
+      let t = ((x - x0) * ex + (z - z0) * ez) / l2;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const px = x0 + ex * t, pz = z0 + ez * t;
+      const d2 = (x - px) ** 2 + (z - pz) ** 2;
+      if (d2 < best) {
+        best = d2;
+        const l = Math.sqrt(l2);
+        out.i = i;
+        out.s = this.s[i] + t * l;
+        out.y = this.y[i] + (this.y[i + 1] - this.y[i]) * t;
+        // signe : produit vectoriel direction × (point - projeté)
+        const side = (ex * (z - pz) - ez * (x - px)) / l;
+        out.d = Math.sign(side) * Math.sqrt(d2);
+      }
+    }
+    return out;
+  }
+
   roadName(s) {
     let name = "";
     for (const [d, label] of this.names) {
