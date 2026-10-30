@@ -29,9 +29,9 @@ function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 const saveSettings = () => writeLS("vv-settings", settings);
 
 const QUALITY = {
-  bas: { pr: 0.7, lod: 0.6, trees: 120, treeDist: 450, density: 0.55, bDist: 700, ortho: 2048 },
-  moyen: { pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, ortho: 4096 },
-  eleve: { pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, ortho: 4096 },
+  bas: { pr: 0.7, lod: 0.6, trees: 120, treeDist: 450, density: 0.55, bDist: 700, ortho: 2048, shadow: 0 },
+  moyen: { pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, ortho: 4096, shadow: 1024 },
+  eleve: { pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, ortho: 4096, shadow: 2048 },
 };
 const qKey = () => (settings.quality === "auto" ? "moyen" : settings.quality);
 
@@ -70,7 +70,30 @@ const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.5, 60
 scene.fog = new THREE.Fog(0xcfe0ef, 2000, 16000);
 const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5b5544, 1.5);
 const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-scene.add(hemi, sun);
+scene.add(hemi, sun, sun.target);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+// ombres portées du soleil dans un cadre de 90 m qui suit la caméra
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -45;
+sun.shadow.camera.right = sun.shadow.camera.top = 45;
+sun.shadow.camera.near = 10;
+sun.shadow.camera.far = 900;
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.6;
+const sunDir = new THREE.Vector3(0.3, 0.6, 0.2).normalize();
+function applyShadows() {
+  const size = QUALITY[qKey()].shadow;
+  const on = size > 0;
+  if (sun.shadow.map && sun.shadow.mapSize.x !== size) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  sun.shadow.mapSize.set(size || 512, size || 512);
+  if (renderer.shadowMap.enabled !== on) {
+    renderer.shadowMap.enabled = on;
+    sun.castShadow = on;
+    scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => (m.needsUpdate = true)); });
+  }
+  sun.castShadow = on;
+}
 const sky = buildSky();
 scene.add(sky);
 addEventListener("resize", () => {
@@ -139,12 +162,13 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     scene.add(forest.group);
     $("credits").textContent = D.meta.attribution;
     applyConditions();
+    applyShadows();
     buildMenu();
     selectRoute(settings.route, settings.reverse);
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, terrain, renderer, settings, simulate, keys, look };
+    window.__vv = { THREE, scene, camera, game, hf, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -161,7 +185,7 @@ function applyConditions() {
     soir: { dir: [-0.8, 0.22, 0.4], sun: 0xffb27a, si: 1.8, hs: 0x9db2d8, hg: 0x5a4636, hi: 1.2, top: 0x35558f, hor: 0xf3b07a },
   }[settings.time];
   const dir = new THREE.Vector3(...T.dir).normalize();
-  sun.position.copy(dir).multiplyScalar(1000);
+  sunDir.copy(dir);
   sun.color.set(T.sun);
   sun.intensity = T.si;
   hemi.color.set(T.hs);
@@ -301,6 +325,7 @@ function buildMenu() {
     pixelRatio = Math.min(devicePixelRatio, QUALITY[qKey()].pr);
     renderer.setPixelRatio(pixelRatio);
     if (game.route) forest.build(game.route, QUALITY[qKey()].trees, QUALITY[qKey()].density);
+    applyShadows();
   });
   seg(g, "Son", "sound", [[true, "Oui"], [false, "Non"]], (v) => sound.setEnabled(v));
   const gn = document.createElement("p");
@@ -592,9 +617,10 @@ function startRide() {
     const base = LEVEL_WKG[settings.level];
     RIVALS.forEach((rv, i) => {
       const ftp = Math.round(rv.mass * base * rv.wkg);
-      const row = Math.floor((i + 1) / 3), col = (i + 1) % 3;
+      // grille de départ : le joueur occupe la première place à droite
+      const slot = i + 1, row = Math.floor(slot / 3), lane = [1.3, 0.1, -1.1][slot % 3];
       const a = makeRider({
-        name: rv.name, mass: rv.mass, ftp, s: START_S - row * 2.2, o: -1 + col * 1.15,
+        name: rv.name, mass: rv.mass, ftp, s: START_S - row * 2.2, o: lane,
         ai: { climb: rv.climb, flat: rv.flat, aggr: rv.aggr, mood: 1, t: 0, attack: 0, lane: 0.3 + (i % 3) * 0.6, mu: 0.5 + Math.random() * 0.1 },
       });
       a.color = rv.jersey;
@@ -701,22 +727,29 @@ function finish() {
 // ------------------------------------------------------------ commandes
 const keys = new Set();
 const touchKeys = new Set();
+// lettres tapées (indépendantes de la disposition AZERTY / QWERTY)
+const letters = new Set();
 addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   keys.add(e.code);
+  if (e.key && e.key.length === 1) letters.add(e.key.toLowerCase());
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   const p = game.player;
   if (e.code === "KeyC" && game.player) { game.camMode = (game.camMode + 1) % CAMS.length; showCamHint(); }
   if ((e.code === "Escape" || e.code === "KeyP") && game.state !== "menu") setPaused(game.state !== "paused");
-  if (e.code === "KeyE" && p) p.tuck = !p.tuck;
+  const L = (e.key || "").toLowerCase();
+  if (L === "x" && p) p.tuck = !p.tuck;
   if (e.code === "KeyR") { look.yaw = 0; look.pitch = 0; }
   if (e.code === "KeyM") { settings.sound = !settings.sound; sound.setEnabled(settings.sound); saveSettings(); }
-  if ((e.code === "ArrowUp" || e.code === "KeyW") && p) p.target = Math.min(1500, p.target + 10);
-  if ((e.code === "ArrowDown" || e.code === "KeyS") && p) p.target = Math.max(0, p.target - 10);
+  if ((e.code === "ArrowUp" || L === "e") && p) p.target = Math.min(1500, p.target + 10);
+  if ((e.code === "ArrowDown" || L === "a") && p) p.target = Math.max(0, p.target - 10);
 });
-addEventListener("keyup", (e) => keys.delete(e.code));
-addEventListener("blur", () => keys.clear());
+addEventListener("keyup", (e) => {
+  keys.delete(e.code);
+  if (e.key && e.key.length === 1) letters.delete(e.key.toLowerCase());
+});
+addEventListener("blur", () => { keys.clear(); letters.clear(); });
 addEventListener("wheel", (e) => {
   if (game.player && game.state !== "menu") game.player.target = Math.max(0, Math.min(1500, game.player.target - Math.sign(e.deltaY) * 10));
 }, { passive: true });
@@ -762,15 +795,16 @@ function readControls(dt) {
   if (!p) return;
   const pad = navigator.getGamepads ? [...navigator.getGamepads()].find((x) => x) : null;
   const k = (c) => keys.has(c);
-  const up = k("ArrowUp") || k("KeyW") || touchKeys.has("up");
-  const down = k("ArrowDown") || k("KeyS") || touchKeys.has("down");
+  const l = (c) => letters.has(c);
+  const up = k("ArrowUp") || l("e") || touchKeys.has("up");
+  const down = k("ArrowDown") || l("a") || touchKeys.has("down");
   if (up || down) {
     holdT += dt;
     if (holdT > 0.35) p.target = Math.max(0, Math.min(1500, p.target + (up ? 1 : -1) * 120 * dt));
   } else holdT = 0;
   p.sprint = k("ShiftLeft") || k("ShiftRight") || touchKeys.has("sprint");
-  p.brake = k("Space") || touchKeys.has("brake") ? 1 : 0;
-  let steer = (k("ArrowRight") || k("KeyD") || touchKeys.has("right") ? 1 : 0) - (k("ArrowLeft") || k("KeyA") || touchKeys.has("left") ? 1 : 0);
+  p.brake = k("Space") || l("s") || touchKeys.has("brake") ? 1 : 0;
+  let steer = (k("ArrowRight") || l("d") || touchKeys.has("right") ? 1 : 0) - (k("ArrowLeft") || l("q") || touchKeys.has("left") ? 1 : 0);
   if (pad) {
     const rt = pad.buttons[7]?.value || 0, lt = pad.buttons[6]?.value || 0;
     if (rt > 0.05) p.target = Math.round((rt * settings.ftp * 1.3) / 5) * 5;
@@ -792,10 +826,12 @@ function placePlayerOnRoad(p, s, o) {
   p.z = q.z + q.dx * o;
   p.yaw = Math.atan2(q.dx, q.dz);
   p.lean = 0;
+  p.leanTarget = 0;
+  p.leanVel = 0;
   p.ri = q.i;
   p.s = s;
   p.o = o;
-  p.y = q.y + 0.1;
+  p.y = q.y + 0.06;
   p.free = { y: p.y, grade: q.grade, dx: q.dx, dz: q.dz, curv: 0, crr: 0.0045 };
 }
 
@@ -805,13 +841,13 @@ function groundAt(x, z, p) {
   const q = r.project(x, z, p.ri, 30, projTmp);
   const ad = Math.abs(q.d);
   let y, surf;
-  if (ad < 3.3) { y = q.y + 0.1; surf = 0; }
-  else if (ad < 5.6) { y = q.y + 0.05 - ((ad - 3) / 2.6) * 1.3; surf = 1; }
+  if (ad < 3.2) { y = q.y + 0.06; surf = 0; }
+  else if (ad < 4.4) { y = q.y + 0.04 - ((ad - 3.2) / 1.2) * 0.24; surf = 1; }
   else { y = hf.height(x, z); surf = 2; }
   if (surf) {
     // autre route (croisement, autre parcours)
     const o = roadIndex.nearest(x, z, 3.2);
-    if (o.y !== null && Math.abs(o.y - y) < 2.5) { y = o.y + 0.1; surf = 0; }
+    if (o.y !== null && Math.abs(o.y - y) < 2.5) { y = o.y + 0.06; surf = 0; }
   }
   return { y, surf, s: q.s, d: q.d, i: q.i };
 }
@@ -825,17 +861,21 @@ function movePlayer(p, dt) {
     placePlayerOnRoad(p, Math.max(START_S, p.s), 1.3);
   }
   const v = p.v;
-  const maxLean = v < 4 ? 0.45 : 0.87;
+  // inclinaison : la consigne évolue progressivement, le vélo la suit avec
+  // un amortissement (pas d'à-coups) et se redresse seul au relâchement
+  const maxLean = v < 4 ? 0.4 : 0.85;
   if (p.steerAnalog) {
-    const want = p.steer * maxLean;
-    p.lean += Math.max(-1.6 * dt, Math.min(1.6 * dt, want - p.lean));
+    p.leanTarget = p.steer * maxLean;
   } else if (p.steer) {
-    const against = p.lean && Math.sign(p.steer) !== Math.sign(p.lean);
-    p.lean += p.steer * (against ? 1.6 : 0.6) * dt;
+    const against = p.leanTarget && Math.sign(p.steer) !== Math.sign(p.leanTarget);
+    p.leanTarget = (p.leanTarget || 0) + p.steer * (against ? 1.3 : 0.6) * dt;
   } else {
-    p.lean *= Math.exp(-dt * 2.0); // le vélo se redresse seul
+    p.leanTarget = (p.leanTarget || 0) * Math.exp(-dt * 1.5);
   }
-  p.lean = Math.max(-maxLean, Math.min(maxLean, p.lean || 0));
+  p.leanTarget = Math.max(-maxLean, Math.min(maxLean, p.leanTarget));
+  const w = 5.5;
+  p.leanVel = (p.leanVel || 0) + (w * w * (p.leanTarget - (p.lean || 0)) - 2 * w * p.leanVel) * dt;
+  p.lean = Math.max(-0.95, Math.min(0.95, (p.lean || 0) + p.leanVel * dt));
   // lacet : rayon imposé par l'inclinaison ; à l'arrêt, on tourne le guidon
   let yawRate = (-G * Math.tan(p.lean)) / Math.max(v, 2.5);
   if (v < 2.5) yawRate *= v / 2.5;
@@ -908,6 +948,12 @@ function loop(now) {
   forest.update(camera.position, q.treeDist);
   buildings.update(camera.position, q.bDist);
   sky.position.copy(camera.position);
+  // le cadre d'ombre suit le coureur (ou le point regardé), aligné sur une grille
+  const focus = game.player && game.state !== "menu" ? tmpV.set(game.player.x, game.player.y, game.player.z) : camLook;
+  const snapG = 2;
+  sun.target.position.set(Math.round(focus.x / snapG) * snapG, focus.y, Math.round(focus.z / snapG) * snapG);
+  sun.position.copy(sun.target.position).addScaledVector(sunDir, 400);
+  sun.target.updateMatrixWorld();
   updateFog(camera.position.y);
   renderer.render(scene, camera);
 }
@@ -1012,14 +1058,16 @@ function poseRiders(dt) {
       const lean = x.crashed > 0 ? 1.35 * Math.sign(x.lean || 1) : x.lean;
       m.animate(dt, v, x.cadence, x.posture, lean, Math.atan(x.free.grade));
       m.setFirstPerson(game.camMode === 1);
+      if (m.shadow) m.shadow.visible = !renderer.shadowMap.enabled;
       continue;
     }
     const p = r.sample(Math.max(0, Math.min(r.length, x.s)), pose);
     const rx = -p.dz, rz = p.dx;
-    m.root.position.set(p.x + rx * x.o, p.y + 0.1, p.z + rz * x.o);
+    m.root.position.set(p.x + rx * x.o, p.y + 0.06, p.z + rz * x.o);
     m.root.rotation.y = Math.atan2(p.dx, p.dz);
     const lean = x.crashed > 0 ? 1.35 : Math.atan((v * v * p.curv) / G) * 0.9;
     m.animate(dt, v, x.ghost ? 85 : x.cadence, x.ghost ? 0 : x.posture, lean, Math.atan(p.grade));
+    if (m.shadow) m.shadow.visible = !renderer.shadowMap.enabled;
   }
 }
 
@@ -1050,7 +1098,7 @@ function rideCamera(dt, snap = false) {
     // première personne : yeux du coureur, inclinaison du vélo comprise
     game.models[0].eyeWorld(camPos);
     camera.position.copy(camPos);
-    camEuler.set(-0.3 + look.pitch + Math.atan(p.free.grade) * 0.6, p.yaw + Math.PI + look.yaw, -(p.crashed > 0 ? 1.2 : p.lean) * 0.9);
+    camEuler.set(-0.3 + look.pitch + Math.atan(p.free.grade) * 0.6, p.yaw + Math.PI + look.yaw, -(p.crashed > 0 ? 1.0 : p.lean) * 0.6);
     camera.quaternion.setFromEuler(camEuler);
     camera.fov = 78;
     camera.updateProjectionMatrix();
@@ -1082,6 +1130,8 @@ function rideCamera(dt, snap = false) {
   if (camPos.distanceTo(want) > 60) camPos.copy(want);
   camera.position.copy(camPos);
   camera.lookAt(lk);
+  // léger roulis de la caméra de poursuite avec le vélo
+  if (mode === 0) camera.rotateZ(-p.lean * 0.18);
   camera.fov = 62;
   camera.updateProjectionMatrix();
 }

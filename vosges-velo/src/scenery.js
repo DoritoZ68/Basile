@@ -49,36 +49,57 @@ export function rng(seed) {
 
 // ------------------------------------------------------------ routes
 function roadTexture() {
+  // 6 m de large x 13 m de long : enrobé, réparations, fissures, marquages
+  const W = 256, H = 1024;
   const c = document.createElement("canvas");
-  c.width = 128; c.height = 512;
+  c.width = W; c.height = H;
   const g = c.getContext("2d");
-  g.fillStyle = "#5d5d5f";
-  g.fillRect(0, 0, 128, 512);
+  g.fillStyle = "#58585a";
+  g.fillRect(0, 0, W, H);
   const r = rng(7);
-  for (let i = 0; i < 5000; i++) {
-    const v = 70 + r() * 50;
-    g.fillStyle = `rgba(${v},${v},${v + 3},${0.25 + r() * 0.3})`;
-    g.fillRect(r() * 128, r() * 512, 1 + r() * 2, 1 + r() * 2);
+  for (let i = 0; i < 26000; i++) {
+    const v = 60 + r() * 60;
+    g.fillStyle = `rgba(${v},${v},${v + 2},${0.18 + r() * 0.35})`;
+    g.fillRect(r() * W, r() * H, 1 + r() * 2.2, 1 + r() * 2.2);
+  }
+  // reprises d'enrobé plus sombres
+  for (let i = 0; i < 4; i++) {
+    g.fillStyle = `rgba(35,35,38,${0.18 + r() * 0.15})`;
+    g.fillRect(r() * W * 0.7, r() * H, 30 + r() * 80, 40 + r() * 160);
+  }
+  // fissures
+  g.strokeStyle = "rgba(25,25,25,0.5)";
+  g.lineWidth = 1.2;
+  for (let i = 0; i < 9; i++) {
+    let x = r() * W, y = r() * H;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 8; k++) { x += (r() - 0.5) * 18; y += r() * 14; g.lineTo(x, y); }
+    g.stroke();
   }
   // usure des bandes de roulement
-  const grd = g.createLinearGradient(0, 0, 128, 0);
-  grd.addColorStop(0, "rgba(40,40,40,0.25)");
-  grd.addColorStop(0.25, "rgba(40,40,40,0)");
-  grd.addColorStop(0.32, "rgba(30,30,30,0.18)");
+  const grd = g.createLinearGradient(0, 0, W, 0);
+  grd.addColorStop(0, "rgba(90,88,80,0.35)");
+  grd.addColorStop(0.08, "rgba(40,40,40,0)");
+  grd.addColorStop(0.3, "rgba(28,28,28,0.2)");
   grd.addColorStop(0.42, "rgba(40,40,40,0)");
   grd.addColorStop(0.58, "rgba(40,40,40,0)");
-  grd.addColorStop(0.68, "rgba(30,30,30,0.18)");
-  grd.addColorStop(0.75, "rgba(40,40,40,0)");
-  grd.addColorStop(1, "rgba(40,40,40,0.25)");
+  grd.addColorStop(0.7, "rgba(28,28,28,0.2)");
+  grd.addColorStop(0.92, "rgba(40,40,40,0)");
+  grd.addColorStop(1, "rgba(90,88,80,0.35)");
   g.fillStyle = grd;
-  g.fillRect(0, 0, 128, 512);
-  // ligne axiale discontinue (3 m de trait / 10 m de vide, ramené à 13 m)
-  g.fillStyle = "#e9e9e2";
-  g.fillRect(62, 0, 4, 118);
+  g.fillRect(0, 0, W, H);
+  // ligne axiale discontinue (3 m de trait, 10 m de vide), un peu usée
+  g.fillStyle = "rgba(236,236,228,0.92)";
+  g.fillRect(W / 2 - 4, 0, 8, Math.round(H * 3 / 13));
+  for (let i = 0; i < 300; i++) {
+    g.fillStyle = "rgba(80,80,80,0.5)";
+    g.fillRect(W / 2 - 4 + r() * 8, r() * H * 3 / 13, 1.5, 1.5);
+  }
   // lignes de rive
-  g.fillStyle = "rgba(235,235,225,0.85)";
-  g.fillRect(5, 0, 3, 512);
-  g.fillRect(120, 0, 3, 512);
+  g.fillStyle = "rgba(232,232,222,0.8)";
+  g.fillRect(9, 0, 5, H);
+  g.fillRect(W - 14, 0, 5, H);
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.colorSpace = THREE.SRGBColorSpace;
@@ -86,11 +107,31 @@ function roadTexture() {
   return t;
 }
 
+// accotement : gravillons et herbe rase
+function vergeTexture() {
+  const c = document.createElement("canvas");
+  c.width = 64; c.height = 256;
+  const g = c.getContext("2d");
+  g.fillStyle = "#6d6b58";
+  g.fillRect(0, 0, 64, 256);
+  const r = rng(11);
+  for (let i = 0; i < 5000; i++) {
+    const grass = r() < 0.55;
+    const v = r();
+    g.fillStyle = grass ? `rgba(${70 + v * 40},${95 + v * 45},${45 + v * 20},0.7)` : `rgba(${110 + v * 50},${108 + v * 50},${100 + v * 45},0.6)`;
+    g.fillRect(r() * 64, r() * 256, 1 + r() * 2, 1 + r() * 3);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function buildRoads(routes, renderer) {
   const tex = roadTexture();
   tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const mat = new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const vergeMat = new THREE.MeshLambertMaterial({ color: 0x5f6448, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const vergeMat = new THREE.MeshLambertMaterial({ map: vergeTexture(), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   const group = new THREE.Group();
   const done = new RoadIndex([], 6);
   routes.forEach((r, ri) => {
@@ -119,9 +160,10 @@ export function buildRoads(routes, renderer) {
       // chevauchement de 3 points avec la route existante : pas de jour
       const a = Math.max(0, i - 3), b = Math.min(n - 1, j + 2);
       if (b - a >= 1) {
-        group.add(ribbon(r, a, b, [[-3.0, 0.1], [3.0, 0.1]], mat, true));
-        group.add(ribbon(r, a, b, [[-5.6, -1.25], [-3.0, 0.05]], vergeMat, false));
-        group.add(ribbon(r, a, b, [[3.0, 0.05], [5.6, -1.25]], vergeMat, false));
+        // chaussée au ras du sol, accotements qui rejoignent le terrain
+        group.add(ribbon(r, a, b, [[-3.0, 0.06], [3.0, 0.06]], mat, true));
+        group.add(ribbon(r, a, b, [[-4.4, -0.2], [-2.9, 0.04]], vergeMat, true));
+        group.add(ribbon(r, a, b, [[2.9, 0.04], [4.4, -0.2]], vergeMat, true));
       }
       i = j;
     }
@@ -160,39 +202,52 @@ function ribbon(r, a, b, edge, mat, uvs) {
   g.computeVertexNormals();
   const m = new THREE.Mesh(g, mat);
   m.matrixAutoUpdate = false;
+  m.receiveShadow = true;
   return m;
 }
 
 // ------------------------------------------------------------ arbres
+// sapin : étages de branches irréguliers, plus sombres vers le bas et l'intérieur
 function conifer() {
   const parts = [];
   const trunk = new THREE.CylinderGeometry(0.008, 0.014, 0.3, 5);
   trunk.translate(0, 0.15, 0);
   paint(trunk, 0x4a3426);
   parts.push(trunk);
-  const tiers = [[0.15, 0.42, 0.14], [0.115, 0.36, 0.38], [0.075, 0.3, 0.64]];
+  const R = rng(3);
+  const tiers = [[0.16, 0.3, 0.1], [0.14, 0.28, 0.27], [0.115, 0.26, 0.43], [0.09, 0.24, 0.58], [0.06, 0.25, 0.72]];
   for (const [rad, h, y] of tiers) {
-    const c = new THREE.ConeGeometry(rad, h, 7);
+    const c = new THREE.ConeGeometry(rad, h, 8, 1, true);
+    // bords de branches dentelés
+    const pa = c.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      if (pa.getY(i) < 0) {
+        const k = 0.85 + R() * 0.3;
+        pa.setX(i, pa.getX(i) * k); pa.setZ(i, pa.getZ(i) * k); pa.setY(i, pa.getY(i) - R() * 0.03);
+      }
+    }
+    c.rotateY(R() * 3);
     c.translate(0, y + h / 2, 0);
-    paint(c, 0x2c4a2a);
+    paintGrad(c, 0x1f3a22, 0x3c6338);
     parts.push(c);
   }
   return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p));
 }
 
+// feuillu (hêtre, chêne) : houppier en plusieurs masses, éclairé par le haut
 function broadleaf() {
   const parts = [];
   const trunk = new THREE.CylinderGeometry(0.014, 0.024, 0.5, 5);
   trunk.translate(0, 0.25, 0);
   paint(trunk, 0x5a4636);
   parts.push(trunk);
-  const crowns = [[0, 0.6, 0, 0.21], [0.1, 0.74, 0.04, 0.15], [-0.08, 0.78, -0.05, 0.14]];
+  const crowns = [[0, 0.58, 0, 0.21], [0.11, 0.72, 0.05, 0.16], [-0.09, 0.76, -0.06, 0.15], [0.02, 0.86, -0.02, 0.12], [-0.06, 0.62, 0.12, 0.13]];
   for (const [x, y, z, r] of crowns) {
-    const s = new THREE.IcosahedronGeometry(r, 0);
-    s.scale(1, 1.1, 1);
-    s.translate(x, y, z);
-    paint(s, 0x4d6b32);
-    parts.push(s);
+    const sp = new THREE.IcosahedronGeometry(r, 1);
+    sp.scale(1, 0.95, 1);
+    sp.translate(x, y, z);
+    paintGrad(sp, 0x34502a, 0x6f8f45);
+    parts.push(sp);
   }
   return mergeGeometries(parts.map((p) => p.index ? p.toNonIndexed() : p));
 }
@@ -202,6 +257,21 @@ function vine() {
   g.translate(0, 0.6, 0);
   paint(g, 0x5f7a2e);
   return g;
+}
+
+// dégradé vertical (ombre interne simulée, sans calcul à l'exécution)
+function paintGrad(g, low, high) {
+  g.computeBoundingBox();
+  const bb = g.boundingBox;
+  const c0 = new THREE.Color(low), c1 = new THREE.Color(high), c = new THREE.Color();
+  const pa = g.attributes.position;
+  const a = new Float32Array(pa.count * 3);
+  for (let i = 0; i < pa.count; i++) {
+    const t = (pa.getY(i) - bb.min.y) / (bb.max.y - bb.min.y || 1);
+    c.copy(c0).lerp(c1, t * t * 0.6 + t * 0.4);
+    a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(a, 3));
 }
 
 function paint(g, hex) {
@@ -219,7 +289,7 @@ export class Forest {
     this.meta = data.meta;
     this.roadIndex = roadIndex;
     this.geos = { conifer: conifer(), broadleaf: broadleaf(), vine: vine() };
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     this.group = new THREE.Group();
     this.chunks = [];
   }
@@ -316,6 +386,7 @@ export class Forest {
         const L = lists[type];
         if (!L.length) continue;
         const im = new THREE.InstancedMesh(this.geos[type], this.mat, L.length);
+        im.castShadow = true;
         L.forEach(([m, shade], i) => {
           im.setMatrixAt(i, m);
           col.setRGB(shade, shade * (0.95 + R() * 0.1), shade * (0.9 + R() * 0.15));
@@ -457,6 +528,8 @@ export function buildBuildings(list, hf) {
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat);
     m.matrixAutoUpdate = false;
+    m.castShadow = true;
+    m.receiveShadow = true;
     group.add(m);
     chunks.push({ x: bk.x, z: bk.z, mesh: m });
   }
@@ -641,6 +714,8 @@ export function buildSky() {
         c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.25) * (1.0 - haze * 0.7);
         if (vDir.y < 0.0) c = horizon;
         gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
   });
   const m = new THREE.Mesh(geo, mat);
@@ -695,6 +770,7 @@ export class Crowd {
     this.rest = new THREE.InstancedMesh(this.geos.rest, mat, people.length);
     const c = new THREE.Color();
     people.forEach((q, i) => this.shirts.setColorAt(i, c.setHex(q.col)));
+    this.shirts.castShadow = this.rest.castShadow = true;
     this.group.add(this.shirts, this.rest);
     this.update(-1e9, 0);
   }

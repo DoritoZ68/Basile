@@ -130,6 +130,7 @@ export class RiderModel {
     this.body.add(this.torso, this.headM, this.helmet);
 
     this.eye = new THREE.Vector3();
+    this.root.traverse((o) => { if (o.isMesh && o !== this.shadow) o.castShadow = !ghost; });
     this.phase = 0;
     this.wheelAngle = 0;
     this.standing = 0;

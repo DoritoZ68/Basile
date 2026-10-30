@@ -36,7 +36,7 @@ export class Heightfield {
   // Aplanit le relief sous les routes (déblais / remblais) pour que la
   // chaussée épouse le terrain.
   flattenRoads(routes) {
-    const R0 = 26, R1 = 70;
+    const R0 = 20, R1 = 62, RMIN = 34;
     const n = this.h.length;
     const dist = new Float32Array(n).fill(1e9);
     const rh = new Float32Array(n);
@@ -57,7 +57,7 @@ export class Heightfield {
             const d = Math.hypot(vx - x, vz - z);
             const idx = j * this.nx + i;
             if (d < dist[idx]) { dist[idx] = d; rh[idx] = y; }
-            if (d < R0 + 12 && y < minH[idx]) minH[idx] = y;
+            if (d < RMIN && y < minH[idx]) minH[idx] = y;
           }
         }
       }
@@ -69,9 +69,9 @@ export class Heightfield {
       this.roadMask[i] = 1;
       let w = (d - R0) / (R1 - R0);
       w = w <= 0 ? 0 : w * w * (3 - 2 * w);
-      const base = Math.min(rh[i], minH[i]) - 1.0;
+      const base = Math.min(rh[i], minH[i]) - 0.2;
       this.h[i] = base * (1 - w) + this.h[i] * w;
-      if (d < R0 + 12) this.h[i] = Math.min(this.h[i], minH[i] - 1.0);
+      if (d < RMIN) this.h[i] = Math.min(this.h[i], minH[i] - 0.2);
     }
   }
 
@@ -185,6 +185,7 @@ export class Terrain {
         const i1 = Math.min(hf.nx - 1, i0 + CHUNK), j1 = Math.min(hf.nz - 1, j0 + CHUNK);
         const cx = hf.x0 + ((i0 + i1) / 2) * hf.cx, cz = hf.z0 + ((j0 + j1) / 2) * hf.cz;
         const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+        mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
         mesh.frustumCulled = true;
         this.group.add(mesh);

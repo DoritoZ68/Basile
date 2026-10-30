@@ -17,11 +17,11 @@ pour rester fluides sur un petit portable.
 
 | Touche | Action |
 | --- | --- |
-| ↑ ↓ ou Z S (molette) | Doser l'effort, en watts |
-| ← → ou Q D | Pencher le vélo pour tourner : plus on maintient, plus on se penche ; relâché, le vélo se redresse |
+| E / A ou ↑ ↓ (molette) | Augmenter / baisser l'effort, en watts |
+| ← → ou Q D | Pencher le vélo pour tourner : plus on maintient, plus on se penche ; relâché, le vélo se redresse en douceur |
 | Maj | Attaquer (puise dans la réserve anaérobie) |
-| Espace | Freiner |
-| E | Position de descente |
+| S ou Espace | Freiner |
+| X | Position de descente |
 | C | Changer de caméra : poursuite, première personne, moto TV, drone |
 | Souris | Regarder autour (clic pour capturer la souris, Échap pour la libérer) |
 | R / double-clic | Recentrer le regard |
