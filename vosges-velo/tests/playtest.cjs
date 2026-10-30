@@ -1,7 +1,7 @@
 // Joueur automatique : parcourt les tracés comme un joueur (inclinaison au
 // clavier, freinage avant les virages, effort dosé) et note les anomalies.
 // Usage : npm run build && node tests/playtest.cjs [scénario…]
-//   scénarios : race:<parcours>[:inv] · tt:<parcours>[:inv] · free:<n>
+//   scénarios : race:<parcours>[:inv][:météo] · tt:… · balade:… · free:<n>
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
@@ -85,13 +85,24 @@ async function drive(page, opts) {
           const a = srt[i - 1], b = srt[i];
           if (b.s - a.s < 0.8 && Math.abs(b.o - a.o) < 0.4 && !a.finished && !b.finished && a.v > 2) { add("ia-chevauche", `${a.name} et ${b.name} superposés`); break; }
         }
+        // circulation : une voiture sur le cycliste
+        if (g.traffic) {
+          const P = g.player;
+          for (const c of g.traffic.cars) {
+            if (!c.alive) continue;
+            const m = c.v.mesh, hx = Math.sin(m.rotation.y), hz = Math.cos(m.rotation.y);
+            const lx = P.x - m.position.x, lz = P.z - m.position.z;
+            if (Math.abs(lx * hx + lz * hz) < 2.4 && Math.abs(lx * hz - lz * hx) < 1.0) { add("circulation", `voiture sur le cycliste (${Math.round(c.sp * 3.6)} km/h)`); break; }
+          }
+        }
         if (g.convoy) {
           for (const it of g.convoy.items) {
-            if (!it.mesh.visible) continue;
+            const mesh = it.v ? it.v.mesh : it.mesh;
+            if (!mesh.visible) continue;
             for (const a of g.riders) {
               const q = r.sample(a.s);
               const ax = q.x - q.dz * a.o, az = q.z + q.dx * a.o;
-              if (Math.hypot(it.mesh.position.x - ax, it.mesh.position.z - az) < 1.6) { add("voiture", `${it.role} sur ${a.name}`); break; }
+              if (Math.hypot(mesh.position.x - ax, mesh.position.z - az) < 1.6) { add("voiture", `${it.role} sur ${a.name}`); break; }
             }
           }
         }
@@ -116,13 +127,13 @@ async function drive(page, opts) {
   const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
   const report = [];
   for (const sc of scenarios) {
-    const [mode, route, inv] = sc.split(":");
+    const [mode, route, inv, weather] = sc.split(":");
     const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    const set = { quality: "bas", time: "midi", timescale: 1, field: 40, level: "amateur", bike: "route" };
+    const set = { quality: "bas", time: "midi", timescale: 1, field: 40, level: "amateur", bike: "route", weather: weather || "beau" };
     if (mode === "free") Object.assign(set, { mode: "open" });
-    else Object.assign(set, { mode: mode === "race" ? "race" : "tt", route, reverse: inv === "inv" });
+    else Object.assign(set, { mode: mode === "race" ? "race" : mode === "balade" ? "free" : "tt", route, reverse: inv === "inv" });
     await page.addInitScript((s) => localStorage.setItem("vv-settings", JSON.stringify(s)), set);
     await page.goto(file);
     await page.waitForSelector("#menu:not([hidden])", { timeout: 300000 });

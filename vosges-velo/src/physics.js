@@ -176,9 +176,10 @@ export function step(r, route, env, dt) {
   const vAir = r.v - head;
   const fAero = 0.5 * rho * cda * vAir * Math.abs(vAir);
   const fGrav = m * G * Math.sin(theta);
-  const fRoll = (r.free ? r.free.crr : r.offRoad ? 0.02 : CRR) * m * G * Math.cos(theta);
+  const fRoll = (r.free ? r.free.crr : r.offRoad ? 0.02 : CRR) * (env.wet ? 1.08 : 1) * m * G * Math.cos(theta);
   const fPedal = (r.power * ETA) / Math.max(r.v, 1.5);
-  let fBrake = r.brake * m * 6.5;
+  // freinage limité par l'adhérence : 6,5 m/s² au sec, 4,6 sur route mouillée
+  let fBrake = r.brake * m * (env.wet ? 4.6 : 6.5);
 
   // virages : accélération latérale
   const kappa = p.curv;
@@ -195,6 +196,12 @@ export function step(r, route, env, dt) {
   r.energy += (r.power * dt) / 1000;
   r.sumP += r.power * dt;
   r.maxV = Math.max(r.maxV, r.v);
+  // puissance normalisée : moyenne glissante sur 30 s, élevée à la puissance 4
+  if (r.isPlayer) {
+    r.p30 = (r.p30 || 0) + (r.power - (r.p30 || 0)) * Math.min(1, dt / 30);
+    r.sumP4 = (r.sumP4 || 0) + r.p30 ** 4 * dt;
+    r.maxP = Math.max(r.maxP || 0, r.p30);
+  }
 
   // braquet automatique et cadence
   if (r.power > 5 && r.v > 0.5) {
@@ -321,7 +328,7 @@ export function aiThink(r, route, sorted, idx, dt, env) {
   r.target = target;
   r.tuck = g < -0.04 && r.v > 11;
   // freinage avant les virages
-  const safe = route.safeSpeedAhead(r.s, 70, 0.6);
+  const safe = route.safeSpeedAhead(r.s, 70, env.mu ?? 0.6);
   r.brake = r.v > safe.v ? Math.min(1, (r.v - safe.v) * 0.6) : 0;
   // placement latéral : on se décale si la roue devant bouche le passage
   let want = ai.lane;

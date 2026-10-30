@@ -2,9 +2,9 @@
 // direction, motos, voitures d'équipe, voiture-balai), rendu du peloton en
 // deux niveaux de détail, groupes et écarts.
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { RiderModel } from "./rider.js";
 import { makeRider } from "./physics.js";
+import { Fleet, teamCar, officialCar, motoGeometry, roofSign, slate } from "./vehicles.js";
 
 export const TEAMS = [
   { name: "Hopla Racing", jersey: "#e5332a", jersey2: "#ffffff", helmet: "#ffffff", frame: "#1c1c1c" },
@@ -130,76 +130,45 @@ export class PelotonView {
 }
 
 // ---------------------------------------------------------------- caravane
-function vc(geo, hex, m) {
-  const g = geo.index ? geo.toNonIndexed() : geo;
-  if (g.attributes.uv) g.deleteAttribute("uv");
-  if (m) g.applyMatrix4(m);
-  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
-  g.setAttribute("color", new THREE.BufferAttribute(a, 3));
-  return g;
-}
-const M = (x, y, z, rx = 0, ry = 0, rz = 0) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1));
-
-// voiture break (avant = +z) ; roof : vélos sur le toit ; light : gyrophare
-function carGeometry(color, { roof = false, light = false, sign = null } = {}) {
-  const p = [];
-  p.push(vc(new THREE.BoxGeometry(1.8, 0.62, 4.6), color, M(0, 0.62, 0)));
-  const cab = new THREE.BoxGeometry(1.66, 0.55, 2.6);
-  const pa = cab.attributes.position;
-  for (let i = 0; i < pa.count; i++) if (pa.getY(i) > 0 && pa.getZ(i) > 0) pa.setZ(i, pa.getZ(i) - 0.45); // pare-brise incliné
-  p.push(vc(cab, "#26313a", M(0, 1.2, -0.25)));
-  p.push(vc(new THREE.BoxGeometry(1.7, 0.06, 2.0), color, M(0, 1.5, -0.45)));
-  for (const sx of [-0.8, 0.8]) for (const sz of [-1.45, 1.45]) p.push(vc(new THREE.CylinderGeometry(0.33, 0.33, 0.24, 14).rotateZ(Math.PI / 2), "#151515", M(sx, 0.33, sz)));
-  for (const sx of [-0.6, 0.6]) p.push(vc(new THREE.BoxGeometry(0.3, 0.12, 0.05), "#fff6d6", M(sx, 0.7, 2.31)));
-  for (const sx of [-0.65, 0.65]) p.push(vc(new THREE.BoxGeometry(0.3, 0.12, 0.05), "#b0121b", M(sx, 0.75, -2.31)));
-  if (roof) {
-    p.push(vc(new THREE.BoxGeometry(1.5, 0.05, 1.8), "#333", M(0, 1.56, -0.45)));
-    for (let k = 0; k < 3; k++) {
-      const x = -0.5 + k * 0.5;
-      p.push(vc(new THREE.TorusGeometry(0.33, 0.015, 4, 16).rotateY(Math.PI / 2), "#111", M(x, 1.95, -0.95)));
-      p.push(vc(new THREE.TorusGeometry(0.33, 0.015, 4, 16).rotateY(Math.PI / 2), "#111", M(x, 1.95, 0.05)));
-      p.push(vc(new THREE.BoxGeometry(0.03, 0.03, 1.0), color, M(x, 2.15, -0.45)));
-    }
-  }
-  if (light) p.push(vc(new THREE.BoxGeometry(0.9, 0.12, 0.25), "#ff2a2a", M(0, 1.6, -0.1)));
-  if (sign) p.push(vc(new THREE.BoxGeometry(1.4, 0.35, 0.04), sign, M(0, 1.8, -0.4)));
-  return mergeGeometries(p);
-}
-
-function motoGeometry(color) {
-  const p = [];
-  p.push(vc(new THREE.BoxGeometry(0.45, 0.5, 1.6), color, M(0, 0.75, 0)));
-  for (const z of [-0.75, 0.75]) p.push(vc(new THREE.CylinderGeometry(0.32, 0.32, 0.12, 14).rotateZ(Math.PI / 2), "#151515", M(0, 0.32, z)));
-  // pilote et passager (caméraman ou commissaire)
-  p.push(vc(new THREE.CylinderGeometry(0.17, 0.2, 0.65, 8), "#1d2733", M(0, 1.3, 0.1, -0.25)));
-  p.push(vc(new THREE.SphereGeometry(0.15, 8, 6), "#e8e8e8", M(0, 1.72, 0.2)));
-  p.push(vc(new THREE.CylinderGeometry(0.17, 0.2, 0.65, 8), "#2f3a2f", M(0, 1.38, -0.45, 0.2)));
-  p.push(vc(new THREE.SphereGeometry(0.15, 8, 6), "#e8e8e8", M(0, 1.8, -0.5)));
-  return mergeGeometries(p);
-}
-
+// course : 2 motos de gendarmerie, voiture de direction, motos commissaire,
+// photo, télévision et ardoisier, voitures d'équipe, voiture-balai ;
+// contre-la-montre (tt) : une moto devant le coureur, sa voiture suiveuse.
 export class Convoy {
-  constructor(scene, teams) {
-    this.scene = scene;
-    this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  constructor(scene, teams, { tt = false } = {}) {
+    this.fleet = new Fleet(scene, 24);
+    this.tt = tt;
     this.items = [];
-    const add = (geo, role, extra = {}) => {
-      const m = new THREE.Mesh(geo, this.mat);
-      m.castShadow = true;
-      scene.add(m);
-      this.items.push({ mesh: m, role, s: 0, o: 0, ...extra });
+    const add = (geo, kind, role, extra = {}, beacons = []) => {
+      const v = this.fleet.add(geo, kind, beacons);
+      const it = { v, role, s: 0, o: 0, ...extra };
+      this.items.push(it);
+      return it;
     };
-    add(carGeometry("#d01f2a", { light: true, sign: "#ffffff" }), "direction");
-    add(motoGeometry("#f2f2f2"), "moto-tv");
-    add(motoGeometry("#1f5fbf"), "moto-com");
-    teams.forEach((t, i) => add(carGeometry(t.jersey, { roof: true }), "team", { k: i, team: t }));
-    add(carGeometry("#2a2a2a", { sign: "#f2c230" }), "balai");
+    const blue = (ph) => [[-0.18, 2.06, -1.0, "#2a6cff", ph], [0.12, 1.24, 0.86, "#2a6cff", ph + 0.15]];
+    add(motoGeometry("gendarme"), "moto", "gendarme", { lead: tt ? 40 : 150, off: tt ? -0.6 : -1.1 }, blue(0));
+    if (!tt) {
+      add(motoGeometry("gendarme"), "moto", "gendarme", { lead: 138, off: 1.1 }, blue(0.3));
+      const dir = add(officialCar("#c8102e"), "car", "direction", {}, [[-0.45, 1.56, -0.2, "#ff8a00", 0], [0.45, 1.56, -0.2, "#ff8a00", 0.14]]);
+      dir.v.mesh.add(roofSign([{ text: "DIRECTION DE COURSE", size: 30, color: "#fff" }], "#c8102e"));
+      add(motoGeometry("com"), "moto", "moto", { lead: 34, off: 1.5 });
+      add(motoGeometry("photo"), "moto", "moto", { lead: 24, off: -1.9 });
+      add(motoGeometry("tv"), "moto", "moto", { lead: 11, off: -2.1 });
+      const ard = add(motoGeometry("ardoise"), "moto", "ardoise");
+      this.slate = slate();
+      ard.v.mesh.add(this.slate);
+      this.slateT = 0;
+    }
+    teams.forEach((t, i) => add(teamCar(t), "car", "team", { k: i, team: t }));
+    if (!tt) {
+      const balai = add(officialCar("#2a2a2a"), "car", "balai", {}, [[0, 1.56, -0.2, "#ff8a00", 0.07]]);
+      balai.v.mesh.add(roofSign([{ text: "FIN DE COURSE", size: 32, color: "#111" }], "#f2c230"));
+    }
     this.teamCall = null;
   }
 
   dispose() {
-    for (const it of this.items) { this.scene.remove(it.mesh); it.mesh.geometry.dispose(); }
+    for (const it of this.items) it.v.mesh.traverse((o) => { if (o !== it.v.mesh && o.material) { o.material.map?.dispose(); o.material.dispose(); o.geometry.dispose(); } });
+    this.fleet.dispose();
   }
 
   // appelle la voiture de l'équipe du joueur à sa hauteur
@@ -207,22 +176,51 @@ export class Convoy {
 
   // leaderS : tête de course ; mainTail : dernier du gros groupe ; lastS : dernier coureur
   // riders : tous les coureurs ; les voitures ne roulent jamais dans un groupe
-  update(route, leaderS, mainTail, lastS, player, dt, riders = []) {
+  // grp : groupes (écarts affichés par l'ardoisier)
+  update(route, leaderS, mainTail, lastS, player, dt, riders = [], grp = []) {
+    const q = {};
     const pos = (it, s, o) => {
       it.s = it.s ? it.s + Math.max(-30 * dt, Math.min(30 * dt, s - it.s)) : s;
       it.o += (o - it.o) * Math.min(1, dt * 0.8);
-      const q = route.sample(Math.max(0, Math.min(route.length, it.s)));
-      it.mesh.position.set(q.x - q.dz * it.o, q.y + 0.05, q.z + q.dx * it.o);
-      it.mesh.rotation.set(-Math.atan(q.grade), Math.atan2(q.dx, q.dz), 0, "YXZ");
+      route.sample(Math.max(0, Math.min(route.length, it.s)), q);
       // pas d'affichage au-delà de la fin du tracé
-      it.mesh.visible = it.s < route.length - 5 && it.s > 0;
+      this.fleet.place(it.v, q.x - q.dz * it.o, q.y + 0.03, q.z + q.dx * it.o, Math.atan2(q.dx, q.dz), -Math.atan(q.grade || 0), dt, it.s < route.length - 5 && it.s > 0);
     };
+    const main = grp.length ? grp.reduce((a, g) => (g.riders.length > a.riders.length ? g : a)) : null;
     for (const it of this.items) {
-      if (it.role === "direction") pos(it, leaderS + 70, -0.4);
-      else if (it.role === "moto-tv") pos(it, leaderS + 14, -2.0);
-      else if (it.role === "moto-com") pos(it, leaderS + 32, 1.4);
+      if (this.tt) {
+        if (it.role === "gendarme") pos(it, player.s + it.lead, it.off);
+        else if (it.role === "team") {
+          let s = player.s - 14;
+          if (it.s && it.s > player.s - 8) s = player.s - 10;
+          pos(it, s, Math.max(-1.6, Math.min(1.6, player.o)) - 0.2);
+        }
+        continue;
+      }
+      if (it.role === "gendarme" || it.role === "moto") pos(it, leaderS + it.lead, it.off);
+      else if (it.role === "direction") pos(it, leaderS + 70, -0.4);
       else if (it.role === "balai") pos(it, lastS - 45, -0.4);
-      else if (it.role === "team") {
+      else if (it.role === "ardoise") {
+        // devant le peloton quand une échappée a de l'avance, sinon en tête
+        // devant le peloton, au milieu du trou avec le coureur suivant ; sinon
+        // en tête de course
+        let away = main && grp[0] !== main && main.gapTime > 8;
+        let target = leaderS + 46;
+        if (away) {
+          let ahead = 1e9;
+          for (const r of riders) if (r.s > main.headS + 1 && r.s < ahead) ahead = r.s;
+          if (ahead - main.headS > 30) target = Math.min(main.headS + 28, (main.headS + ahead) / 2);
+          else away = false;
+        }
+        // en changeant de place, la moto se range au bord de la route
+        pos(it, target, Math.abs(target - it.s) > 12 ? 3.4 : 1.7);
+        this.slateT -= dt;
+        if (this.slateT <= 0) {
+          this.slateT = 1;
+          const t = Math.round(away ? main.gapTime : 0);
+          this.slate.userData.draw(away ? `ÉCHAPPÉE (${grp[0].riders.length})` : "PELOTON", away ? `+${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}` : "groupé");
+        }
+      } else if (it.role === "team") {
         let s = mainTail - 22 - it.k * 13, o = -1.2;
         // le joueur lâché : les voitures restent derrière lui
         if (player.s < mainTail - 8 && player.s > s - 30) s = Math.min(s, player.s - 14 - it.k * 13);
@@ -242,6 +240,7 @@ export class Convoy {
         pos(it, s, o);
       }
     }
+    this.fleet.update(dt);
   }
 }
 

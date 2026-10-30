@@ -34,6 +34,7 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 | V | Course : appeler la voiture d'équipe (bidons pleins, barre, gel) |
 | F | Attraper une musette dans la zone de ravitaillement ; en mode libre, remplir ses bidons à la fontaine d'un village (à l'arrêt) |
 | M | Carte : petite → grande → masquée (molette pour zoomer, glisser pour se déplacer ; en mode libre, double-clic pour s'y téléporter) |
+| H | Mode photo : masquer l'interface |
 
 Manette : gâchette droite pour l'effort, gauche pour freiner, stick pour
 l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
@@ -50,13 +51,30 @@ l'inclinaison, A pour attaquer. Sur écran tactile, des boutons s'affichent.
 
 Chaque parcours se joue aussi en sens inverse (descentes).
 
-Modes : **course** en peloton (10, 40 ou 80 coureurs de 10 équipes fictives, avec voiture de direction, motos, voitures d'équipe et voiture-balai ; les groupes et les écarts s'affichent en haut de l'écran), contre-la-montre face au fantôme de son
-record, balade sur un parcours, et mode **libre** : on choisit son point de
+Modes : **course** en peloton (10, 40 ou 80 coureurs de 10 équipes fictives ; les groupes et les écarts s'affichent en haut de l'écran), contre-la-montre face au fantôme de son
+record (moto de gendarmerie devant, voiture suiveuse derrière), balade sur un parcours, et mode **libre** : on choisit son point de
 départ sur la carte (zoom à la molette ou aux boutons, déplacement en glissant, clic à l'endroit exact) ou par village, et on roule où l'on veut sur les
 24 000 tronçons de routes, rues, routes empierrées, pistes cyclables et
 voies vertes de la zone ; rues, arbres et bâtiments se construisent autour
 du cycliste au fil du trajet. Pause > « Changer de lieu » pour repartir
 ailleurs.
+
+Caravane de course : deux motos de gendarmerie à gyrophares bleus, voiture
+de direction, motos commissaire, photo, télévision (le caméraman filme assis
+à l'envers) et ardoisier (son ardoise affiche l'écart de l'échappée sur le
+peloton), voitures d'équipe chargées de vélos de rechange, voiture-balai
+« Fin de course ». Les motos se penchent en virage, les roues tournent.
+
+Circulation : en balade et en mode libre, des voitures roulent à droite
+(50 km/h en agglomération, 80 ailleurs), passent d'une route à l'autre aux
+carrefours, ralentissent derrière le cycliste et le doublent quand la voie
+d'en face est libre.
+
+Montées : chaque col ou côte du parcours (au moins 80 m de dénivelé à
+3,5 %) est annoncé, puis suivi en haut à gauche (distance et pente
+restantes) ; au sommet, temps de montée, VAM et record personnel (par
+parcours, sens et vélo). Le bilan d'arrivée ajoute la puissance normalisée
+et les temps de chaque montée.
 
 Vélos : **route** (7,4 kg, cintre à drops, roues à rayons, maniable) ou
 **contre-la-montre** (8,6 kg, tubes profilés, prolongateurs, roue
@@ -73,8 +91,14 @@ au-delà de 2 % du poids perdu, la puissance baisse aussi. En course, zone
 de ravitaillement à mi-parcours et voiture d'équipe à la demande.
 
 Options : poids, puissance seuil (FTP), maillot,
-niveau des adversaires, heure (matin, midi, soir), météo
-(dont le brouillard qui s'épaissit sur les crêtes), vent, temps accéléré.
+niveau des adversaires, heure (matin, midi, soir), météo (grand beau,
+nuageux, pluie, brouillard qui s'épaissit sur les crêtes), vent, temps
+accéléré.
+
+Pluie : route sombre et brillante, gouttes autour de la caméra, adhérence
+de l'enrobé réduite d'un quart, freinage limité à 4,6 m/s² (6,5 au sec),
+résistance au roulement un peu plus forte, transpiration moindre ; le
+peloton freine plus tôt dans les virages.
 
 ## Ce qui est réel
 
@@ -88,6 +112,8 @@ niveau des adversaires, heure (matin, midi, soir), météo
 - **Forêts** : BD TOPO de l'IGN, qui distingue sapins, feuillus, forêts
   mixtes et vignes ; les arbres sont plantés selon ces zones.
 - **Bâtiments** : 28 000 emprises BD TOPO avec leur hauteur.
+- **Bord de route** : balises blanches à bande noire hors agglomération,
+  jalons à neige rouge et blanc au-dessus de 950 m.
 - **Lieux** : radar et monument des Diables Bleus au Grand Ballon, croix
   sommitale et nécropole du Silberloch au Vieil Armand, panneaux de cols,
   bornes kilométriques façon panneaux de col, panneaux d'agglomération.
@@ -116,6 +142,11 @@ réserve anaérobie W′ (modèle de Skiba), fréquence cardiaque, braquets
   d'autre) accompagne donc chaque route et la raccorde au relief réel ;
   sous ce ruban, la grille grossière est masquée par le shader
   (`src/ground.js`).
+- Ciel : dégradé, soleil et nuages calculés dans le shader de la voûte
+  (bruit fractal sur un plafond), couverture selon la météo.
+- Véhicules : carrosseries en sections (environ 1 000 triangles), matériau
+  à reflets ; roues, gyrophares et ombres de contact de tous les véhicules
+  dessinés en trois appels.
 - Arbres en deux niveaux de détail (≈50 triangles près, 8 à 10 loin),
   coureurs fusionnés en deux maillages chacun, relief en dalles de ~3 km
   avec niveaux de détail : une image courante demande une centaine

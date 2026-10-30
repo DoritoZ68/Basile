@@ -28,6 +28,17 @@ export class Sound {
     this.windGain.gain.value = 0;
     src.connect(this.windFilter).connect(this.windGain).connect(this.master);
     src.start();
+    // moteur des véhicules proches : dent de scie grave filtrée
+    this.engine = ctx.createOscillator();
+    this.engine.type = "sawtooth";
+    this.engine.frequency.value = 62;
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = "lowpass";
+    this.engineFilter.frequency.value = 380;
+    this.engineGain = ctx.createGain();
+    this.engineGain.gain.value = 0;
+    this.engine.connect(this.engineFilter).connect(this.engineGain).connect(this.master);
+    this.engine.start();
     this.tickAcc = 0;
   }
 
@@ -54,6 +65,15 @@ export class Sound {
       let n = 0;
       while (this.tickAcc > 1 && n < 4) { this.tickAcc -= 1; this.click(t + n * 0.004); n++; }
     }
+  }
+
+  // véhicule le plus proche : distance (m)
+  vehicle(dist) {
+    if (!this.ctx || !this.enabled) return;
+    const t = this.ctx.currentTime;
+    const k = Math.max(0, 1 - dist / 45);
+    this.engineGain.gain.setTargetAtTime(k * k * 0.09, t, 0.2);
+    this.engine.frequency.setTargetAtTime(58 + k * 30, t, 0.3);
   }
 
   click(t) {

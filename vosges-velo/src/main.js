@@ -1,14 +1,16 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { loadData } from "./data.js";
 import { Heightfield, Terrain, makeTerrainMaterial, buildOuterTerrain } from "./terrain.js";
 import { Ground, routeLine, networkLine, makeRoadMaterials, buildRoutes, NetworkCells, onRoute, MASK_RANGE, DISCARD } from "./ground.js";
-import { RoadIndex, Forest, Streamer, buildBuildings, buildLandmarks, buildSky, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
+import { RoadIndex, Forest, Streamer, buildBuildings, buildLandmarks, buildSky, buildRain, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
 import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
 import { makeRider, step, computeDrafts, aiThink, assignChains, gearLabel, G, makeFuel, eat } from "./physics.js";
 import { makeField, PelotonView, Convoy, groups } from "./race.js";
 import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
+import { Traffic } from "./traffic.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt1 = (v) => v.toFixed(1).replace(".", ",");
@@ -34,9 +36,9 @@ const saveSettings = () => writeLS("vv-settings", settings);
 // bas : pensé pour les cartes graphiques anciennes à 512 Mo (Radeon HD 6000,
 // Intel HD 3000/4000…) : textures réduites, pas d'ombres, horizon plus proche
 const QUALITY = {
-  bas: { nearRiders: 5, netR: 750, budget: 5, treeNear: 90, mask: 4096, discard: 520, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
-  moyen: { nearRiders: 9, netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 880, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
-  eleve: { nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
+  bas: { traffic: 4, nearRiders: 5, netR: 750, budget: 5, treeNear: 90, mask: 4096, discard: 520, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
+  moyen: { traffic: 7, nearRiders: 9, netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 880, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
+  eleve: { traffic: 10, nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
 };
 
 // carte graphique : les modèles anciens ou à peu de mémoire passent en « bas »
@@ -111,6 +113,8 @@ function applyShadows() {
   sun.castShadow = on;
 }
 const sky = buildSky();
+const rain = buildRain();
+scene.add(rain);
 scene.add(sky);
 addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight);
@@ -216,7 +220,7 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, placePlayerFree, rideCamera, poseRiders, startRide, selectRoute, streamWorld, D };
+    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, placePlayerFree, rideCamera, poseRiders, startRide, selectRoute, streamWorld, applyConditions, D };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -315,6 +319,60 @@ function prepareNetwork(list, hf, routeGround) {
   return out;
 }
 
+// balises de bord de route (hors agglomération, tous les 50 m de chaque
+// côté, 25 m en virage) ; au-dessus de 950 m, jalons à neige rouge et blanc
+function postGeometry(snow) {
+  const parts = [];
+  const box = (w, h, d, y, hex, x = 0) => {
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed().translate(x, y, 0);
+    const c = new THREE.Color(hex), a = new Float32Array(g.attributes.position.count * 3);
+    for (let i = 0; i < a.length; i += 3) { a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b; }
+    g.setAttribute("color", new THREE.BufferAttribute(a, 3));
+    g.deleteAttribute("uv");
+    parts.push(g);
+  };
+  if (snow) for (let k = 0; k < 6; k++) box(0.06, 0.4, 0.06, 0.2 + k * 0.4, k % 2 ? "#f2f2f2" : "#d2232a");
+  else {
+    box(0.1, 1.0, 0.12, 0.5, "#eeeeea");
+    box(0.105, 0.17, 0.125, 0.82, "#151515");
+    box(0.11, 0.1, 0.05, 0.82, "#ff7a1a", 0);
+  }
+  return mergeGeometries(parts);
+}
+
+function roadsidePosts(r) {
+  const spots = [];
+  const q = {};
+  let s = 30;
+  while (s < r.length - 30) {
+    r.sample(s, q);
+    const urban = D.towns.some((t) => Math.hypot(q.x - t.x, q.z - t.z) < t.r * 0.8);
+    if (!urban) {
+      for (const side of [-1, 1]) {
+        const off = side * 4.6;
+        const x = q.x - q.dz * off, z = q.z + q.dx * off;
+        // pas de balise sur une autre chaussée (carrefour, route parallèle)
+        const g = ground.road(x, z, 1.2, 1e9, 0, q.y);
+        if (g && !g.line.route) continue;
+        spots.push([x, ground.height(x, z, q.y), z, Math.atan2(q.dx, q.dz) + (side > 0 ? Math.PI : 0), q.y > 950]);
+      }
+    }
+    const k = Math.abs(r.curvPeak[r.index(s)] || 0);
+    s += k > 0.01 ? 25 : 50;
+  }
+  const grp = new THREE.Group();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  for (const snow of [false, true]) {
+    const list = spots.filter((p) => p[4] === snow);
+    if (!list.length) continue;
+    const im = new THREE.InstancedMesh(postGeometry(snow), mat, list.length);
+    const m = new THREE.Matrix4(), qt = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), v = new THREE.Vector3();
+    list.forEach((p, i) => im.setMatrixAt(i, m.compose(v.set(p[0], p[1] - 0.05, p[2]), qt.setFromAxisAngle(up, p[3]), one)));
+    grp.add(im);
+  }
+  return grp;
+}
+
 // ------------------------------------------------------------ conditions
 function applyConditions() {
   const T = {
@@ -334,17 +392,42 @@ function applyConditions() {
   u.top.value.set(T.top);
   u.horizon.value.set(T.hor);
   u.haze.value = 0;
+  u.cover.value = 0.3;
+  u.cloudLit.value.set(settings.time === "soir" ? 0xffd2b0 : 0xffffff);
+  u.cloudDark.value.set(settings.time === "soir" ? 0x8a7f86 : 0x9aa3ae);
+  game.wet = settings.weather === "pluie";
+  game.env.wet = game.wet;
+  rain.visible = game.wet;
+  if (roadMats) {
+    roadMats.road.color.setScalar(game.wet ? 0.62 : 1);
+    roadMats.road.specular.set(game.wet ? 0x5a5a5a : 0x161616);
+    roadMats.road.shininess = game.wet ? 60 : 14;
+    roadMats.verge.color.setScalar(game.wet ? 0.8 : 1);
+  }
   let fogCol = new THREE.Color(T.hor);
   game.fogBase = { near: 3000, far: 42000 };
   if (settings.weather === "voile") {
-    u.haze.value = 0.55;
+    u.haze.value = 0.3;
+    u.cover.value = 0.78;
     sun.intensity *= 0.6;
     hemi.intensity *= 1.1;
     fogCol.lerp(new THREE.Color(0xc9ced3), 0.6);
     u.horizon.value.copy(fogCol);
     game.fogBase = { near: 800, far: 14000 };
+  } else if (settings.weather === "pluie") {
+    u.haze.value = 0.45;
+    u.cover.value = 0.98;
+    u.cloudLit.value.set(0xa9b0b8);
+    u.cloudDark.value.set(0x5d646c);
+    u.top.value.set(0x7d8791);
+    sun.intensity *= 0.3;
+    hemi.intensity *= 1.05;
+    fogCol = new THREE.Color(0xa3aab1);
+    u.horizon.value.copy(fogCol);
+    game.fogBase = { near: 200, far: 5000 };
   } else if (settings.weather === "brouillard") {
     u.haze.value = 1;
+    u.cover.value = 0.9;
     sun.intensity *= 0.35;
     hemi.intensity *= 1.15;
     fogCol = new THREE.Color(0xc4c9cc);
@@ -503,7 +586,7 @@ function buildMenu() {
 
   const w = $("opts-world");
   seg(w, "Heure", "time", [["matin", "Matin"], ["midi", "Midi"], ["soir", "Soir"]], applyConditions);
-  seg(w, "Météo", "weather", [["beau", "Grand beau"], ["voile", "Voilé"], ["brouillard", "Brouillard sur les crêtes"]], applyConditions);
+  seg(w, "Météo", "weather", [["beau", "Grand beau"], ["voile", "Nuageux"], ["pluie", "Pluie"], ["brouillard", "Brouillard sur les crêtes"]], applyConditions);
   seg(w, "Temps", "timescale", [[1, "Réel"], [2, "Accéléré ×2"], [4, "×4"]]);
   seg(w, "Vent", "wind", [["none", "Nul"], ["ouest", "Ouest 13 km/h"], ["ouest-fort", "Ouest 27 km/h"], ["bise", "Bise de NE"]], applyConditions);
   const wn = document.createElement("p");
@@ -620,6 +703,73 @@ function renderRouteList() {
   }
 }
 
+// montées : d'un creux au sommet suivant, au moins 80 m de dénivelé et
+// 3,5 % de moyenne ; nom du col le plus proche du sommet, sinon du village
+function findClimbs(r) {
+  const out = [];
+  const q = {};
+  let lowS = 0, lowY = r.y[0], highS = 0, highY = r.y[0];
+  const close = () => {
+    const gain = highY - lowY, len = highS - lowS;
+    if (gain >= 80 && len > 0 && gain / len >= 0.035) {
+      r.sample(highS, q);
+      let name = null, best = 700;
+      for (const l of D.landmarks) {
+        const d = Math.hypot(l.x - q.x, l.z - q.z);
+        if (l.kind === "pass" && d < best) { best = d; name = l.name.split(" · ")[0]; }
+      }
+      if (!name) {
+        const town = townAt(r, game.crossings, lowS);
+        name = town ? `Montée depuis ${town}` : `Côte n° ${out.length + 1}`;
+      }
+      out.push({ s0: lowS, s1: highS, gain, len, grade: gain / len, name });
+    }
+  };
+  for (let s = 0; s <= r.length; s += 25) {
+    const y = r.sample(Math.min(s, r.length), q).y;
+    if (y > highY) { highY = y; highS = s; }
+    if (y < highY - 30 || s + 25 > r.length) {
+      close();
+      if (y < highY - 30) { lowS = s; lowY = y; highS = s; highY = y; }
+    }
+    if (y < lowY && highS <= lowS + 1) { lowS = s; lowY = y; highS = s; highY = y; }
+  }
+  return out;
+}
+
+// suivi de la montée en cours : panneau en haut à gauche, chrono au sommet
+function updateClimb(p) {
+  const el = $("h-climb");
+  const c = game.free ? null : game.climbs.find((x) => p.s >= x.s0 - 300 && p.s < x.s1);
+  if (!c) { el.hidden = true; return; }
+  el.hidden = false;
+  if (p.s < c.s0) {
+    el.innerHTML = `<b>${c.name}</b> dans ${fmtInt(c.s0 - p.s)} m<br>${fmt1(c.len / 1000)} km à ${fmt1(c.grade * 100)} % · +${fmtInt(c.gain)} m`;
+    return;
+  }
+  const left = c.s1 - p.s, yTop = game.route.sample(c.s1).y;
+  const gLeft = left > 50 ? (yTop - p.y) / left : 0;
+  el.innerHTML = `<b>${c.name}</b> · ${fmt1(left / 1000)} km du sommet<br>${fmt1(Math.max(0, gLeft) * 100)} % de moyenne restante · ${fmtTime(p.time - (c.t0 ?? p.time))}<div class="bar"><i style="width:${Math.min(100, ((p.s - c.s0) / c.len) * 100)}%"></i></div>`;
+}
+
+function climbStep(p) {
+  if (game.free || !game.climbs) return;
+  game.climbs.forEach((c, i) => {
+    if (c.t0 === undefined && p.s >= c.s0) c.t0 = p.time;
+    if (c.t0 !== undefined && c.t === undefined && p.s >= c.s1) {
+      c.t = p.time - c.t0;
+      const key = `${recordKey(game.route.id, settings.reverse)}-${i}-${settings.bike}`;
+      const recs = readLS("vv-climbs", {});
+      const old = recs[key];
+      const vam = (c.gain / c.t) * 3600;
+      if (!old || c.t < old) { recs[key] = c.t; writeLS("vv-climbs", recs); }
+      toast(`Sommet : ${c.name}\n${fmtTime(c.t)} · VAM ${fmtInt(vam)} m/h${old ? (c.t < old ? " · nouveau record !" : ` · record ${fmtTime(old)}`) : ""}`, 5);
+      c.vam = vam;
+      c.rec = old && c.t < old;
+    }
+  });
+}
+
 function selectRoute(id, reverse) {
   settings.route = id;
   settings.reverse = reverse;
@@ -627,6 +777,7 @@ function selectRoute(id, reverse) {
   const def = D.routes.find((r) => r.id === id) || D.routes[0];
   game.route = new Route(def, reverse);
   game.crossings = townCrossings(game.route, D.towns);
+  game.climbs = findClimbs(game.route);
   buildRouteSigns();
   renderRouteList();
   drawProfile($("menu-profile"), game.route, null);
@@ -676,6 +827,7 @@ function buildRouteSigns() {
     });
     signs.add(signPost(tex, 1.5, 0.55, p, 1, 4.8, 1.3));
   }
+  signs.add(roadsidePosts(r));
   // cols et lieux remarquables proches de la route
   game.events = [];
   for (const l of D.landmarks) {
@@ -788,6 +940,7 @@ function clearRiders() {
   for (const m of game.models) scene.remove(m.root);
   if (game.peloton) { game.peloton.dispose(); game.peloton = null; }
   if (game.convoy) { game.convoy.dispose(); game.convoy = null; }
+  if (game.traffic) { game.traffic.dispose(); game.traffic = null; }
   if (game.ghostModel) scene.remove(game.ghostModel.root);
   game.models = [];
   game.riders = [];
@@ -806,7 +959,7 @@ function startRide() {
   const fieldN = settings.mode === "race" ? settings.field : 0;
   START_S = 12 + Math.ceil((fieldN + 1) / 6) * 1.9;
   const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, o: 1.3, s: START_S, bike: settings.bike });
-  player.fuel = makeFuel(settings.mass, { matin: 0.85, midi: 1.25, soir: 1.0 }[settings.time]);
+  player.fuel = makeFuel(settings.mass, { matin: 0.85, midi: 1.25, soir: 1.0 }[settings.time] * (game.wet ? 0.75 : 1));
   player.target = Math.round(settings.ftp * 0.7 / 5) * 5;
   player.color = settings.jersey;
   game.free = settings.mode === "open";
@@ -829,6 +982,12 @@ function startRide() {
     game.teams = teams;
     game.peloton = new PelotonView(scene, QUALITY[qKey()].nearRiders, fieldN);
     game.convoy = new Convoy(scene, teams);
+  } else if (settings.mode === "free" || settings.mode === "open") {
+    // circulation : sur tout le réseau en mode libre, sur le parcours en balade
+    const ri = D.routes.findIndex((x) => x.id === r.id);
+    game.traffic = new Traffic(scene, ground, QUALITY[qKey()].traffic, game.free ? () => true : (li) => li === ri);
+  } else if (settings.mode === "tt") {
+    game.convoy = new Convoy(scene, [{ jersey: settings.jersey === "#ffffff" ? "#2a2a2a" : settings.jersey, jersey2: "#ffffff", frame: "#1d1f24" }], { tt: true });
   }
   game.feedZone = settings.mode === "race" ? { s0: r.finish * 0.55, s1: r.finish * 0.55 + 180 } : null;
   game.gotMusette = false;
@@ -861,6 +1020,8 @@ function startRide() {
   $("warn").classList.remove("on");
   game.t = 0;
   game.nextEvent = 0;
+  for (const c of game.climbs || []) { delete c.t0; delete c.t; delete c.vam; delete c.rec; }
+  $("hud").classList.remove("photo");
   game.lastKm = 0;
   game.camMode = game.camMode || 0;
   $("h-route").textContent = r.def.name + (settings.reverse ? " (sens inverse)" : "");
@@ -943,8 +1104,10 @@ function finish() {
     ["Puissance moy.", `${fmtInt(avgP)} W`],
     ["W/kg moyen", fmt1(avgP / settings.mass)],
     [climb > 100 ? "VAM" : "Vitesse max", climb > 100 ? `${fmtInt(vam)} m/h` : `${fmt1(p.maxV * 3.6)} km/h`],
-    ["Énergie", `${fmtInt(p.energy)} kJ`],
+    ["Puiss. normalisée", `${fmtInt(Math.pow((p.sumP4 || 0) / Math.max(1, p.time), 0.25))} W`],
+    ["Énergie", `${fmtInt(p.energy)} kJ · ${fmtInt(p.energy * 1.0)} kcal`],
   ];
+  for (const c of game.climbs || []) if (c.t !== undefined) stats.push([c.name, `${fmtTime(c.t)} · ${fmtInt(c.vam)} m/h${c.rec ? " · record" : ""}`]);
   $("r-stats").innerHTML = stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join("");
   const table = $("r-table");
   table.innerHTML = "";
@@ -987,7 +1150,7 @@ addEventListener("keydown", (e) => {
       if (msg) { toast(msg, 2); if (game.playerModel) game.playerModel.feed = act === "drink" ? 1.2 : 1.8; }
       else toast(act === "drink" ? "Bidons vides" : act === "bar" ? "Plus de barres" : "Plus de gels", 2);
     }
-    if (L === "v" && game.convoy) {
+    if (L === "v" && game.convoy && !game.convoy.tt) {
       if (game.callCool > 0) toast("La voiture d'équipe est déjà en route", 2);
       else {
         game.callCool = 45;
@@ -1016,6 +1179,8 @@ addEventListener("keydown", (e) => {
     }
   }
   if (e.code === "KeyR") { look.yaw = 0; look.pitch = 0; }
+  // mode photo : interface masquée
+  if (L === "h" && p && game.state !== "menu") $("hud").classList.toggle("photo");
   if (L === "m" && p && game.state !== "menu") setMapSize({ 1: 2, 2: 0, 0: 1 }[game.mapSize ?? 1]);
   if ((e.code === "ArrowUp" || L === "e") && p) p.target = Math.min(1500, p.target + EFFORT_STEP);
   if ((e.code === "ArrowDown" || L === "a") && p) p.target = Math.max(0, p.target - EFFORT_STEP);
@@ -1190,7 +1355,8 @@ function movePlayer(p, dt) {
   p.free = { y: p.y, grade: p.gradeS, dx, dz, curv: 0, crr: [0.0045, 0.01, 0.03][g0.surf] };
   p.offRoad = g0.surf > 0;
   // adhérence
-  const mu = MU[g0.surf] * (settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1);
+  // route mouillée : adhérence de l'enrobé réduite d'un quart environ
+  const mu = MU[g0.surf] * (game.wet ? (g0.surf === 0 ? 0.74 : 0.85) : settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1);
   p.latG = v > 3 ? Math.abs(Math.tan(p.lean)) : 0;
   if (p.latG > mu) crash(p, g0.surf ? "Chute ! Le vélo a glissé hors de la route" : "Chute ! Trop penché, la roue a glissé");
   else if (p.latG > mu * 0.8) warn(`Limite d'adhérence · ${Math.round((Math.abs(p.lean) * 180) / Math.PI)}°`, "red");
@@ -1279,6 +1445,7 @@ function loop(now) {
   } else if (game.state === "ride" || game.state === "finished") {
     const k = game.state === "ride" ? settings.timescale : 1;
     for (let i = 0; i < k; i++) simulate(dt);
+    if (game.traffic) game.traffic.update(game.player, dt * k);
     poseRiders(dt * k);
     rideCamera(dt);
     updateHud(dt);
@@ -1293,6 +1460,12 @@ function loop(now) {
   streamWorld(q.budget);
   forest.update(camera.position, q.treeNear);
   sky.position.copy(camera.position);
+  sky.material.uniforms.time.value = now / 1000;
+  if (rain.visible) {
+    rain.material.uniforms.cam.value.copy(camera.position);
+    rain.material.uniforms.time.value = (now / 1000) % 1000;
+    rain.material.uniforms.wind.value.set(game.env.windX, game.env.windZ);
+  }
   // le cadre d'ombre suit le coureur (ou le point regardé), aligné sur une grille
   const focus = game.player && game.state !== "menu" ? tmpV.set(game.player.x, game.player.y, game.player.z) : camLook;
   const snapG = 2;
@@ -1353,7 +1526,7 @@ function simulate(dt) {
   const sorted = game.riders.length > 1 ? [...game.riders].sort((a, b) => b.s - a.s) : game.riders;
   sorted.forEach((x, i) => (x._idx = i));
   if (sorted.length > 2) assignChains(sorted, r);
-  const aiEnv = { windX: game.env.windX, windZ: game.env.windZ, finish: r.finish };
+  const aiEnv = { windX: game.env.windX, windZ: game.env.windZ, finish: r.finish, mu: game.wet ? 0.44 : 0.6 };
   for (const x of game.riders) {
     if (x.finished && !x.isPlayer) {
       // coureur arrivé : il ralentit, se range à droite en file indienne
@@ -1413,7 +1586,7 @@ function simulate(dt) {
     game.groupT -= dt;
     if (game.groupT <= 0) { game.groupT = 0.5; game.groups = groups(game.riders); }
     const main = game.groups.reduce((a, g) => (g.riders.length > (a ? a.riders.length : 0) ? g : a), null);
-    game.convoy.update(r, sorted[0].s, main ? main.tailS : sorted[sorted.length - 1].s, sorted[sorted.length - 1].s, p, dt, sorted);
+    game.convoy.update(r, sorted[0].s, main ? main.tailS : sorted[sorted.length - 1].s, sorted[sorted.length - 1].s, p, dt, sorted, game.groups);
   }
   if (game.callCool > 0) game.callCool -= dt;
   if (game.feedZone && game.state === "ride") {
@@ -1609,12 +1782,14 @@ function updateHud(dt) {
   if (warnT > 0) { warnT -= dt; if (warnT <= 0) $("warn").classList.remove("on"); }
   // avertissement de virage
   if (game.state === "ride" && !game.free && p.v > 8) {
-    const safe = r.safeSpeedAhead(p.s, 80, 0.6);
+    const safe = r.safeSpeedAhead(p.s, 80, game.wet ? 0.44 : 0.6);
     if (safe.dist > 5 && p.v > safe.v + 1.5 && warnT <= 0.1) warn(`Virage serré dans ${Math.round(safe.dist)} m · ${Math.round(safe.v * 3.6)} km/h`, "amber");
   }
+  if (game.state === "ride") climbStep(p);
   hudT -= dt;
   if (hudT > 0) return;
   hudT = 0.1;
+  updateClimb(p);
   $("h-speed").textContent = Math.round(p.v * 3.6);
   $("h-power").textContent = Math.round(p.power);
   const ratio = p.power / settings.ftp;
@@ -1631,13 +1806,13 @@ function updateHud(dt) {
     $("h-gly").style.width = `${(f.gly / f.glyMax) * 100}%`;
     $("h-hyd").style.width = `${hyd * 100}%`;
     const ml = f.bottles.reduce((a, b) => a + b, 0);
-    $("h-pockets").innerHTML = `<b>${f.bars}</b> barres (1) · <b>${f.gels}</b> gels (2) · <b>${(ml / 1000).toFixed(1).replace(".", ",")} L</b> (3)${game.convoy ? " · voiture (V)" : ""}`;
+    $("h-pockets").innerHTML = `<b>${f.bars}</b> barres (1) · <b>${f.gels}</b> gels (2) · <b>${(ml / 1000).toFixed(1).replace(".", ",")} L</b> (3)${game.convoy && !game.convoy.tt ? " · voiture (V)" : ""}`;
     if (f.gly / f.glyMax < 0.12) warn("Fringale ! Mangez (1 ou 2)", "red");
     else if ((f.deficit / f.mass) * 100 > 2) warn("Déshydratation : buvez (3)", "amber");
   }
   // groupes de course
   const gEl2 = $("h-groups");
-  if (game.convoy && game.groups.length) {
+  if (game.convoy && !game.convoy.tt && game.groups.length) {
     const shown = game.groups.slice(0, 4);
     gEl2.innerHTML = shown.map((g, i) => {
       const me = g.riders.includes(p);
@@ -1686,4 +1861,5 @@ function updateHud(dt) {
   }
   const air = p.v - (game.env.windX * p.free.dx + game.env.windZ * p.free.dz);
   sound.update(0.1, air, p.power < 5, p.v);
+  sound.vehicle(Math.min(game.convoy ? game.convoy.fleet.nearest(p.x, p.z) : 1e9, game.traffic ? game.traffic.fleet.nearest(p.x, p.z) : 1e9));
 }

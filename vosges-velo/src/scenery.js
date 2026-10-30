@@ -232,7 +232,7 @@ function conifer(near) {
     }
     c.rotateY(R() * 3);
     c.translate(0, y + h / 2, 0);
-    paintGrad(c, 0x1f3a22, 0x3c6338);
+    paintGrad(c, 0x24432a, 0x4a7244);
     parts.push(c);
   }
   return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
@@ -757,16 +757,36 @@ export function buildSky() {
       sunColor: { value: new THREE.Color(0xfff2d0) },
       sunDir: { value: new THREE.Vector3(0.3, 0.6, 0.2).normalize() },
       haze: { value: 0.0 },
+      time: { value: 0 },
+      cover: { value: 0.35 },
+      cloudLit: { value: new THREE.Color(0xffffff) },
+      cloudDark: { value: new THREE.Color(0x9aa3ae) },
     },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }`,
-    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunColor; uniform vec3 sunDir; uniform float haze; varying vec3 vDir;
+    // nuages : bruit de valeur sur un plafond plat projeté sur la voûte
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunColor; uniform vec3 sunDir; uniform float haze;
+      uniform float time; uniform float cover; uniform vec3 cloudLit; uniform vec3 cloudDark; varying vec3 vDir;
+      float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+      float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int k = 0; k < 4; k++) { s += a * vn(p); p = p * 2.03 + 17.1; a *= 0.5; } return s; }
       void main(){
-        float h = max(vDir.y, 0.0);
+        vec3 d = normalize(vDir);
+        float h = max(d.y, 0.0);
         vec3 c = mix(horizon, top, pow(h, 0.55));
-        c = mix(c, horizon, haze);
-        float s = max(dot(normalize(vDir), sunDir), 0.0);
-        c += sunColor * (pow(s, 600.0) * 1.5 + pow(s, 12.0) * 0.25) * (1.0 - haze * 0.7);
-        if (vDir.y < 0.0) c = horizon;
+        float s = max(dot(d, sunDir), 0.0);
+        if (d.y > 0.0) {
+          vec2 uv = d.xz / (d.y + 0.08) * 1.6 + vec2(time * 0.004, time * 0.0015);
+          float n = fbm(uv);
+          float k = smoothstep(1.0 - cover, 1.0 - cover + 0.28, n) * smoothstep(0.0, 0.12, d.y);
+          float lit = clamp(0.55 + (fbm(uv + sunDir.xz * 0.08) - n) * 3.0 + pow(s, 6.0) * 0.4, 0.0, 1.0);
+          vec3 cc = mix(cloudDark, cloudLit, lit);
+          c = mix(c, cc, k * 0.92);
+          c += sunColor * pow(s, 600.0) * 1.5 * (1.0 - k);
+        }
+        c += sunColor * pow(s, 12.0) * 0.25 * (1.0 - haze * 0.7);
+        c = mix(c, horizon, haze * (1.0 - h * 0.4));
+        if (d.y < 0.0) c = horizon;
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -775,6 +795,42 @@ export function buildSky() {
   const m = new THREE.Mesh(geo, mat);
   m.frustumCulled = false;
   m.renderOrder = -1;
+  return m;
+}
+
+// ------------------------------------------------------------ pluie
+// gouttes en traits autour de la caméra : positions fixes repliées dans une
+// boîte qui suit la caméra (tout est calculé dans le shader)
+export function buildRain(n = 4000) {
+  const pos = new Float32Array(n * 6), end = new Float32Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const x = Math.random(), y = Math.random(), z = Math.random();
+    pos.set([x, y, z, x, y, z], i * 6);
+    end[i * 2 + 1] = 1;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("end", new THREE.BufferAttribute(end, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    uniforms: { cam: { value: new THREE.Vector3() }, time: { value: 0 }, wind: { value: new THREE.Vector2() } },
+    vertexShader: `attribute float end; uniform vec3 cam; uniform float time; uniform vec2 wind; varying float vA;
+      void main(){
+        vec3 B = vec3(44.0, 26.0, 44.0);
+        vec3 p = position * B;
+        p.y -= time * 9.0;
+        p.xz += wind * time;
+        vec3 w = cam + mod(p - cam, B) - B * 0.5;
+        w += end * vec3(-wind.x * 0.06, -0.55, -wind.y * 0.06);
+        vA = 1.0 - end * 0.7;
+        gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
+      }`,
+    fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(0.78, 0.82, 0.88, 0.32 * vA); }`,
+  });
+  const m = new THREE.LineSegments(g, mat);
+  m.frustumCulled = false;
+  m.visible = false;
   return m;
 }
 

@@ -413,7 +413,8 @@ function finishMeshes(out, mats, chunked) {
 }
 
 export function makeRoadMaterials(groundMat, renderer) {
-  const road = new THREE.MeshLambertMaterial({ map: roadTexture(), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // Phong : léger reflet du soleil sur l'enrobé, fort sur route mouillée
+  const road = new THREE.MeshPhongMaterial({ map: roadTexture(), specular: 0x161616, shininess: 14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   road.map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const verge = new THREE.MeshLambertMaterial({ map: vergeTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   return { road, verge, ground: groundMat };
