@@ -10,14 +10,17 @@ Thann, Willer-sur-Thur…).
 Ouvrir `dist/vosges-velo.html` d'un double-clic après le build (voir plus
 bas). Le fichier contient tout : code, relief, photos aériennes, bâtiments.
 Il marche hors ligne, sans serveur, dans Chrome, Edge, Firefox ou Safari
-récents. Les graphismes en mode « Auto » baissent la résolution en continu
-pour rester fluides sur un petit portable.
+récents. En mode « Auto », le jeu reconnaît les cartes graphiques anciennes
+ou à 512 Mo (Radeon HD 6000, Intel HD 3000/4000…) et passe en qualité
+« Bas » : textures réduites, pas d'ombres, végétation et bâtiments limités
+aux abords du parcours, horizon plus proche. Il baisse ensuite la
+résolution, puis la qualité, si l'image n'est pas fluide.
 
 ### Commandes
 
 | Touche | Action |
 | --- | --- |
-| E / A ou ↑ ↓ (molette) | Augmenter / baisser l'effort, en watts |
+| E / A ou ↑ ↓ | Augmenter / baisser l'effort de 20 W par pression (molette : 10 W) |
 | ← → ou Q D | Pencher le vélo pour tourner : plus on maintient, plus on se penche ; relâché, le vélo se redresse en douceur |
 | Maj | Attaquer (puise dans la réserve anaérobie) |
 | S ou Espace | Freiner |

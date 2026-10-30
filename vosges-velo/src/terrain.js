@@ -36,7 +36,9 @@ export class Heightfield {
   // Aplanit le relief sous les routes (déblais / remblais) pour que la
   // chaussée épouse le terrain.
   flattenRoads(routes) {
-    const R0 = 20, R1 = 62, RMIN = 34;
+    // R0 couvre tout triangle de la grille (30 m) qui touche la chaussée :
+    // dessous, le sol est exactement au niveau de la route
+    const R0 = 34, R1 = 80, RMIN = 34;
     const n = this.h.length;
     const dist = new Float32Array(n).fill(1e9);
     const rh = new Float32Array(n);
@@ -69,9 +71,10 @@ export class Heightfield {
       this.roadMask[i] = 1;
       let w = (d - R0) / (R1 - R0);
       w = w <= 0 ? 0 : w * w * (3 - 2 * w);
-      const base = Math.min(rh[i], minH[i]) - 0.2;
+      const base = Math.min(rh[i], minH[i]) - 0.05;
       this.h[i] = base * (1 - w) + this.h[i] * w;
-      if (d < RMIN) this.h[i] = Math.min(this.h[i], minH[i] - 0.2);
+      if (d < RMIN) this.h[i] = Math.min(this.h[i], minH[i] - 0.05);
+      if (d < R0) this.roadMask[i] = 2;
     }
   }
 
@@ -85,11 +88,11 @@ export class Heightfield {
       for (let a = i - r; a <= i + r; a++) {
         const ai = Math.min(this.nx - 1, Math.max(0, a)), bj = Math.min(this.nz - 1, Math.max(0, b));
         const k = bj * this.nx + ai;
-        if (this.roadMask[k]) road = true;
-        if (this.h[k] < lo) lo = this.h[k];
+        // on ne garde que les points au niveau de la route, pas les creux voisins
+        if (this.roadMask[k] === 2) { road = true; if (this.h[k] < lo) lo = this.h[k]; }
       }
     }
-    return road ? lo : this.at(i, j);
+    return road ? Math.min(lo, this.at(i, j)) : this.at(i, j);
   }
 }
 
@@ -255,8 +258,10 @@ export class Terrain {
       const d = Math.hypot(dx, dz) / lodScale;
       const stride = d < 1300 ? 1 : d < 3500 ? 2 : d < 7000 ? 4 : 8;
       if (stride !== c.lod) {
+        // une seule géométrie par dalle en mémoire graphique
+        if (c.geos[c.lod]) { c.geos[c.lod].dispose(); delete c.geos[c.lod]; }
         c.lod = stride;
-        if (!c.geos[stride]) c.geos[stride] = this.buildGeometry(c, stride);
+        c.geos[stride] = this.buildGeometry(c, stride);
         c.mesh.geometry = c.geos[stride];
       }
     }

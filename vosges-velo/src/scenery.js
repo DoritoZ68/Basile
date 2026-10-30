@@ -63,9 +63,11 @@ function roadTexture() {
     g.fillRect(r() * W, r() * H, 1 + r() * 2.2, 1 + r() * 2.2);
   }
   // reprises d'enrobé plus sombres
-  for (let i = 0; i < 4; i++) {
-    g.fillStyle = `rgba(35,35,38,${0.18 + r() * 0.15})`;
-    g.fillRect(r() * W * 0.7, r() * H, 30 + r() * 80, 40 + r() * 160);
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = `rgba(35,35,38,${0.05 + r() * 0.05})`;
+    g.beginPath();
+    g.ellipse(r() * W, r() * H, 20 + r() * 40, 40 + r() * 90, 0, 0, Math.PI * 2);
+    g.fill();
   }
   // fissures
   g.strokeStyle = "rgba(25,25,25,0.5)";
@@ -162,8 +164,8 @@ export function buildRoads(routes, renderer) {
       if (b - a >= 1) {
         // chaussée au ras du sol, accotements qui rejoignent le terrain
         group.add(ribbon(r, a, b, [[-3.0, 0.06], [3.0, 0.06]], mat, true));
-        group.add(ribbon(r, a, b, [[-4.4, -0.2], [-2.9, 0.04]], vergeMat, true));
-        group.add(ribbon(r, a, b, [[2.9, 0.04], [4.4, -0.2]], vergeMat, true));
+        group.add(ribbon(r, a, b, [[-4.6, -0.04], [-2.9, 0.04]], vergeMat, true));
+        group.add(ribbon(r, a, b, [[2.9, 0.04], [4.6, -0.04]], vergeMat, true));
       }
       i = j;
     }
@@ -414,12 +416,13 @@ export class Forest {
 const WALLS = ["#efe6d2", "#e8d9b5", "#f0d2b4", "#e9c9a0", "#ddd6c6", "#f2e8c9", "#e6cbc4", "#d3dccf", "#f4efe6", "#e8dcc0", "#d9c3a4"];
 const ROOFS = ["#8a4a36", "#7b3f2f", "#9a5a40", "#6e4a3c", "#80463a", "#5f4b45"];
 
-export function buildBuildings(list, hf) {
+export function buildBuildings(list, hf, keep = () => true) {
   const R = rng(99);
   const cell = 600;
   const buckets = new Map();
   const c1 = new THREE.Color(), c2 = new THREE.Color();
   for (const [h, kind, flat] of list) {
+    if (!keep(flat[0], flat[1])) continue;
     let pts = [];
     for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i + 1]]);
     // orientation anti-horaire vue de dessus
@@ -537,6 +540,9 @@ export function buildBuildings(list, hf) {
     group,
     update(camPos, dist) {
       for (const c of chunks) c.mesh.visible = Math.hypot(c.x - camPos.x, c.z - camPos.z) < dist + 450;
+    },
+    dispose() {
+      for (const c of chunks) c.mesh.geometry.dispose();
     },
   };
 }
@@ -772,12 +778,17 @@ export class Crowd {
     people.forEach((q, i) => this.shirts.setColorAt(i, c.setHex(q.col)));
     this.shirts.castShadow = this.rest.castShadow = true;
     this.group.add(this.shirts, this.rest);
+    this.wasActive = true;
     this.update(-1e9, 0);
   }
 
   // le public saute au passage du coureur
   update(sPlayer, t) {
     if (!this.people || !this.people.length) return;
+    // rien à animer si personne n'est près du coureur (économie de calcul)
+    const active = this.people.some((q) => Math.abs(q.s - sPlayer) < 35);
+    if (!active && !this.wasActive) return;
+    this.wasActive = active;
     const o = new THREE.Object3D();
     this.people.forEach((q, i) => {
       const near = Math.abs(q.s - sPlayer) < 35;

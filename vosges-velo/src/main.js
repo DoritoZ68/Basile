@@ -28,12 +28,32 @@ function readLS(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? de
 function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } }
 const saveSettings = () => writeLS("vv-settings", settings);
 
+// bas : pensé pour les cartes graphiques anciennes à 512 Mo (Radeon HD 6000,
+// Intel HD 3000/4000…) : textures réduites, pas d'ombres, horizon plus proche
 const QUALITY = {
-  bas: { pr: 0.7, lod: 0.6, trees: 120, treeDist: 450, density: 0.55, bDist: 700, ortho: 2048, shadow: 0 },
-  moyen: { pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, ortho: 4096, shadow: 1024 },
-  eleve: { pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, ortho: 4096, shadow: 2048 },
+  bas: { pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
+  moyen: { pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
+  eleve: { pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
 };
-const qKey = () => (settings.quality === "auto" ? "moyen" : settings.quality);
+
+// carte graphique : les modèles anciens ou à peu de mémoire passent en « bas »
+function detectGpu() {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return { name: "", weak: true };
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    const weak =
+      /Radeon (HD )?[2-7]\d{3}|Radeon (X|R[5-9] M?2)|FirePro|Intel.*(HD|GMA|Iris)( Graphics)? ?(\d{3,4})?\b|GeForce (\d{3}M?|G[T]?S? ?[1-7]\d{2}M?)\b|Quadro|Mali|Adreno|PowerVR|SwiftShader|llvmpipe|Software/i.test(name) &&
+      !/Iris (Pro|Xe)|Intel.*(UHD|Arc)/i.test(name);
+    return { name, weak };
+  } catch {
+    return { name: "", weak: true };
+  }
+}
+const GPU = detectGpu();
+let autoTier = GPU.weak ? "bas" : "moyen";
+const qKey = () => (settings.quality === "auto" ? autoTier : settings.quality);
 
 const DEST = {
   "vieil-armand": "Vieil Armand",
@@ -61,7 +81,7 @@ const LEVEL_WKG = { cyclo: 2.9, amateur: 3.7, elite: 4.9 };
 
 // ------------------------------------------------------------ moteur 3D
 const canvas = $("gl");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.quality !== "bas", powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: qKey() !== "bas", powerPreference: "high-performance" });
 renderer.setSize(innerWidth, innerHeight);
 let pixelRatio = Math.min(devicePixelRatio, QUALITY[qKey()].pr);
 renderer.setPixelRatio(pixelRatio);
@@ -147,13 +167,12 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     const mat = makeTerrainMaterial(D.ortho, QUALITY[qKey()].ortho, renderer);
     terrain = new Terrain(hf, mat);
     scene.add(terrain.group);
-    scene.add(buildOuterTerrain(D.outerMeta, D.outer, hf, makeTerrainMaterial(D.outerImg, 2048, renderer)));
+    scene.add(buildOuterTerrain(D.outerMeta, D.outer, hf, makeTerrainMaterial(D.outerImg, QUALITY[qKey()].outer, renderer)));
     $("loadbar").style.width = "70%";
     $("loadmsg").textContent = "Routes et bâtiments…";
     await frame();
     scene.add(buildRoads(D.routes, renderer));
-    buildings = buildBuildings(D.buildings, hf);
-    scene.add(buildings.group);
+    buildings = { group: new THREE.Group(), update() {}, dispose() {} };
     scene.add(buildLandmarks(D.landmarks, hf, roadIndex));
     $("loadbar").style.width = "85%";
     $("loadmsg").textContent = "Plantation des sapins…";
@@ -229,7 +248,7 @@ function updateFog(camY) {
     scene.fog.far = THREE.MathUtils.lerp(f.far, 140, k);
   } else {
     scene.fog.near = f.near;
-    scene.fog.far = f.far;
+    scene.fog.far = Math.min(f.far, QUALITY[qKey()].fogFar);
   }
   camera.far = Math.min(60000, scene.fog.far * 1.3 + 500);
   camera.updateProjectionMatrix();
@@ -324,7 +343,7 @@ function buildMenu() {
   seg(g, "Graphismes", "quality", [["auto", "Auto"], ["bas", "Bas"], ["moyen", "Moyen"], ["eleve", "Élevé"]], () => {
     pixelRatio = Math.min(devicePixelRatio, QUALITY[qKey()].pr);
     renderer.setPixelRatio(pixelRatio);
-    if (game.route) forest.build(game.route, QUALITY[qKey()].trees, QUALITY[qKey()].density);
+    if (game.route) { forest.build(game.route, QUALITY[qKey()].trees, QUALITY[qKey()].density); rebuildBuildings(); }
     applyShadows();
   });
   seg(g, "Son", "sound", [[true, "Oui"], [false, "Non"]], (v) => sound.setEnabled(v));
@@ -371,6 +390,16 @@ function renderRouteList() {
   }
 }
 
+// bâtiments : seulement ceux proches du parcours choisi (mémoire graphique)
+function rebuildBuildings() {
+  scene.remove(buildings.group);
+  buildings.dispose();
+  const r = game.route, rad = QUALITY[qKey()].bRadius;
+  const idx = new RoadIndex([{ x: r.x, z: r.z, y: r.y }], 60);
+  buildings = buildBuildings(D.buildings, hf, (x, z) => idx.nearest(x, z, rad).y !== null);
+  scene.add(buildings.group);
+}
+
 function selectRoute(id, reverse) {
   settings.route = id;
   settings.reverse = reverse;
@@ -379,6 +408,7 @@ function selectRoute(id, reverse) {
   game.route = new Route(def, reverse);
   game.crossings = townCrossings(game.route, D.towns);
   forest.build(game.route, QUALITY[qKey()].trees, QUALITY[qKey()].density);
+  rebuildBuildings();
   buildRouteSigns();
   renderRouteList();
   drawProfile($("menu-profile"), game.route, null);
@@ -727,6 +757,7 @@ function finish() {
 // ------------------------------------------------------------ commandes
 const keys = new Set();
 const touchKeys = new Set();
+const EFFORT_STEP = 20; // watts par pression
 // lettres tapées (indépendantes de la disposition AZERTY / QWERTY)
 const letters = new Set();
 addEventListener("keydown", (e) => {
@@ -742,8 +773,8 @@ addEventListener("keydown", (e) => {
   if (L === "x" && p) p.tuck = !p.tuck;
   if (e.code === "KeyR") { look.yaw = 0; look.pitch = 0; }
   if (e.code === "KeyM") { settings.sound = !settings.sound; sound.setEnabled(settings.sound); saveSettings(); }
-  if ((e.code === "ArrowUp" || L === "e") && p) p.target = Math.min(1500, p.target + 10);
-  if ((e.code === "ArrowDown" || L === "a") && p) p.target = Math.max(0, p.target - 10);
+  if ((e.code === "ArrowUp" || L === "e") && p) p.target = Math.min(1500, p.target + EFFORT_STEP);
+  if ((e.code === "ArrowDown" || L === "a") && p) p.target = Math.max(0, p.target - EFFORT_STEP);
 });
 addEventListener("keyup", (e) => {
   keys.delete(e.code);
@@ -760,8 +791,8 @@ document.querySelectorAll("#touch button").forEach((b) => {
     sound.start();
     if (k === "pause") return setPaused(game.state !== "paused");
     touchKeys.add(k);
-    if (k === "up" && game.player) game.player.target = Math.min(1500, game.player.target + 10);
-    if (k === "down" && game.player) game.player.target = Math.max(0, game.player.target - 10);
+    if (k === "up" && game.player) game.player.target = Math.min(1500, game.player.target + EFFORT_STEP);
+    if (k === "down" && game.player) game.player.target = Math.max(0, game.player.target - EFFORT_STEP);
   });
   const up = () => touchKeys.delete(k);
   b.addEventListener("pointerup", up);
@@ -789,19 +820,12 @@ canvas.addEventListener("dblclick", () => { look.yaw = 0; look.pitch = 0; });
 
 function showCamHint() { $("h-cam").textContent = `Caméra : ${CAMS[game.camMode]} (C)`; }
 
-let holdT = 0;
 function readControls(dt) {
   const p = game.player;
   if (!p) return;
   const pad = navigator.getGamepads ? [...navigator.getGamepads()].find((x) => x) : null;
   const k = (c) => keys.has(c);
   const l = (c) => letters.has(c);
-  const up = k("ArrowUp") || l("e") || touchKeys.has("up");
-  const down = k("ArrowDown") || l("a") || touchKeys.has("down");
-  if (up || down) {
-    holdT += dt;
-    if (holdT > 0.35) p.target = Math.max(0, Math.min(1500, p.target + (up ? 1 : -1) * 120 * dt));
-  } else holdT = 0;
   p.sprint = k("ShiftLeft") || k("ShiftRight") || touchKeys.has("sprint");
   p.brake = k("Space") || l("s") || touchKeys.has("brake") ? 1 : 0;
   let steer = (k("ArrowRight") || l("d") || touchKeys.has("right") ? 1 : 0) - (k("ArrowLeft") || l("q") || touchKeys.has("left") ? 1 : 0);
@@ -842,7 +866,7 @@ function groundAt(x, z, p) {
   const ad = Math.abs(q.d);
   let y, surf;
   if (ad < 3.2) { y = q.y + 0.06; surf = 0; }
-  else if (ad < 4.4) { y = q.y + 0.04 - ((ad - 3.2) / 1.2) * 0.24; surf = 1; }
+  else if (ad < 4.6) { y = q.y + 0.04 - ((ad - 3.2) / 1.4) * 0.08; surf = 1; }
   else { y = hf.height(x, z); surf = 2; }
   if (surf) {
     // autre route (croisement, autre parcours)
@@ -964,7 +988,14 @@ function autoQuality(dt) {
   const fps = fpsN / fpsAcc;
   fpsAcc = 0; fpsN = 0; fpsT = 0;
   if (settings.quality !== "auto") return;
-  const maxPr = Math.min(devicePixelRatio, 1.5);
+  const maxPr = Math.min(devicePixelRatio, QUALITY[autoTier].pr);
+  // toujours trop lent à basse résolution : on passe au niveau inférieur
+  if (fps < 28 && pixelRatio <= 0.6 && autoTier !== "bas") {
+    autoTier = "bas";
+    applyShadows();
+    if (game.route) { forest.build(game.route, QUALITY.bas.trees, QUALITY.bas.density); rebuildBuildings(); }
+    return;
+  }
   if (fps < 40 && pixelRatio > 0.5) pixelRatio = Math.max(0.5, pixelRatio - 0.15);
   else if (fps > 57 && pixelRatio < maxPr) pixelRatio = Math.min(maxPr, pixelRatio + 0.1);
   else return;
