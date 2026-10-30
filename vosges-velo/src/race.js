@@ -208,7 +208,6 @@ export class Convoy {
   // leaderS : tête de course ; mainTail : dernier du gros groupe ; lastS : dernier coureur
   // riders : tous les coureurs ; les voitures ne roulent jamais dans un groupe
   update(route, leaderS, mainTail, lastS, player, dt, riders = []) {
-    const near = (s) => riders.some((r) => Math.abs(r.s - s) < 7);
     const pos = (it, s, o) => {
       it.s = it.s ? it.s + Math.max(-30 * dt, Math.min(30 * dt, s - it.s)) : s;
       it.o += (o - it.o) * Math.min(1, dt * 0.8);
@@ -227,8 +226,9 @@ export class Convoy {
         let s = mainTail - 22 - it.k * 13, o = -1.2;
         // le joueur lâché : les voitures restent derrière lui
         if (player.s < mainTail - 8 && player.s > s - 30) s = Math.min(s, player.s - 14 - it.k * 13);
-        // en passant un coureur, la voiture se serre sur le bas-côté
-        if (near(it.s)) o = -3.6;
+        // jamais dans un groupe : la voiture reste derrière le coureur le plus
+        // proche devant elle (marge de 8 m)
+        for (const r of riders) if (r.s > it.s - 2 && r.s < s + 8) s = Math.min(s, r.s - 8);
         const c = this.teamCall;
         if (it.k === 0 && c && !c.done) {
           // la voiture remonte à la gauche du coureur, donne bidons et

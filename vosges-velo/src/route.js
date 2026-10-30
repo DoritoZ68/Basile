@@ -36,6 +36,24 @@ export class Route {
       k[i] = (this.dx[i - 1] * this.dz[i + 1] - this.dz[i - 1] * this.dx[i + 1]) / ds;
     }
     this.curv = boxSmooth(k, 2);
+    // courbure « de pointe » pour les vitesses de passage : changement de cap
+    // d'un segment à l'autre, maximum sur ±15 m (un angle de rue à 90° ne
+    // doit pas être dilué par le lissage)
+    const raw = new Float32Array(n);
+    for (let i = 1; i < n - 1; i++) {
+      const ax = this.x[i] - this.x[i - 1], az = this.z[i] - this.z[i - 1];
+      const bx = this.x[i + 1] - this.x[i], bz = this.z[i + 1] - this.z[i];
+      const la = Math.hypot(ax, az) || 1, lb = Math.hypot(bx, bz) || 1;
+      const ang = Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+      raw[i] = ang / ((la + lb) / 2);
+    }
+    const sm = boxSmooth(raw, 1);
+    this.curvPeak = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      let m = 0;
+      for (let j = Math.max(0, i - 3); j <= Math.min(n - 1, i + 3); j++) if (Math.abs(sm[j]) > Math.abs(m)) m = sm[j];
+      this.curvPeak[i] = m;
+    }
     // pente lissée (sur ±15 m)
     const g = new Float32Array(n);
     for (let i = 0; i < n; i++) {
@@ -107,7 +125,7 @@ export class Route {
     let dist = 0;
     for (let d = 0; d <= look; d += 5) {
       const i = this.index(s + d);
-      const k = Math.abs(this.curv[i]);
+      const k = Math.abs(this.curvPeak[i]);
       if (k > 1e-4) {
         const v = Math.sqrt((mu * 9.81) / k);
         // on doit pouvoir freiner (~4 m/s²) d'ici là

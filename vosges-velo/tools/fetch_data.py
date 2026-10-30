@@ -231,6 +231,42 @@ def smooth(vals, radius):
     return res
 
 
+def remove_spurs(xs, zs, ys, names, step=5.0):
+    """Retire les allers-retours parasites du routeur (impasse, parking au
+    bout d'une voie) : le tracé repasse à moins de 6 m d'un point déjà
+    parcouru. Retourne les tableaux nettoyés et les noms réindexés."""
+    n = len(xs)
+    keep = []
+    removed = []  # (abscisse de coupure, longueur retirée)
+    i = 0
+    while i < n:
+        best = None
+        for j in range(i + 8, min(n, i + 600)):
+            if math.hypot(xs[i] - xs[j], zs[i] - zs[j]) < 6:
+                best = j
+        keep.append(i)
+        if best:
+            removed.append((i * step, (best - i) * step))
+            i = best
+        else:
+            i += 1
+    nx = [xs[k] for k in keep]
+    nz = [zs[k] for k in keep]
+    ny = [ys[k] for k in keep]
+    out_names = []
+    for d, label in names:
+        cut = 0
+        inside = False
+        for a, l in removed:
+            if d > a + l:
+                cut += l
+            elif d > a:
+                inside = True
+        if not inside:
+            out_names.append([round(d - cut), label])
+    return nx, nz, ny, out_names, removed
+
+
 def chaikin_xz(pts, iters=2):
     for _ in range(iters):
         new = [pts[0]]
@@ -326,6 +362,13 @@ def main():
             best = min(range(len(rs)), key=lambda k: (rs[k][0] - nxz[0]) ** 2 + (rs[k][1] - nxz[1]) ** 2)
             if nm["label"] and (not names or names[-1][1] != nm["label"]):
                 names.append([round(prof[best]), nm["label"]])
+        xs_, zs_, ys_, names, removed = remove_spurs([p[0] for p in rs], [p[1] for p in rs], el, names)
+        if removed:
+            print("  allers-retours retirés :", removed)
+            rs = list(zip(xs_, zs_))
+            el = ys_
+            dist = sum(math.hypot(rs[k][0] - rs[k - 1][0], rs[k][1] - rs[k - 1][1]) for k in range(1, len(rs)))
+            gain = sum(max(0, b - a) for a, b in zip(el, el[1:]))
         out_routes.append({
             "id": r["id"], "name": r["name"], "subtitle": r["subtitle"],
             "length": round(dist, 1), "gain": round(gain),

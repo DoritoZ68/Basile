@@ -66,7 +66,9 @@ export class Ground {
   // voie la plus proche par distance AU BORD (négative sur la chaussée),
   // à moins de maxEdge ; maxLine limite la recherche aux lignes d'indice
   // inférieur ; les parcours ont une légère priorité sur le réseau
-  road(x, z, maxEdge, maxLine = 1e9, minLine = 0) {
+  // yRef : altitude actuelle du cycliste ; sous un pont ou à un croisement
+  // de rues à des hauteurs différentes, on garde la voie à sa hauteur
+  road(x, z, maxEdge, maxLine = 1e9, minLine = 0, yRef) {
     const c = this.cell, ci = Math.floor(x / c), cj = Math.floor(z / c);
     const rr = Math.ceil((maxEdge + this.maxHalf + 8) / c);
     let best = maxEdge, found = false;
@@ -85,7 +87,8 @@ export class Ground {
           t = t < 0 ? 0 : t > 1 ? 1 : t;
           const dx = x - x0 - ex * t, dz = z - z0 - ez * t;
           const d = Math.sqrt(dx * dx + dz * dz);
-          const score = d - r.half - (r.route ? 0.3 : 0);
+          let score = d - r.half - (r.route ? 0.3 : 0);
+          if (yRef !== undefined) score += Math.max(0, Math.abs(r.y[k] + (r.y[k + 1] - r.y[k]) * t - yRef) - 1) * 2;
           if (score < best) {
             best = score;
             found = true;
@@ -105,9 +108,9 @@ export class Ground {
   }
 
   // altitude du sol visible : chaussée, accotement, raccord, relief naturel
-  height(x, z) {
+  height(x, z, yRef) {
     const n = this.hf.height(x, z);
-    const q = this.road(x, z, 18);
+    const q = this.road(x, z, 18, 1e9, 0, yRef);
     if (!q) return n;
     const L = q.line;
     if (q.edge <= 0) return q.y + L.lift;
@@ -121,8 +124,8 @@ export class Ground {
   }
 
   // 0 chaussée, 1 accotement ou chemin empierré, 2 hors route
-  surface(x, z) {
-    const q = this.road(x, z, VERGE_W);
+  surface(x, z, yRef) {
+    const q = this.road(x, z, VERGE_W, 1e9, 0, yRef);
     if (!q) return 2;
     if (q.edge > 0.2) return 1;
     return q.line.cls === 3 ? 1 : 0;

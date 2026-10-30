@@ -6,7 +6,8 @@
   "scripts": {
     "data": "node tools/fetch-data.mjs",
     "build": "node tools/build.mjs",
-    "dev": "node tools/build.mjs --watch"
+    "dev": "node tools/build.mjs --watch",
+    "test": "node tests/playtest.cjs"
   },
   "dependencies": {
     "three": "0.170.0"

@@ -216,7 +216,7 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, rideCamera, poseRiders };
+    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, placePlayerFree, rideCamera, poseRiders, startRide, selectRoute, streamWorld, D };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -230,6 +230,31 @@ function frame() { return new Promise((r) => requestAnimationFrame(() => r())); 
 // la même chaussée, pour qu'il n'y ait ni marche ni double route
 function prepareNetwork(list, hf, routeGround) {
   const out = [];
+  // les tronçons qui se rejoignent à un carrefour reçoivent la même altitude
+  // à leur extrémité (raccord progressif sur 40 m) : plus de marche entre rues
+  const nodes = new Map();
+  const key = (x, z) => `${Math.round(x)},${Math.round(z)}`;
+  for (const n of list) {
+    for (const k of [0, n.x.length - 1]) {
+      if (Number.isNaN(n.y[k])) continue;
+      const kk = key(n.x[k], n.z[k]);
+      const e = nodes.get(kk) || { sum: 0, c: 0 };
+      e.sum += n.y[k]; e.c++;
+      nodes.set(kk, e);
+    }
+  }
+  for (const n of list) {
+    const m = n.x.length;
+    for (const [k, dir] of [[0, 1], [m - 1, -1]]) {
+      const e = nodes.get(key(n.x[k], n.z[k]));
+      if (!e || e.c < 2 || Number.isNaN(n.y[k])) continue;
+      const delta = e.sum / e.c - n.y[k];
+      for (let j = 0; j < 5 && j < m; j++) {
+        const i = k + dir * j;
+        if (!Number.isNaN(n.y[i])) n.y[i] += delta * (1 - j / 5);
+      }
+    }
+  }
   for (const n of list) {
     if (n.x.length < 2) continue;
     const y = Float32Array.from(n.y, (v, k) => (Number.isNaN(v) ? hf.height(n.x[k], n.z[k]) : v));
@@ -1050,7 +1075,7 @@ const projTmp = {};
 // position sur le parcours (abscisse, écart) et sol réellement affiché
 function groundAt(x, z, p) {
   const q = game.route.project(x, z, p.ri, 30, projTmp);
-  return { y: ground.height(x, z), surf: ground.surface(x, z), s: q.s, d: q.d, i: q.i };
+  return { y: ground.height(x, z, p.y), surf: ground.surface(x, z, p.y), s: q.s, d: q.d, i: q.i };
 }
 
 const MU = [0.9, 0.72, 0.55]; // asphalte, accotement, herbe/terre
@@ -1072,12 +1097,13 @@ function movePlayer(p, dt) {
     p.leanTarget = p.steer * maxLean;
   } else if (p.steer) {
     const against = p.leanTarget && Math.sign(p.steer) !== Math.sign(p.leanTarget);
-    p.leanTarget = (p.leanTarget || 0) + p.steer * (against ? 1.3 : 0.6) * (tt ? 0.75 : 1) * dt;
+    // plus réactif à vitesse élevée (où de petites inclinaisons suffisent)
+    p.leanTarget = (p.leanTarget || 0) + p.steer * (against ? 1.4 : 0.6 + Math.min(0.3, v * 0.02)) * (tt ? 0.75 : 1) * dt;
   } else {
     p.leanTarget = (p.leanTarget || 0) * Math.exp(-dt * 1.5);
   }
   p.leanTarget = Math.max(-maxLean, Math.min(maxLean, p.leanTarget));
-  const w = 5.5;
+  const w = 6.2;
   p.leanVel = (p.leanVel || 0) + (w * w * (p.leanTarget - (p.lean || 0)) - 2 * w * p.leanVel) * dt;
   p.lean = Math.max(-0.95, Math.min(0.95, (p.lean || 0) + p.leanVel * dt));
   // lacet : rayon imposé par l'inclinaison ; à l'arrêt, on tourne le guidon
@@ -1090,7 +1116,7 @@ function movePlayer(p, dt) {
   let g0;
   if (game.free) {
     // mode libre : pas de parcours, on compte la distance parcourue
-    g0 = { y: ground.height(p.x, p.z), surf: ground.surface(p.x, p.z), d: 0 };
+    g0 = { y: ground.height(p.x, p.z, p.y), surf: ground.surface(p.x, p.z, p.y), d: 0 };
     p.s += v * dt;
     p.o = 0;
     p.safeT = (p.safeT || 0) + dt;
@@ -1100,7 +1126,7 @@ function movePlayer(p, dt) {
     p.ri = g0.i; p.s = g0.s; p.o = g0.d;
   }
   p.y = g0.y; p.surface = g0.surf;
-  const ga = ground.height(p.x + dx * 2, p.z + dz * 2), gb = ground.height(p.x - dx * 2, p.z - dz * 2);
+  const ga = ground.height(p.x + dx * 2, p.z + dz * 2, p.y), gb = ground.height(p.x - dx * 2, p.z - dz * 2, p.y);
   const grade = Math.max(-0.45, Math.min(0.45, (ga - gb) / 4));
   // altitude et pente lissées : le sol échantillonné a de petits sauts
   // (jonctions de routes, accotements) qui faisaient tressauter la caméra
@@ -1299,6 +1325,12 @@ function simulate(dt) {
       if (gap > 0 && gap < 1.9 && Math.abs(o.o - x.o) < 0.55 && x.v > o.v) {
         x.v = o.v;
         if (!x.isPlayer) x.s = Math.min(x.s, o.s - 1.9 + 0.01);
+      }
+      // côte à côte : les coureurs s'écartent l'un de l'autre (épaules)
+      if (Math.abs(gap) < 1.6 && Math.abs(o.o - x.o) < 0.6 && !x.isPlayer) {
+        const push = (0.6 - Math.abs(o.o - x.o)) * (x.o >= o.o ? 1 : -1);
+        x.o = Math.max(-2.6, Math.min(2.6, x.o + push * Math.min(1, dt * 6)));
+        if (!o.isPlayer) o.o = Math.max(-2.6, Math.min(2.6, o.o - push * Math.min(1, dt * 6)));
       }
     }
     if (!game.free && !x.finished && x.s >= r.finish) {
