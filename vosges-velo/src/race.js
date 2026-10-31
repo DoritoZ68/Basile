@@ -179,9 +179,15 @@ export class Convoy {
   // grp : groupes (écarts affichés par l'ardoisier)
   update(route, leaderS, mainTail, lastS, player, dt, riders = [], grp = []) {
     const q = {};
-    const pos = (it, s, o) => {
-      it.s = it.s ? it.s + Math.max(-30 * dt, Math.min(30 * dt, s - it.s)) : s;
-      it.o += (o - it.o) * Math.min(1, dt * 0.8);
+    // vMax : vitesse de rattrapage (m/s au-delà de la cible, en distance)
+    const pos = (it, s, o, vMax = 30) => {
+      // un véhicule ne recule pas : si sa place est derrière lui, il s'arrête
+      // au bord de la route et laisse passer les coureurs
+      if (it.s && s < it.s - 1) o = o < 0 ? -3.9 : 3.9;
+      const s0 = it.s;
+      it.s = it.s ? it.s + Math.max(-1 * dt, Math.min(vMax * dt, s - it.s)) : s;
+      if (dt > 0) it.vs = (it.s - s0) / dt;
+      it.o += (o - it.o) * Math.min(1, dt * (Math.abs(o) > 3 ? 1.8 : 0.8));
       route.sample(Math.max(0, Math.min(route.length, it.s)), q);
       // pas d'affichage au-delà de la fin du tracé
       this.fleet.place(it.v, q.x - q.dz * it.o, q.y + 0.03, q.z + q.dx * it.o, Math.atan2(q.dx, q.dz), -Math.atan(q.grade || 0), dt, it.s < route.length - 5 && it.s > 0);
@@ -201,43 +207,48 @@ export class Convoy {
       else if (it.role === "direction") pos(it, leaderS + 70, -0.4);
       else if (it.role === "balai") pos(it, lastS - 45, -0.4);
       else if (it.role === "ardoise") {
-        // devant le peloton quand une échappée a de l'avance, sinon en tête
-        // devant le peloton, au milieu du trou avec le coureur suivant ; sinon
-        // en tête de course
-        let away = main && grp[0] !== main && main.gapTime > 8;
-        let target = leaderS + 46;
-        if (away) {
-          let ahead = 1e9;
-          for (const r of riders) if (r.s > main.headS + 1 && r.s < ahead) ahead = r.s;
-          if (ahead - main.headS > 30) target = Math.min(main.headS + 28, (main.headS + ahead) / 2);
-          else away = false;
-        }
-        // en changeant de place, la moto se range au bord de la route
-        pos(it, target, Math.abs(target - it.s) > 12 ? 3.4 : 1.7);
+        // l'ardoisier roule devant la tête de course et lui montre son avance
+        // sur le peloton (jamais à reculons dans les groupes)
+        const away = main && grp[0] !== main && main.gapTime > 8;
+        pos(it, leaderS + 46, 1.7);
         this.slateT -= dt;
         if (this.slateT <= 0) {
           this.slateT = 1;
           const t = Math.round(away ? main.gapTime : 0);
-          this.slate.userData.draw(away ? `ÉCHAPPÉE (${grp[0].riders.length})` : "PELOTON", away ? `+${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}` : "groupé");
+          this.slate.userData.draw("PELOTON", away ? `+${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}` : "groupé");
         }
       } else if (it.role === "team") {
         let s = mainTail - 22 - it.k * 13, o = -1.2;
         // le joueur lâché : les voitures restent derrière lui
         if (player.s < mainTail - 8 && player.s > s - 30) s = Math.min(s, player.s - 14 - it.k * 13);
+        // le joueur échappé avec plus de 20 s d'avance : sa voiture d'équipe
+        // passe le peloton et le suit (comme en course)
+        const mine = grp.find((g) => g.riders.includes(player));
+        if (it.k === 0 && mine && main && mine !== main && mine.headS > main.headS && mine.gapTime + 20 < main.gapTime) s = mine.tailS - 25;
         // jamais dans un groupe : la voiture reste derrière le coureur le plus
-        // proche devant elle (marge de 8 m)
-        for (const r of riders) if (r.s > it.s - 2 && r.s < s + 8) s = Math.min(s, r.s - 8);
+        // proche devant elle (marge de 8 m) ; si elle doit remonter loin,
+        // elle double par la gauche, au bord de la route
+        const passing = s - it.s > 40;
+        if (passing) o = -3.9;
+        else for (const r of riders) if (r.s > it.s - 2 && r.s < s + 8) s = Math.min(s, r.s - 8);
+        // un coureur plus rapide arrive de l'arrière : on se range à gauche
+        for (const r of riders) if (r.s < it.s + 3 && r.s > it.s - 30 && r.v > (it.vs || 0) + 0.3) { o = -3.9; break; }
         const c = this.teamCall;
         if (it.k === 0 && c && !c.done) {
           // la voiture remonte à la gauche du coureur, donne bidons et
           // ravitaillement, puis redescend
           c.t += dt;
           s = player.s - 2.5;
-          o = player.o - 2.3;
+          // à gauche du joueur, mais aussi de tous les coureurs qui l'entourent
+          let lo = player.o;
+          for (const r of riders) if (Math.abs(r.s - player.s) < 7) lo = Math.min(lo, r.o);
+          o = Math.abs(it.s - s) > 40 ? -3.9 : Math.max(-3.9, Math.min(player.o - 2.3, lo - 1.9));
           if (Math.abs(it.s - (player.s - 2.5)) < 3 && c.t > 1) { c.done = true; c.onArrive(); }
-          if (c.t > 40) c.done = true;
+          if (c.t > 180) c.done = true;
         }
-        pos(it, s, o);
+        // avant de remonter, la voiture se décale d'abord sur la gauche
+        if (s - it.s > 40 && it.o > -3.4) s = Math.min(s, it.s + 1);
+        pos(it, s, o, it.k === 0 ? 40 : 30);
       }
     }
     this.fleet.update(dt);

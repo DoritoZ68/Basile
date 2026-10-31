@@ -125,6 +125,14 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
           // de dessus) : ramenées vers un gris plus sombre, sinon effet « neige »
           float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
           c = mix(c, c * vec3(0.64, 0.66, 0.62), smoothstep(0.34, 0.62, l) * (1.0 - smoothstep(0.06, 0.16, sat)));
+          // chaumes et blés mûrs : la photo aérienne d'été les rend presque
+          // blancs (beige très clair), ce qui ressemblait à des trous dans le
+          // sol ; vus du sol ils sont dorés, plus sombres et plus contrastés
+          float warm = smoothstep(0.03, 0.1, c.r - c.b) * (1.0 - smoothstep(0.38, 0.5, sat));
+          float stub = smoothstep(0.3, 0.52, l) * warm;
+          c = mix(c, vec3(0.42, 0.31, 0.14) * (0.75 + 0.5 * l), stub * 0.75);
+          det = mix(det, mix(1.0, (d1 * 0.65 + d2 * 0.35) * 2.0, near * 0.95), stub);
+          l = dot(c, vec3(0.299, 0.587, 0.114));
           ${opts.veg ? `
           // sous-bois : la photo aérienne y est grise ou trop claire (route,
           // coupes) ; on la ramène vers un sol forestier brun-vert
@@ -133,7 +141,7 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
           float amt = forest * (0.25 + 0.5 * smoothstep(0.28, 0.6, l));
           c = mix(c, vec3(0.17, 0.21, 0.11) * (0.8 + 0.9 * l), amt);
           l = dot(c, vec3(0.299, 0.587, 0.114));` : ""}
-          diffuseColor.rgb = max(c, 0.0) * det * (1.4 - 0.5 * l);
+          diffuseColor.rgb = max(c, 0.0) * det * (1.38 - 0.6 * l);
         }`,
       );
   };

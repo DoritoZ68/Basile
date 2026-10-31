@@ -102,7 +102,7 @@ async function drive(page, opts) {
             for (const a of g.riders) {
               const q = r.sample(a.s);
               const ax = q.x - q.dz * a.o, az = q.z + q.dx * a.o;
-              if (Math.hypot(mesh.position.x - ax, mesh.position.z - az) < 1.6) { add("voiture", `${it.role} sur ${a.name}`); break; }
+              if (Math.hypot(mesh.position.x - ax, mesh.position.z - az) < 1.6) { add("voiture", `${it.role} sur ${a.name} (voiture s ${it.s.toFixed(1)} o ${it.o.toFixed(1)}, coureur s ${a.s.toFixed(1)} o ${a.o.toFixed(1)} v ${(a.v * 3.6).toFixed(0)} km/h${a.isPlayer ? ", joueur" : ""})`); break; }
             }
           }
         }

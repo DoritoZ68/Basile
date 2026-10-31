@@ -1154,7 +1154,7 @@ addEventListener("keydown", (e) => {
       if (game.callCool > 0) toast("La voiture d'équipe est déjà en route", 2);
       else {
         game.callCool = 45;
-        toast("Voiture d'équipe appelée : restez dans le groupe", 2.5);
+        toast("Voiture d'équipe appelée : elle remonte jusqu'à vous", 2.5);
         game.convoy.call(() => {
           p.fuel.bottles = [500, 500];
           p.fuel.bars = Math.min(4, p.fuel.bars + 1);
