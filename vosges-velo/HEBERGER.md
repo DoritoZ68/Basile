@@ -10,6 +10,12 @@ convient), branché à votre box.
 
 ## 1. Installer Node.js (une seule fois)
 
+- Linux Mint, Ubuntu, Debian : dans un terminal
+
+```bash
+sudo apt update && sudo apt install -y nodejs
+```
+
 - Mac récent (macOS 10.15 ou plus) ou PC Windows : télécharger la version
   « LTS » sur https://nodejs.org et l'installer.
 - iMac de 2011 (macOS High Sierra 10.13 au plus) : prendre Node.js 16, la
@@ -51,6 +57,8 @@ démarrage puis toutes les 5 minutes : rien d'autre à installer.
 ## 4. Donner une adresse fixe à l'ordinateur sur le réseau local
 
 1. Trouver l'adresse locale de l'ordinateur :
+   - Linux : `hostname -I` dans un terminal (la première adresse, du type
+     `192.168.1.23`).
    - Mac : Préférences Système > Réseau > Wi-Fi (ou Ethernet) : « Adresse
      IP », du type `192.168.1.23`.
    - Windows : Paramètres > Réseau et Internet > Propriétés : « Adresse
@@ -83,6 +91,14 @@ l'adresse locale de l'ordinateur** (étape 4).
 
 ## 6. Lancer le serveur
 
+- Linux : dans un terminal, `cd` dans le dossier puis `./lancer.sh` (ou
+  double-clic sur `lancer.sh` > « Lancer dans un terminal »). Si le
+  pare-feu est activé (Linux Mint : « Configuration du pare-feu ») :
+
+```bash
+sudo ufw allow 8080/tcp
+```
+
 - Mac : double-cliquer sur `LANCER.command`. La première fois, macOS peut
   refuser un fichier téléchargé : clic droit (ou Ctrl+clic) > Ouvrir >
   Ouvrir. Si macOS demande d'accepter les connexions entrantes pour
@@ -95,7 +111,39 @@ La fenêtre affiche les adresses et, si DuckDNS est bien configuré :
 ouverte pendant la partie ; la fermer (ou Ctrl+C) arrête le serveur.
 
 Penser à empêcher la mise en veille de l'ordinateur pendant la partie
-(Mac : Préférences Système > Économiseur d'énergie).
+(Linux Mint : Paramètres système > Gestion de l'alimentation ; Mac :
+Préférences Système > Économiseur d'énergie).
+
+### Linux : démarrage automatique (facultatif)
+
+Pour que le serveur tourne en permanence, même après un redémarrage
+(remplacer `/home/moi/vosges-velo-serveur` par le vrai dossier et `moi`
+par votre nom d'utilisateur) :
+
+```bash
+sudo tee /etc/systemd/system/vosges-velo.service >/dev/null <<'FIN'
+[Unit]
+Description=Serveur Vosges Vélo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=moi
+WorkingDirectory=/home/moi/vosges-velo-serveur
+ExecStart=/usr/bin/node server.cjs
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+FIN
+```
+
+```bash
+sudo systemctl enable --now vosges-velo
+```
+
+Voir les messages du serveur : `journalctl -u vosges-velo -f` ; l'arrêter :
+`sudo systemctl disable --now vosges-velo`.
 
 ## 7. Jouer
 
