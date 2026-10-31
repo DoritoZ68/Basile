@@ -290,7 +290,9 @@ function vergeTexture() {
 
 // bande le long d'une portion de route ; cols = décalages latéraux,
 // hfun(x, z, off) = altitude, uvMode : "road" (u en travers, v en long) ou "world"
-function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1]) {
+// covered(x, z) : vrai si le point est sur la chaussée ou l'accotement d'une
+// autre voie ; les quadrilatères de sol concernés ne sont pas émis
+function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1], covered = null) {
   const nc = cols.length, nr = b - a + 1;
   const pos = new Float32Array(nr * nc * 3);
   const uv = new Float32Array(nr * nc * 2);
@@ -324,10 +326,21 @@ function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1]) {
       else { uv[q] = (x - hf.x0) / hf.w; uv[q + 1] = 1 - (z - hf.z0) / hf.d; }
     }
   }
+  let cov = null;
+  if (covered) {
+    cov = new Uint8Array(nr * nc);
+    for (let p = 0; p < nr * nc; p++) cov[p] = covered(pos[p * 3], pos[p * 3 + 2]) ? 1 : 0;
+  }
   const idx = [];
   for (let k = 0; k < nr - 1; k++) {
     for (let c = 0; c < nc - 1; c++) {
       const p = k * nc + c;
+      if (cov) {
+        if (cov[p] || cov[p + 1] || cov[p + nc] || cov[p + nc + 1]) continue;
+        const mx = (pos[p * 3] + pos[(p + 1) * 3] + pos[(p + nc) * 3] + pos[(p + nc + 1) * 3]) / 4;
+        const mz = (pos[p * 3 + 2] + pos[(p + 1) * 3 + 2] + pos[(p + nc) * 3 + 2] + pos[(p + nc + 1) * 3 + 2]) / 4;
+        if (covered(mx, mz)) continue;
+      }
       idx.push(p, p + 1, p + nc, p + nc, p + 1, p + nc + 1);
     }
   }
@@ -390,8 +403,16 @@ function lineGeometry(ground, L, a, b, inner, out) {
   const colsR = L.route ? [v - 0.05, 8.5, 13, 18, 24, cr] : [v - 0.05, v + 3, v + 6.5, cr];
   const colsL = colsR.map((c) => -c).reverse();
   const hfun = (x, z) => ground.height(x, z);
-  out.ground.push(strip(L, a, b, colsL, hfun, "world", hf, inner));
-  out.ground.push(strip(L, a, b, colsR, hfun, "world", hf, inner));
+  // le ruban de sol d'une voie ne passe pas sur la chaussée ni l'accotement
+  // d'une autre (carrefours, rues parallèles) : les deux surfaces, à la même
+  // hauteur, se disputaient l'affichage et le sol mordait sur l'enrobé.
+  // L'autre voie a son propre ruban, qui couvre cet endroit.
+  const covered = (x, z) => {
+    const q = ground.road(x, z, VERGE_W - 0.3);
+    return !!q && q.line !== L && Math.abs(q.y - hf.height(x, z)) < 4;
+  };
+  out.ground.push(strip(L, a, b, colsL, hfun, "world", hf, inner, undefined, covered));
+  out.ground.push(strip(L, a, b, colsR, hfun, "world", hf, inner, undefined, covered));
 }
 
 function finishMeshes(out, mats, chunked) {
@@ -412,11 +433,26 @@ function finishMeshes(out, mats, chunked) {
   return meshes;
 }
 
+function pull(mat, k) {
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+      gl_Position = projectionMatrix * vec4(mvPosition.xyz * ${(1 - k).toFixed(5)}, 1.0);`);
+  };
+  mat.customProgramCacheKey = () => "pull" + k;
+}
+
 export function makeRoadMaterials(groundMat, renderer) {
   // Phong : léger reflet du soleil sur l'enrobé, fort sur route mouillée
   const road = new THREE.MeshPhongMaterial({ map: roadTexture(), specular: 0x161616, shininess: 14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   road.map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const verge = new THREE.MeshLambertMaterial({ map: vergeTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  // priorité de profondeur : la chaussée et l'accotement sont rapprochés de la
+  // caméra d'une fraction de leur distance (position à l'écran inchangée).
+  // Les cartes à tampon de profondeur 24 bits (Radeon HD, Intel HD) n'ont pas
+  // assez de précision à quelques centaines de mètres pour départager des
+  // surfaces distantes de quelques centimètres : le sol scintillait sur la route.
+  pull(road, 0.0015);
+  pull(verge, 0.0008);
   return { road, verge, ground: groundMat };
 }
 

@@ -1695,7 +1695,8 @@ function rideCamera(dt, snap = false) {
     look.yaw *= Math.exp(-dt * 2);
     look.pitch *= Math.exp(-dt * 2);
   }
-  camera.near = mode === 1 ? 0.06 : 0.5;
+  // plan proche : pas plus près que nécessaire (précision de profondeur)
+  camera.near = mode === 1 ? 0.12 : 0.5;
   if (mode === 1) {
     // première personne : yeux du coureur, inclinaison du vélo comprise
     game.playerModel.eyeWorld(camPos);
