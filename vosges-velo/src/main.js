@@ -11,6 +11,8 @@ import { makeField, PelotonView, Convoy, groups } from "./race.js";
 import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
 import { Traffic } from "./traffic.js";
+import { CHARACTERS, characterById, paletteOf, renderPortraits, Coverflow } from "./characters.js";
+import { Net, netSupported } from "./net.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt1 = (v) => v.toFixed(1).replace(".", ",");
@@ -26,7 +28,7 @@ const DEFAULTS = {
   route: "grand-ballon-willer", reverse: false, mode: "race",
   mass: 72, ftp: 230, jersey: "#d8323c", level: "amateur", bike: "route", field: 40,
   time: "matin", weather: "beau", wind: "none", timescale: 1,
-  quality: "auto", sound: true,
+  quality: "auto", sound: true, character: "perso", pseudo: "",
 };
 const settings = { ...DEFAULTS, ...readLS("vv-settings", {}) };
 function readLS(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
@@ -137,6 +139,7 @@ scene.add(crowd.group);
 const game = {
   state: "loading", // menu | countdown | ride | paused | finished
   route: null,
+  remotes: new Map(),
   crossings: [],
   riders: [],
   models: [],
@@ -478,6 +481,7 @@ function seg(container, label, key, options, onChange) {
   return row;
 }
 
+const rangeRefresh = {};
 function range(container, label, key, min, max, stepV, unit, onChange) {
   const row = document.createElement("div");
   row.className = "opt";
@@ -485,6 +489,7 @@ function range(container, label, key, min, max, stepV, unit, onChange) {
   const inp = row.querySelector("input"), out = row.querySelector("output");
   const show = () => { out.textContent = `${settings[key]} ${unit}`; onChange && onChange(); };
   inp.oninput = () => { settings[key] = Number(inp.value); saveSettings(); show(); };
+  rangeRefresh[key] = () => { inp.value = settings[key]; show(); };
   show();
   container.appendChild(row);
 }
@@ -555,6 +560,7 @@ function buildMenu() {
   updateModeUi();
 
   const rd = $("opts-rider");
+  buildCharacters(rd);
   const wkgNote = document.createElement("p");
   wkgNote.className = "opt-note";
   const upd = () => { wkgNote.textContent = `Rapport poids/puissance : ${fmt1(settings.ftp / settings.mass)} W/kg au seuil (FTP). Un bon cyclosportif tourne autour de 3 W/kg, un coureur pro dépasse 5,5 W/kg.`; };
@@ -607,12 +613,17 @@ function buildMenu() {
   gn.textContent = "« Auto » ajuste la résolution en continu pour rester fluide, même sur un petit portable.";
   g.appendChild(gn);
 
-  $("go").onclick = () => { sound.start(); startRide(); };
+  buildMp();
+  $("go").onclick = () => {
+    if (net.role === "guest" && net.connected) return;
+    sound.start();
+    hostStart();
+  };
   $("resume").onclick = () => setPaused(false);
-  $("restart").onclick = () => { $("pause").hidden = true; startRide(); };
+  $("restart").onclick = () => { $("pause").hidden = true; hostStart(); };
   $("quit").onclick = () => { $("pause").hidden = true; showMenu(); };
   $("relocate").onclick = () => { $("pause").hidden = true; showMenu(); };
-  $("r-again").onclick = () => { $("results").hidden = true; startRide(); };
+  $("r-again").onclick = () => { $("results").hidden = true; hostStart(); };
   $("r-menu").onclick = () => { $("results").hidden = true; showMenu(); };
 }
 
@@ -935,6 +946,254 @@ function drawProfileMarkers(g, route, riders, X, Y) {
   }
 }
 
+// ------------------------------------------------------------ personnages
+let coverflow = null;
+function buildCharacters(container) {
+  const box = document.createElement("div");
+  box.className = "chars";
+  box.innerHTML = `<div class="cf-host"></div><div class="char-info"><h3></h3><p></p><div class="char-stats"></div></div>`;
+  container.appendChild(box);
+  const idx = Math.max(0, CHARACTERS.findIndex((c) => c.id === settings.character));
+  // le personnage choisi impose son poids et sa puissance
+  const c0 = characterById(settings.character);
+  if (!c0.custom) { settings.mass = c0.mass; settings.ftp = c0.ftp; }
+  const info = () => {
+    const c = characterById(settings.character);
+    box.querySelector("h3").textContent = c.custom ? c.name : `${c.name} · ${c.style}`;
+    box.querySelector("p").textContent = c.text;
+    const stat = (k, v, pct) => `<div><small>${k}</small><b>${v}</b><i style="width:${Math.max(4, Math.min(100, pct))}%"></i></div>`;
+    const wkg = settings.ftp / settings.mass;
+    box.querySelector(".char-stats").innerHTML =
+      stat("Poids", `${settings.mass} kg`, (settings.mass - 45) / 0.6) +
+      stat("Seuil (FTP)", `${settings.ftp} W`, (settings.ftp - 120) / 2.6) +
+      stat("Grimpe (W/kg)", fmt1(wkg), (wkg - 2) * 28) +
+      stat("Explosivité (W′)", `${Math.round(c.wp / 1000)} kJ`, (c.wp - 12000) / 200);
+  };
+  coverflow = new Coverflow(box.querySelector(".cf-host"), CHARACTERS, idx, (c) => {
+    settings.character = c.id;
+    if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
+    saveSettings();
+    rangeRefresh.mass?.();
+    rangeRefresh.ftp?.();
+    info();
+    if (net.active) net.updateMe(myInfo());
+  });
+  game.charInfo = info;
+  info();
+  // portraits rendus quand l'onglet s'ouvre (le contexte WebGL temporaire
+  // ne coûte rien tant qu'on ne regarde pas les personnages)
+  let done = false;
+  const tab = document.querySelector('#tabs [data-tab="rider"]');
+  tab.addEventListener("click", () => {
+    if (done) return;
+    done = true;
+    setTimeout(() => coverflow.setImages(renderPortraits(CHARACTERS, settings.jersey)), 30);
+  });
+}
+
+// ------------------------------------------------------------ multijoueur
+const net = new Net();
+function myInfo() {
+  const c = characterById(settings.character);
+  return { name: (settings.pseudo || "").trim() || c.name.split(" ")[0] || "Joueur", palette: paletteOf(c, settings.jersey), height: c.height, bike: settings.bike, mass: settings.mass, ftp: settings.ftp, char: c.id };
+}
+
+function nameTag(text, color) {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "rgba(14,22,19,0.75)";
+  g.beginPath(); g.roundRect(4, 8, 248, 48, 12); g.fill();
+  g.fillStyle = color; g.fillRect(16, 22, 8, 20);
+  g.fillStyle = "#fff"; g.font = "700 30px Barlow, Arial, sans-serif"; g.textBaseline = "middle";
+  g.fillText(text, 34, 33, 210);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
+  sp.scale.set(1.8, 0.45, 1);
+  sp.renderOrder = 5;
+  return sp;
+}
+
+function addRemote(info) {
+  if (game.remotes.has(info.id) || !game.player) return;
+  const rider = makeRider({ name: info.name, mass: info.mass || 72, ftp: info.ftp || 230, s: START_S, o: 0, bike: info.bike || "route" });
+  rider.remote = true;
+  rider.netId = info.id;
+  rider.team = game.player.team;
+  Object.assign(rider, { x: game.player.x, y: game.player.y, z: game.player.z, yaw: game.player.yaw, lean: 0 });
+  const model = new RiderModel({ palette: info.palette || {}, type: info.bike || "route" });
+  model.root.scale.setScalar(info.height || 1);
+  scene.add(model.root);
+  const tag = nameTag(info.name, (info.palette && info.palette.jersey) || "#fff");
+  model.root.parent.add(tag);
+  game.models.push({ root: tag });
+  game.remotes.set(info.id, { rider, model, tag, info });
+  game.riders.push(rider);
+  game.models.push(model);
+}
+
+function removeRemote(id) {
+  const x = game.remotes.get(id);
+  if (!x) return;
+  scene.remove(x.model.root);
+  scene.remove(x.tag);
+  game.remotes.delete(id);
+  game.riders = game.riders.filter((r) => r !== x.rider);
+  toast(`${x.info.name} a quitté la partie`, 3);
+}
+
+// position reçue : extrapolée avec la vitesse, rejointe en douceur
+function followNet(x, dt) {
+  const n = x.net;
+  if (!n) return;
+  const age = Math.min(1, (performance.now() - n.at) / 1000);
+  const k = Math.min(1, dt * 6);
+  const sT = n.s + n.v * age;
+  x.s += x.v * dt;
+  x.s += (sT - x.s) * (Math.abs(sT - x.s) > 30 ? 1 : k);
+  x.o += (n.o - x.o) * k;
+  x.v = n.v;
+  x.cadence = n.cad; x.posture = n.post; x.power = n.p || 0;
+  x.time = n.time + age;
+  x.crashed = n.cr || 0;
+  if (n.fin && !x.finished) { x.finished = true; x.finishTime = n.ft; x.place = game.riders.filter((o) => o.finished).length - 1; }
+  if (x.remote) {
+    const xT = n.x + Math.sin(n.yaw) * n.v * age, zT = n.z + Math.cos(n.yaw) * n.v * age;
+    const far = Math.hypot(xT - x.x, zT - x.z) > 25;
+    x.x = far ? xT : x.x + Math.sin(x.yaw) * x.v * dt + (xT - x.x - Math.sin(x.yaw) * x.v * dt) * k;
+    x.z = far ? zT : x.z + Math.cos(x.yaw) * x.v * dt + (zT - x.z - Math.cos(x.yaw) * x.v * dt) * k;
+    x.y += (n.y - x.y) * (far ? 1 : k);
+    let dy = n.yaw - x.yaw;
+    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+    x.yaw += dy * (far ? 1 : k);
+    x.lean += (n.lean - x.lean) * k;
+    x.pitch = n.pitch;
+  }
+}
+
+const r2 = (v, k = 100) => Math.round(v * k) / k;
+function netTick(dt) {
+  if (!net.connected || !game.player) return;
+  const p = game.player;
+  game.netT = (game.netT || 0) - dt;
+  if (game.netT <= 0) {
+    game.netT = 0.1;
+    net.send({ t: "st", s: r2(p.s, 10), o: r2(p.o), x: r2(p.x), y: r2(p.yS), z: r2(p.z), yaw: r2(p.yaw, 1000), lean: r2(p.lean, 1000), pitch: r2(Math.atan(p.gradeS || 0), 1000), v: r2(p.v), cad: Math.round(p.cadence), post: p.posture, p: Math.round(p.power), time: r2(p.time, 10), fin: p.finished ? 1 : 0, ft: p.finishTime || 0, cr: p.crashed > 0 ? 1 : 0 }, true);
+  }
+  // l'hôte diffuse le peloton (5 fois par seconde)
+  if (net.role === "host" && game.field) {
+    game.aiNetT = (game.aiNetT || 0) - dt;
+    if (game.aiNetT <= 0) {
+      game.aiNetT = 0.2;
+      net.send({ t: "ai", d: game.field.map((x) => [r2(x.s, 10), r2(x.o), r2(x.v), Math.round(x.cadence), x.posture, x.finished ? 1 : 0, r2(x.time, 10), r2(x.finishTime || 0, 10), x.crashed > 0 ? 1 : 0]) }, true);
+    }
+  }
+}
+
+// l'hôte lance la partie pour tout le monde
+function hostStart() {
+  game.mpJersey = null;
+  if (net.role === "host" && net.connected) {
+    const keys = ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"];
+    const ms = Object.fromEntries(keys.map((k) => [k, settings[k]]));
+    ms.jersey = paletteOf(characterById(settings.character), settings.jersey).jersey;
+    game.mpJersey = ms.jersey;
+    net.send({ t: "start", settings: ms });
+  }
+  startRide();
+}
+
+net.on("start", (m) => {
+  if (net.role !== "guest") return;
+  const ms = m.settings;
+  for (const k of ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"]) if (k in ms) settings[k] = ms[k];
+  game.mpJersey = ms.jersey;
+  selectRoute(ms.route, ms.reverse);
+  applyConditions();
+  updateModeUi();
+  $("pause").hidden = true;
+  $("results").hidden = true;
+  sound.start();
+  startRide();
+});
+net.on("st", (m) => {
+  const x = game.remotes.get(m.from);
+  if (x) { m.at = performance.now(); x.rider.net = m; }
+});
+net.on("ai", (m) => {
+  if (net.role !== "guest" || !game.field) return;
+  const at = performance.now();
+  m.d.forEach((a, i) => {
+    const x = game.field[i];
+    if (x) x.net = { s: a[0], o: a[1], v: a[2], cad: a[3], post: a[4], fin: a[5], time: a[6], ft: a[7], cr: a[8], at };
+  });
+});
+net.on("join", (info) => { toast(`${info.name} a rejoint la partie`, 3); });
+net.on("leave", (id) => removeRemote(id));
+net.on("lost", () => { toast("Connexion perdue avec l'hôte : vous roulez seul", 4); });
+net.on("lobby", () => renderMp());
+
+function renderMp() {
+  const st = $("mp-status"), list = $("mp-players");
+  if (!st) return;
+  const host = net.role === "host", guest = net.role === "guest";
+  $("mp-start").hidden = net.active;
+  $("mp-hostbox").hidden = !host;
+  $("mp-guestbox").hidden = !guest || net.connected;
+  $("mp-leave").hidden = !net.active;
+  const n = net.players.size;
+  st.textContent = !net.active ? "" : net.connected
+    ? host ? `${n} joueurs connectés. Choisissez le parcours et le mode, puis « Partir » : tout le monde part en même temps.` : "Connecté ! L'hôte choisit le parcours et lancera la partie."
+    : host ? "En attente d'un joueur…" : "";
+  list.innerHTML = [...net.players.values()].map((p) => `<li><i style="background:${(p.palette && p.palette.jersey) || "#fff"}"></i>${p.name}${p.host ? " <small>hôte</small>" : ""}${p.id === net.id ? " <small>vous</small>" : ""}</li>`).join("");
+  const go = $("go");
+  if (guest && net.connected) { go.textContent = "En attente de l'hôte…"; go.disabled = true; }
+  else { go.textContent = host && net.connected ? `Partir à ${n}` : "Partir"; go.disabled = false; }
+  $("restart").disabled = $("r-again").disabled = guest && net.connected;
+}
+
+function buildMp() {
+  if (!netSupported()) { $("mp-intro").textContent = "Ce navigateur ne permet pas les connexions directes (WebRTC)."; $("mp-start").hidden = true; return; }
+  const name = $("mp-name");
+  name.value = settings.pseudo || "";
+  name.oninput = () => { settings.pseudo = name.value.slice(0, 16); saveSettings(); if (net.active) net.updateMe(myInfo()); };
+  const err = (e) => { $("mp-status").textContent = e.message || String(e); };
+  const copy = (id, btn) => {
+    const t = $(id);
+    t.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).catch(() => document.execCommand("copy"));
+    const old = btn.textContent; btn.textContent = "Copié !"; setTimeout(() => (btn.textContent = old), 1500);
+  };
+  $("mp-host").onclick = () => { net.role = "host"; net.players.set(net.id, { ...myInfo(), id: net.id, host: true }); renderMp(); };
+  $("mp-join").onclick = () => { net.role = "guest"; renderMp(); };
+  $("mp-invite").onclick = async () => {
+    if (net.players.size >= 4) return err("4 joueurs au plus");
+    $("mp-status").textContent = "Préparation du code…";
+    try {
+      $("mp-offer").value = await net.invite(myInfo());
+      $("mp-answer-in").value = "";
+      $("mp-offerbox").hidden = false;
+      renderMp();
+    } catch (e) { err(e); }
+  };
+  $("mp-copy-offer").onclick = (e) => copy("mp-offer", e.target);
+  $("mp-copy-answer").onclick = (e) => copy("mp-answer", e.target);
+  $("mp-connect").onclick = async () => {
+    try { await net.accept($("mp-answer-in").value); $("mp-offerbox").hidden = true; $("mp-status").textContent = "Connexion…"; } catch (e) { err(e); }
+  };
+  $("mp-answer-btn").onclick = async () => {
+    $("mp-status").textContent = "Préparation du code…";
+    try {
+      $("mp-answer").value = await net.join($("mp-offer-in").value, myInfo());
+      $("mp-answerbox").hidden = false;
+      $("mp-status").textContent = "Envoyez ce code de réponse à l'hôte.";
+    } catch (e) { err(e); }
+  };
+  $("mp-leave").onclick = () => { net.close(); $("mp-offerbox").hidden = true; $("mp-answerbox").hidden = true; renderMp(); };
+  renderMp();
+}
+
 // ------------------------------------------------------------ course
 function clearRiders() {
   for (const m of game.models) scene.remove(m.root);
@@ -942,6 +1201,9 @@ function clearRiders() {
   if (game.convoy) { game.convoy.dispose(); game.convoy = null; }
   if (game.traffic) { game.traffic.dispose(); game.traffic = null; }
   if (game.ghostModel) scene.remove(game.ghostModel.root);
+  if (game.remotes) for (const x of game.remotes.values()) { scene.remove(x.model.root); x.tag.material.map.dispose(); x.tag.material.dispose(); }
+  game.remotes = new Map();
+  game.field = null;
   game.models = [];
   game.riders = [];
   game.ghostModel = null;
@@ -958,27 +1220,37 @@ function startRide() {
   // course : grille de départ de 6 coureurs de front, le joueur devant à gauche
   const fieldN = settings.mode === "race" ? settings.field : 0;
   START_S = 12 + Math.ceil((fieldN + 1) / 6) * 1.9;
-  const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, o: 1.3, s: START_S, bike: settings.bike });
+  const ch = characterById(settings.character);
+  const pal = paletteOf(ch, settings.jersey);
+  const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, wPrime: ch.wp, o: 1.3, s: START_S, bike: settings.bike });
   player.fuel = makeFuel(settings.mass, { matin: 0.85, midi: 1.25, soir: 1.0 }[settings.time] * (game.wet ? 0.75 : 1));
   player.target = Math.round(settings.ftp * 0.7 / 5) * 5;
-  player.color = settings.jersey;
+  player.color = pal.jersey;
   game.free = settings.mode === "open";
+  // multijoueur : chaque joueur a sa place sur la ligne (ordre des identifiants)
+  const slot = net.connected ? [...net.players.keys()].sort().indexOf(net.id) : 0;
   if (game.free) {
     const sp = settings.spawn || D.towns[0];
-    placePlayerFree(player, sp.x, sp.z);
+    placePlayerFree(player, sp.x + slot * 2.5, sp.z);
     player.s = 0;
     game.lastTown = placeNames(player.x, player.z).town;
-  } else placePlayerOnRoad(player, START_S, fieldN ? -2.2 : 1.3);
+  } else placePlayerOnRoad(player, START_S, net.connected ? -2.2 + slot * 1.2 : fieldN ? -2.2 : 1.3);
   game.player = player;
   game.riders.push(player);
-  const pm = new RiderModel({ jersey: settings.jersey, helmet: settings.jersey === "#ffffff" ? "#222" : "#ffffff", type: settings.bike, bike: settings.bike === "clm" ? "#1d1f24" : "#202020" });
+  const pm = new RiderModel({ palette: { ...pal, frame: settings.bike === "clm" ? "#1d1f24" : pal.frame || "#202020" }, type: settings.bike });
+  pm.root.scale.setScalar(ch.height || 1);
   game.models.push(pm);
   scene.add(pm.root);
   game.playerModel = pm;
   if (settings.mode === "race") {
-    const { field, teams } = makeField(fieldN, LEVEL_WKG[settings.level], settings.jersey, START_S);
+    // en multijoueur, le peloton est simulé par l'hôte (même tirage partout,
+    // maillot de l'hôte pour l'équipe 0) ; chez les invités, ses coureurs
+    // suivent les positions reçues
+    const { field, teams } = makeField(fieldN, LEVEL_WKG[settings.level], game.mpJersey || pal.jersey, START_S);
     player.team = teams[0];
+    if (net.role === "guest" && net.connected) for (const x of field) { x.puppet = true; x.ai = null; }
     game.riders.push(...field);
+    game.field = field;
     game.teams = teams;
     game.peloton = new PelotonView(scene, QUALITY[qKey()].nearRiders, fieldN);
     game.convoy = new Convoy(scene, teams);
@@ -987,8 +1259,11 @@ function startRide() {
     const ri = D.routes.findIndex((x) => x.id === r.id);
     game.traffic = new Traffic(scene, ground, QUALITY[qKey()].traffic, game.free ? () => true : (li) => li === ri);
   } else if (settings.mode === "tt") {
-    game.convoy = new Convoy(scene, [{ jersey: settings.jersey === "#ffffff" ? "#2a2a2a" : settings.jersey, jersey2: "#ffffff", frame: "#1d1f24" }], { tt: true });
+    game.convoy = new Convoy(scene, [{ jersey: pal.jersey === "#ffffff" ? "#2a2a2a" : pal.jersey, jersey2: pal.jersey2 || "#ffffff", frame: "#1d1f24" }], { tt: true });
   }
+  // autres joueurs
+  game.remotes = new Map();
+  if (net.connected) for (const info of net.players.values()) if (info.id !== net.id) addRemote(info);
   game.feedZone = settings.mode === "race" ? { s0: r.finish * 0.55, s1: r.finish * 0.55 + 180 } : null;
   game.gotMusette = false;
   game.inFeed = false;
@@ -1439,6 +1714,8 @@ function loop(now) {
       if (game.free) toast(game.lastTown ? `Bienvenue à ${game.lastTown}` : "Balade libre", 3);
       else toast(`${settings.reverse ? DEST[game.route.id] : ORIGIN[game.route.id]} → ${settings.reverse ? ORIGIN[game.route.id] : DEST[game.route.id]}\n${fmt1(game.route.finish / 1000)} km · D+ ${fmtInt(game.route.gain)} m`, 4);
     }
+    netTick(dt);
+    for (const x of game.remotes.values()) followNet(x.rider, dt);
     poseRiders(0);
     rideCamera(dt);
     updateHud(dt);
@@ -1446,6 +1723,7 @@ function loop(now) {
     const k = game.state === "ride" ? settings.timescale : 1;
     for (let i = 0; i < k; i++) simulate(dt);
     if (game.traffic) game.traffic.update(game.player, dt * k);
+    netTick(dt);
     poseRiders(dt * k);
     rideCamera(dt);
     updateHud(dt);
@@ -1521,7 +1799,7 @@ function simulate(dt) {
     p.steerAnalog = true;
     p.steer = Math.max(-1, Math.min(1, -err * 2.5));
   }
-  computeDrafts(game.riders);
+  computeDrafts(game.free && game.remotes.size ? game.riders.filter((x) => !x.remote) : game.riders);
   // classement courant (du premier au dernier) pour l'IA et les collisions
   const sorted = game.riders.length > 1 ? [...game.riders].sort((a, b) => b.s - a.s) : game.riders;
   sorted.forEach((x, i) => (x._idx = i));
@@ -1540,6 +1818,12 @@ function simulate(dt) {
       x.power = 0; x.cadence *= 0.95; x.posture = 0;
       continue;
     }
+    // autres joueurs et peloton simulé par l'hôte : positions reçues
+    if (x.remote || x.puppet) {
+      followNet(x, dt);
+      if (x.puppet && !game.free && !x.finished && x.s >= r.finish) { x.finished = true; x.finishTime = x.time; x.place = game.riders.filter((o) => o.finished).length - 1; }
+      continue;
+    }
     if (x.ai) aiThink(x, r, sorted, x._idx, dt, aiEnv);
     step(x, r, game.env, dt);
     if (x.isPlayer) movePlayer(x, dt);
@@ -1547,7 +1831,7 @@ function simulate(dt) {
     for (let j = x._idx - 1; j >= 0; j--) {
       const o = sorted[j];
       if (o.s - x.s > 2.5) break;
-      if (o === x || o.finished || o.crashed > 0) continue;
+      if (o === x || o.finished || o.crashed > 0 || (game.free && o.remote)) continue;
       const gap = o.s - x.s;
       if (gap > 0 && gap < 1.9 && Math.abs(o.o - x.o) < 0.55 && x.v > o.v) {
         // roue dans la roue : on ralentit fortement mais sans à-coup
@@ -1668,7 +1952,15 @@ function poseRiders(dt) {
     g.root.rotation.y = q.yaw;
     g.animate(dt, q.v, q.cadence, 0, q.lean, q.pitch);
   }
-  if (game.peloton) game.peloton.update(game.riders.filter((r) => !r.isPlayer), camera.position, dt, poseOf, renderer.shadowMap.enabled);
+  for (const x of game.remotes.values()) {
+    const r = x.rider, m = x.model;
+    m.root.position.set(r.x, r.y, r.z);
+    m.root.rotation.y = r.yaw;
+    m.animate(dt, r.v, r.cadence, r.posture, r.crashed > 0 ? 1.35 : r.lean, r.pitch || 0);
+    if (m.shadow) m.shadow.visible = !renderer.shadowMap.enabled;
+    x.tag.position.set(r.x, r.y + 2.05 * (x.info.height || 1), r.z);
+  }
+  if (game.peloton) game.peloton.update(game.riders.filter((r) => !r.isPlayer && !r.remote), camera.position, dt, poseOf, renderer.shadowMap.enabled);
 }
 
 function placeCameraImmediately() {
@@ -1822,6 +2114,15 @@ function updateHud(dt) {
       return `<span class="${me ? "me" : ""}">${label} (${g.riders.length})${i ? " +" + fmtTime(g.gapTime) : ""}</span>`;
     }).join("") + (game.groups.length > 4 ? `<span>+${game.groups.length - 4} groupes</span>` : "");
   } else gEl2.innerHTML = "";
+  // autres joueurs : écart en mètres (devant +, derrière −)
+  const mpEl = $("h-mp");
+  if (game.remotes.size) {
+    mpEl.innerHTML = [...game.remotes.values()].map(({ rider: x, info }) => {
+      const d = game.free ? Math.hypot(x.x - p.x, x.z - p.z) : x.s - p.s;
+      const txt = game.free ? `${fmtInt(d)} m` : x.finished ? "arrivé" : `${d >= 0 ? "+" : "−"}${fmtInt(Math.abs(d))} m`;
+      return `<span><i style="background:${(info.palette && info.palette.jersey) || "#fff"}"></i>${info.name} ${txt}</span>`;
+    }).join("");
+  } else mpEl.innerHTML = "";
   $("h-cad").textContent = Math.round(p.cadence);
   $("h-gear").textContent = gearLabel(p);
   $("h-hr").textContent = Math.round(p.hr);

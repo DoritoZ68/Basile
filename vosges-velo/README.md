@@ -76,6 +76,24 @@ restantes) ; au sommet, temps de montée, VAM et record personnel (par
 parcours, sens et vélo). Le bilan d'arrivée ajoute la puissance normalisée
 et les temps de chaque montée.
 
+Personnages : sept coureurs fictifs (grimpeuse, rouleur, sprinteur,
+puncheuse, baroudeur, cyclosportif, débutante) choisis dans un coverflow
+(flèches, clic, molette, glisser au doigt), chacun avec son poids, sa
+puissance seuil, sa réserve anaérobie, sa taille et ses couleurs ; ou
+« Personnalisé » avec ses propres réglages.
+
+Multijoueur : jusqu'à 4 joueurs en pair à pair (WebRTC), sans serveur de
+jeu ni compte. L'hôte crée un code d'invitation, l'invité le colle et
+renvoie un code de réponse que l'hôte colle à son tour (codes à échanger
+par message). L'hôte choisit parcours, mode et conditions et lance la
+partie pour tous ; chacun simule son propre coureur et envoie sa position
+10 fois par seconde. En course, le peloton est simulé chez l'hôte et
+diffusé aux invités ; les joueurs profitent de l'aspiration les uns des
+autres et figurent au classement. Les noms flottent au-dessus des
+coureurs, les écarts s'affichent en haut de l'écran. La connexion passe
+par des serveurs STUN publics pour traverser les box ; derrière certains
+pare-feu d'entreprise, elle peut échouer (pas de relais TURN).
+
 Vélos : **route** (7,4 kg, cintre à drops, roues à rayons, maniable) ou
 **contre-la-montre** (8,6 kg, tubes profilés, prolongateurs, roue
 lenticulaire, casque profilé ; position allongée qui réduit la traînée

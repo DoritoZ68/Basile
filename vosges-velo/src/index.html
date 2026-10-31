@@ -31,6 +31,7 @@
       <button data-tab="routes" class="on">Parcours</button>
       <button data-tab="rider">Coureur</button>
       <button data-tab="world">Conditions</button>
+      <button data-tab="mp">Multijoueur</button>
       <button data-tab="gfx">Réglages</button>
     </nav>
     <div class="tab-body">
@@ -55,6 +56,33 @@
       </section>
       <section data-panel="rider" hidden><div id="opts-rider"></div></section>
       <section data-panel="world" hidden><div id="opts-world"></div></section>
+      <section data-panel="mp" hidden>
+        <div class="opt"><label>Pseudo</label><input id="mp-name" class="mp-name" maxlength="16" placeholder="Votre nom en course"></div>
+        <p class="opt-note" id="mp-intro">Jusqu'à 4 joueurs, connectés directement d'un navigateur à l'autre (pair à pair, WebRTC), sans serveur ni compte : il suffit d'échanger deux codes par message (SMS, e-mail, discussion). L'hôte choisit le parcours, le mode et les conditions, puis lance la partie avec « Partir ». En course, le peloton est simulé chez l'hôte.</p>
+        <div id="mp-start" class="mp-row"><button id="mp-host" class="mp-btn">Héberger une partie</button><button id="mp-join" class="mp-btn">Rejoindre une partie</button></div>
+        <div id="mp-hostbox" hidden>
+          <ol class="mp-steps"><li>« Inviter un joueur », puis envoyez-lui le code d'invitation.</li><li>Collez le code de réponse qu'il vous renvoie, puis « Connecter ».</li><li>Recommencez pour chaque joueur (4 au plus).</li></ol>
+          <button id="mp-invite" class="mp-btn">Inviter un joueur</button>
+          <div id="mp-offerbox" hidden>
+            <textarea id="mp-offer" readonly rows="3"></textarea>
+            <button id="mp-copy-offer" class="mp-btn small">Copier le code d'invitation</button>
+            <textarea id="mp-answer-in" rows="3" placeholder="Collez ici le code de réponse de votre ami"></textarea>
+            <button id="mp-connect" class="mp-btn">Connecter</button>
+          </div>
+        </div>
+        <div id="mp-guestbox" hidden>
+          <textarea id="mp-offer-in" rows="3" placeholder="Collez ici le code d'invitation de l'hôte"></textarea>
+          <button id="mp-answer-btn" class="mp-btn">Générer ma réponse</button>
+          <div id="mp-answerbox" hidden>
+            <textarea id="mp-answer" readonly rows="3"></textarea>
+            <button id="mp-copy-answer" class="mp-btn small">Copier le code de réponse</button>
+            <p class="opt-note">Envoyez ce code à l'hôte : la connexion s'établit dès qu'il l'a collé.</p>
+          </div>
+        </div>
+        <p id="mp-status" class="mp-status"></p>
+        <ul id="mp-players" class="mp-players"></ul>
+        <button id="mp-leave" class="mp-btn small ghost" hidden>Quitter la partie</button>
+      </section>
       <section data-panel="gfx" hidden>
         <div id="opts-gfx"></div>
         <div class="keys">
@@ -105,6 +133,7 @@
   </div>
   <div id="toast" class="toast"></div>
   <div id="h-groups" class="groups"></div>
+  <div id="h-mp" class="h-mp"></div>
   <div id="warn" class="warn"></div>
   <div id="countdown" class="countdown"></div>
 

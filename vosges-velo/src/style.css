@@ -178,3 +178,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .groups span { background: rgba(14, 22, 19, 0.78); border: 1px solid var(--line); border-radius: 8px; padding: 4px 9px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .groups span.me { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 @media (max-width: 900px) { .groups { top: 170px; max-width: 90vw; } }
+
+/* ---------------------------------------------------------- personnages */
+.chars { margin-bottom: 14px; }
+.coverflow { position: relative; height: 250px; perspective: 900px; outline: none; user-select: none; touch-action: pan-y; }
+.cf-stage { position: absolute; inset: 0; transform-style: preserve-3d; }
+.cf-card { position: absolute; left: 50%; top: 6px; width: 150px; height: 228px; margin-left: -75px; padding: 0 0 10px; border-radius: 14px; border: 1px solid var(--line); background: linear-gradient(180deg, #2a3a33, #121a17); color: var(--ink, #fff); cursor: pointer; overflow: hidden; display: flex; flex-direction: column; align-items: center; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s; box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+.cf-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 16px 34px rgba(0,0,0,.5); }
+.cf-card .cf-img { width: 100%; flex: 1; background: radial-gradient(circle at 50% 40%, #3f5a4e, #18221e) center / cover no-repeat; background-size: cover; }
+.cf-card b { font-family: "Barlow Condensed", sans-serif; font-size: 17px; margin-top: 6px; }
+.cf-card small { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.cf-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 200; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: rgba(14,22,19,.85); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+.cf-prev { left: 0; } .cf-next { right: 0; }
+.char-info h3 { margin: 10px 0 4px; font-size: 16px; }
+.char-info p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.char-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.char-stats div { position: relative; padding-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; }
+.char-stats small { color: var(--muted); }
+.char-stats i { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 2px; background: var(--accent); }
+/* ---------------------------------------------------------- multijoueur */
+.mp-name { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: inherit; padding: 7px 10px; font: inherit; }
+.mp-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.mp-btn { background: rgba(255,255,255,.08); border: 1px solid var(--line); color: inherit; border-radius: 9px; padding: 9px 14px; font: 600 14px Barlow, sans-serif; cursor: pointer; margin: 4px 0; }
+.mp-btn:hover { border-color: var(--accent); }
+.mp-btn.small { padding: 6px 10px; font-size: 13px; }
+.mp-btn.ghost { background: none; }
+#mp-hostbox textarea, #mp-guestbox textarea { width: 100%; box-sizing: border-box; background: rgba(0,0,0,.3); border: 1px solid var(--line); border-radius: 8px; color: inherit; font: 12px ui-monospace, monospace; padding: 8px; margin-top: 8px; resize: vertical; word-break: break-all; }
+.mp-steps { margin: 6px 0; padding-left: 20px; color: var(--muted); font-size: 13px; }
+.mp-status { min-height: 1.2em; font-size: 13px; color: var(--accent); margin: 8px 0 4px; }
+.mp-players { list-style: none; padding: 0; margin: 0 0 6px; }
+.mp-players li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+.mp-players li i { width: 10px; height: 10px; border-radius: 3px; }
+.mp-players small { color: var(--muted); }
+.go:disabled { opacity: .6; cursor: default; }
+.h-mp { position: absolute; left: 50%; top: 46px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.h-mp span { background: rgba(14, 22, 19, 0.78); border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.h-mp i { width: 8px; height: 8px; border-radius: 2px; }
