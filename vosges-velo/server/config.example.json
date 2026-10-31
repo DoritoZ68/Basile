@@ -1,0 +1,5 @@
+{
+  "port": 8080,
+  "duckdnsDomain": "monvelo",
+  "duckdnsToken": "colle-ici-ton-jeton-duckdns"
+}

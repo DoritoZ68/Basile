@@ -12,7 +12,7 @@ import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
 import { Traffic } from "./traffic.js";
 import { CHARACTERS, characterById, paletteOf, renderPortraits, Coverflow } from "./characters.js";
-import { Net, netSupported } from "./net.js";
+import { Net, WsNet, netSupported, findServer } from "./net.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt1 = (v) => v.toFixed(1).replace(".", ",");
@@ -992,7 +992,7 @@ function buildCharacters(container) {
 }
 
 // ------------------------------------------------------------ multijoueur
-const net = new Net();
+let net = new Net();
 function myInfo() {
   const c = characterById(settings.character);
   return { name: (settings.pseudo || "").trim() || c.name.split(" ")[0] || "Joueur", palette: paletteOf(c, settings.jersey), height: c.height, bike: settings.bike, mass: settings.mass, ftp: settings.ftp, char: c.id };
@@ -1104,46 +1104,68 @@ function hostStart() {
   startRide();
 }
 
-net.on("start", (m) => {
-  if (net.role !== "guest") return;
-  const ms = m.settings;
-  for (const k of ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"]) if (k in ms) settings[k] = ms[k];
-  game.mpJersey = ms.jersey;
-  selectRoute(ms.route, ms.reverse);
-  applyConditions();
-  updateModeUi();
-  $("pause").hidden = true;
-  $("results").hidden = true;
-  sound.start();
-  startRide();
-});
-net.on("st", (m) => {
-  const x = game.remotes.get(m.from);
-  if (x) { m.at = performance.now(); x.rider.net = m; }
-});
-net.on("ai", (m) => {
-  if (net.role !== "guest" || !game.field) return;
-  const at = performance.now();
-  m.d.forEach((a, i) => {
-    const x = game.field[i];
-    if (x) x.net = { s: a[0], o: a[1], v: a[2], cad: a[3], post: a[4], fin: a[5], time: a[6], ft: a[7], cr: a[8], at };
+function bindNet() {
+  net.on("start", (m) => {
+    if (net.role !== "guest") return;
+    const ms = m.settings;
+    for (const k of ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"]) if (k in ms) settings[k] = ms[k];
+    game.mpJersey = ms.jersey;
+    selectRoute(ms.route, ms.reverse);
+    applyConditions();
+    updateModeUi();
+    $("pause").hidden = true;
+    $("results").hidden = true;
+    sound.start();
+    startRide();
   });
-});
-net.on("join", (info) => { toast(`${info.name} a rejoint la partie`, 3); });
-net.on("leave", (id) => removeRemote(id));
-net.on("lost", () => { toast("Connexion perdue avec l'hôte : vous roulez seul", 4); });
-net.on("lobby", () => renderMp());
+  net.on("st", (m) => {
+    const x = game.remotes.get(m.from);
+    if (x) { m.at = performance.now(); x.rider.net = m; }
+  });
+  net.on("ai", (m) => {
+    if (net.role !== "guest" || !game.field) return;
+    const at = performance.now();
+    m.d.forEach((a, i) => {
+      const x = game.field[i];
+      if (x) x.net = { s: a[0], o: a[1], v: a[2], cad: a[3], post: a[4], fin: a[5], time: a[6], ft: a[7], cr: a[8], at };
+    });
+  });
+  net.on("join", (info) => { toast(`${info.name} a rejoint la partie`, 3); });
+  net.on("leave", (id) => removeRemote(id));
+  net.on("lost", () => { toast("Connexion perdue avec l'hôte : vous roulez seul", 4); });
+  net.on("lobby", () => renderMp());
+  net.on("error", (msg) => { $("mp-status").textContent = msg; });
+}
+bindNet();
 
 function renderMp() {
   const st = $("mp-status"), list = $("mp-players");
   if (!st) return;
   const host = net.role === "host", guest = net.role === "guest";
-  $("mp-start").hidden = net.active;
-  $("mp-hostbox").hidden = !host;
-  $("mp-guestbox").hidden = !guest || net.connected;
+  const srv = !!net.server;
+  $("mp-start").hidden = srv || net.active;
+  $("mp-hostbox").hidden = srv || !host;
+  $("mp-guestbox").hidden = srv || !guest || net.connected;
+  $("mp-serverbox").hidden = !srv || net.active;
+  if (srv) {
+    const rl = $("mp-rooms");
+    rl.innerHTML = net.rooms.length ? "" : "<li class=\"empty\">Aucun salon ouvert pour l'instant.</li>";
+    for (const r of net.rooms) {
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${r.name} <small>${r.players}/4</small></span>`;
+      const b = document.createElement("button");
+      b.className = "mp-btn small";
+      b.textContent = r.full ? "Complet" : "Rejoindre";
+      b.disabled = r.full;
+      b.onclick = () => { st.textContent = "Connexion au salon…"; net.enter(r.id, myInfo()); };
+      li.appendChild(b);
+      rl.appendChild(li);
+    }
+  }
   $("mp-leave").hidden = !net.active;
   const n = net.players.size;
-  st.textContent = !net.active ? "" : net.connected
+  if (srv && net.active && !net.connected) st.textContent = host ? `${net.roomName} ouvert : vos amis le voient dans leur liste en ouvrant la même adresse.` : "Connexion au salon…";
+  else st.textContent = !net.active ? "" : net.connected
     ? host ? `${n} joueurs connectés. Choisissez le parcours et le mode, puis « Partir » : tout le monde part en même temps.` : "Connecté ! L'hôte choisit le parcours et lancera la partie."
     : host ? "En attente d'un joueur…" : "";
   list.innerHTML = [...net.players.values()].map((p) => `<li><i style="background:${(p.palette && p.palette.jersey) || "#fff"}"></i>${p.name}${p.host ? " <small>hôte</small>" : ""}${p.id === net.id ? " <small>vous</small>" : ""}</li>`).join("");
@@ -1154,6 +1176,16 @@ function renderMp() {
 }
 
 function buildMp() {
+  // jeu servi par server/server.cjs : salons par le serveur, sans codes
+  findServer().then((ok) => {
+    if (!ok) return;
+    net.close();
+    net = new WsNet();
+    bindNet();
+    $("mp-intro").textContent = "Partie sur ce serveur : créez un salon, ou rejoignez celui d'un ami qui a ouvert la même adresse. 4 joueurs par salon. L'hôte (créateur du salon) choisit le parcours, le mode et les conditions, puis lance la partie avec « Partir ».";
+    $("mp-create").onclick = () => { $("mp-status").textContent = "Ouverture du salon…"; net.create(myInfo()); };
+    renderMp();
+  });
   if (!netSupported()) { $("mp-intro").textContent = "Ce navigateur ne permet pas les connexions directes (WebRTC)."; $("mp-start").hidden = true; return; }
   const name = $("mp-name");
   name.value = settings.pseudo || "";

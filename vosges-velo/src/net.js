@@ -199,3 +199,128 @@ export class Net {
     this.emit("lobby");
   }
 }
+
+// ------------------------------------------------------------ par serveur
+// Jeu servi par server/server.cjs (DuckDNS, redirection de port) : les
+// messages passent par le serveur, qui les relaie aux joueurs du salon.
+// Même interface que Net ; l'hôte est le créateur du salon.
+export async function findServer() {
+  if (!/^https?:$/.test(location.protocol)) return false;
+  try {
+    const r = await fetch("vv-server", { cache: "no-store" });
+    if (!r.ok) return false;
+    const j = await r.json();
+    return j && j.name === "Vosges Vélo";
+  } catch {
+    return false;
+  }
+}
+
+export class WsNet {
+  constructor() {
+    this.server = true;
+    this.role = null;
+    this.id = null;
+    this.players = new Map();
+    this.handlers = {};
+    this.rooms = [];
+    this.roomName = "";
+    this.queue = [];
+    this.open();
+  }
+
+  open() {
+    const url = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
+    const ws = (this.ws = new WebSocket(url));
+    ws.onopen = () => { for (const m of this.queue.splice(0)) ws.send(m); };
+    ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } this.receive(m); };
+    ws.onclose = () => {
+      const was = this.role;
+      this.leaveRoom(true);
+      if (was) this.emit("lost");
+      this.emit("lobby");
+      // reconnexion automatique (serveur redémarré, Wi-Fi coupé…)
+      setTimeout(() => this.open(), 3000);
+    };
+  }
+
+  on(type, fn) { this.handlers[type] = fn; }
+  emit(type, ...a) { this.handlers[type]?.(...a); }
+  get active() { return this.role !== null; }
+  get connected() { return this.role !== null && this.players.size > 1; }
+
+  raw(m) {
+    const s = JSON.stringify(m);
+    if (this.ws.readyState === 1) this.ws.send(s); else this.queue.push(s);
+  }
+
+  create(me) { this.me = me; this.raw({ t: "create", info: me }); }
+  enter(room, me) { this.me = me; this.raw({ t: "enter", room, info: me }); }
+  list() { this.raw({ t: "list" }); }
+
+  receive(m) {
+    switch (m.t) {
+      case "hi": this.myId = m.id; return;
+      case "rooms": this.rooms = m.rooms; this.emit("lobby"); return;
+      case "error": this.emit("error", m.msg); return;
+      case "joined":
+        this.id = m.id;
+        this.role = m.host ? "host" : "guest";
+        this.roomName = m.name;
+        this.players.clear();
+        this.players.set(this.id, { ...this.me, id: this.id, host: m.host });
+        if (!m.host) this.send({ t: "hello", info: this.players.get(this.id) });
+        this.emit("lobby");
+        return;
+      case "hello":
+        if (this.role === "host") {
+          this.players.set(m.info.id, m.info);
+          this.send({ t: "lobby", players: [...this.players.values()] });
+          this.emit("lobby");
+          this.emit("join", m.info);
+        }
+        return;
+      case "lobby":
+        if (this.role !== "guest") return;
+        for (const p of m.players) this.players.set(p.id, p);
+        for (const id of [...this.players.keys()]) if (!m.players.some((p) => p.id === id)) this.players.delete(id);
+        this.emit("lobby");
+        return;
+      case "leave":
+        this.players.delete(m.id);
+        if (this.role === "host") this.send({ t: "lobby", players: [...this.players.values()] });
+        this.emit("leave", m.id);
+        this.emit("lobby");
+        return;
+      case "hostlost":
+        this.leaveRoom(true);
+        this.emit("lost");
+        this.emit("lobby");
+        return;
+      default:
+        this.emit(m.t, m);
+    }
+  }
+
+  send(m) { this.raw({ ...m, from: this.id }); }
+  broadcast(m) { this.send(m); }
+
+  updateMe(info) {
+    this.me = { ...this.me, ...info };
+    if (!this.role) return;
+    const me = { ...this.players.get(this.id), ...info };
+    this.players.set(this.id, me);
+    if (this.role === "host") this.send({ t: "lobby", players: [...this.players.values()] });
+    else this.send({ t: "hello", info: me });
+    this.emit("lobby");
+  }
+
+  leaveRoom(silent) {
+    for (const id of [...this.players.keys()]) if (id !== this.id) this.emit("leave", id);
+    this.players.clear();
+    this.role = null;
+    if (!silent) this.raw({ t: "exit" });
+  }
+
+  close() { this.leaveRoom(false); this.emit("lobby"); }
+}

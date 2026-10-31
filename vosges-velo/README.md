@@ -94,6 +94,11 @@ coureurs, les écarts s'affichent en haut de l'écran. La connexion passe
 par des serveurs STUN publics pour traverser les box ; derrière certains
 pare-feu d'entreprise, elle peut échouer (pas de relais TURN).
 
+Héberger chez soi : `server/server.cjs` (Node.js, sans dépendance) sert le
+jeu à une adresse DuckDNS avec une redirection de port et relaie les
+parties par WebSocket (salons de 4, sans codes à échanger, à travers
+toutes les box). Pas à pas : [HEBERGER.md](HEBERGER.md).
+
 Vélos : **route** (7,4 kg, cintre à drops, roues à rayons, maniable) ou
 **contre-la-montre** (8,6 kg, tubes profilés, prolongateurs, roue
 lenticulaire, casque profilé ; position allongée qui réduit la traînée
