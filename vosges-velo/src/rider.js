@@ -110,6 +110,12 @@ function bodyParts(TT) {
   tparts.push(piece(new THREE.CylinderGeometry(0.045, 0.05, 0.12, 8), SKIN, at(0, 0.6, 0.02)));
   // numéro de dossard : rectangle blanc dans le dos
   tparts.push(piece(new THREE.BoxGeometry(0.16, 0.12, 0.01), "#f6f6f6", at(0, 0.28, -0.115)));
+  if (!LITE) {
+    // col, fermeture éclair, trois poches dorsales gonflées
+    tparts.push(piece(new THREE.TorusGeometry(0.058, 0.011, 5, 14), SLOT.JERSEY2, at(0, 0.565, 0.005, Math.PI / 2)));
+    tparts.push(piece(new THREE.BoxGeometry(0.007, 0.34, 0.006), "#d9d9d9", at(0, 0.39, 0.124, -0.1)));
+    for (const px of [-0.085, 0, 0.085]) tparts.push(piece(new THREE.BoxGeometry(0.075, 0.075, 0.026), SLOT.JERSEY, at(px, 0.12, -0.112, 0.1)));
+  }
   P.torso = mergePieces(tparts);
   // bras : manche courte avec liseré, avant-bras, gant
   P.upper = piece(limbGeo([[0, 0.05], [0.4, 0.046], [1, 0.038]]), (t) => (t < 0.5 ? SLOT.JERSEY : t < 0.56 ? SLOT.JERSEY2 : SKIN));
@@ -122,6 +128,12 @@ function bodyParts(TT) {
   head.push(piece(new THREE.SphereGeometry(0.03, 6, 4), SKIN, at(0, -0.01, 0.1))); // nez
   const lens = new THREE.CylinderGeometry(0.104, 0.104, 0.045, 14, 1, true, -1.15, 2.3);
   head.push(piece(lens, "#0d1d2c", at(0, 0.012, 0)));
+  if (!LITE) {
+    // oreilles, mâchoire, cheveux sur la nuque
+    for (const sx of [-1, 1]) head.push(piece(new THREE.SphereGeometry(0.022, 6, 5).scale(0.45, 1, 0.8), SKIN, at(sx * 0.097, -0.005, -0.008)));
+    head.push(piece(new THREE.SphereGeometry(0.07, 10, 7).scale(1, 0.75, 1.05), SKIN, at(0, -0.052, 0.028)));
+    head.push(piece(new THREE.BoxGeometry(0.13, 0.045, 0.05), "#3a2a1e", at(0, -0.03, -0.083)));
+  }
   if (TT) {
     // casque profilé : coque en goutte d'eau, queue longue, visière
     const shell = new THREE.SphereGeometry(0.128, 14, 10);
@@ -257,6 +269,23 @@ function bikeParts(TT) {
   fr.push(piece(new THREE.BoxGeometry(0.02, 0.08, 0.04), "#2b2b2b", at(0.065, RA.y - 0.08, RA.z + 0.01)));
   fr.push(tube(P(0.058, BB.y + 0.105, BB.z), P(0.058, RA.y + 0.05, RA.z), 0.004, "#3a3a3a", false));
   fr.push(tube(P(0.058, BB.y - 0.105, BB.z), P(0.058, RA.y - 0.06, RA.z + 0.02), 0.004, "#3a3a3a", false));
+  if (!LITE) {
+    // étriers de frein, compteur sur la potence, second bidon, gaines
+    fr.push(piece(new THREE.BoxGeometry(0.07, 0.035, 0.03), "#2a2b2e", at(0, FA.y + 0.355, FA.z - 0.03)));
+    fr.push(piece(new THREE.BoxGeometry(0.07, 0.035, 0.03), "#2a2b2e", at(0, RA.y + 0.355, RA.z + 0.03)));
+    if (!TT) {
+      const top = out.hoods;
+      fr.push(piece(new THREE.BoxGeometry(0.048, 0.014, 0.072), "#101010", at(0, top.y + 0.028, top.z + 0.07, -0.15)));
+      fr.push(piece(new THREE.BoxGeometry(0.04, 0.002, 0.05), "#3c5a4a", at(0, top.y + 0.036, top.z + 0.07, -0.15)));
+      const mid2 = BB.clone().lerp(ST, 0.42).add(P(0, 0, 0.045));
+      tmpO.position.copy(mid2);
+      tmpO.quaternion.setFromUnitVectors(UP, ST.clone().sub(BB).normalize());
+      tmpO.scale.set(1, 1, 1);
+      tmpO.updateMatrix();
+      fr.push(piece(new THREE.CylinderGeometry(0.034, 0.034, 0.19, 10), (t) => (t > 0.85 ? "#222" : "#f2f2f2"), tmpO.matrix));
+      for (const sx of [-1, 1]) fr.push(curve([[sx * 0.2, top.y + 0.03, top.z + 0.09], [sx * 0.1, top.y + 0.07, top.z + 0.02], [sx * 0.025, HT.y - 0.03, HT.z + 0.04], [sx * 0.02, HB.y - 0.06, HB.z - 0.03]], 0.0035, "#141414", 10));
+    }
+  }
   out.frame = mergePieces(fr);
   return out;
 }

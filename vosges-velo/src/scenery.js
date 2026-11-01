@@ -362,6 +362,152 @@ function paint(g, hex) {
   g.setAttribute("color", new THREE.BufferAttribute(a, 3));
 }
 
+// ------------------------------------------------------------ arbres à plaques
+// Niveau de détail le plus proche : branches et feuillages en plaques
+// ajourées (texture d'aiguilles et de feuilles dessinée au démarrage, test
+// alpha), autour d'un tronc et d'un cœur pleins. Gauche de l'atlas : rameau
+// de sapin (base à gauche, pointe à droite) ; droite : bouquet de feuilles.
+let atlasTex = null;
+function foliageAtlas() {
+  if (atlasTex) return atlasTex;
+  const S = 512, c = document.createElement("canvas");
+  c.width = S * 2; c.height = S;
+  const g = c.getContext("2d");
+  let seed = 3;
+  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // rameau de sapin : axe, rameaux secondaires, aiguilles courtes
+  const greens = ["#1d3a22", "#24462a", "#2c5532", "#355f38", "#3f6b3f"];
+  const twig = (x0, y0, x1, y1, w, needle) => {
+    g.strokeStyle = "#3a2c1f"; g.lineWidth = w; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    const n = Math.hypot(x1 - x0, y1 - y0) / 2.2;
+    for (let i = 0; i < n; i++) {
+      const t = i / n, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+      const len = needle * (1 - t * 0.55) * (0.7 + r() * 0.5);
+      const ang = Math.atan2(y1 - y0, x1 - x0);
+      for (const side of [-1, 1]) {
+        const a = ang + side * (0.9 + r() * 0.5);
+        g.strokeStyle = greens[Math.floor(r() * greens.length)];
+        g.lineWidth = 2.2;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
+      }
+    }
+  };
+  twig(10, S / 2, S - 10, S / 2 + 10, 7, 40);
+  for (let k = 0; k < 9; k++) {
+    const t = 0.12 + k * 0.09, x = 10 + (S - 20) * t, y = S / 2 + 10 * t;
+    const len = (S - x) * (0.55 + r() * 0.2), side = k % 2 ? 1 : -1;
+    twig(x, y, x + len * 0.85, y + side * len * (0.42 - t * 0.2), 3.5, 30);
+  }
+  // bouquet de feuilles (hêtre, chêne) : ellipses de verts variés
+  const leaf = ["#2f5426", "#3b6630", "#4a7a38", "#5a8a42", "#6b9a4c", "#7aa555"];
+  for (let i = 0; i < 1700; i++) {
+    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * S * 0.46;
+    const x = S + S / 2 + Math.cos(a) * d, y = S / 2 + Math.sin(a) * d * 0.92;
+    g.fillStyle = leaf[Math.floor(r() * leaf.length)];
+    g.beginPath(); g.ellipse(x, y, 7 + r() * 6, 4 + r() * 3, r() * Math.PI, 0, Math.PI * 2); g.fill();
+  }
+  atlasTex = new THREE.CanvasTexture(c);
+  atlasTex.colorSpace = THREE.SRGBColorSpace;
+  atlasTex.anisotropy = 4;
+  return atlasTex;
+}
+
+// plaque : quatre coins, uv dans l'atlas, normale « de volume » (vers
+// l'extérieur et le haut) pour un éclairage doux de tout le houppier
+function card(out, a, b, c, d, uv, nrm) {
+  const base = out.pos.length / 3;
+  for (const p of [a, b, c, d]) out.pos.push(p[0], p[1], p[2]);
+  out.uv.push(uv[0], uv[1], uv[2], uv[1], uv[2], uv[3], uv[0], uv[3]);
+  for (let i = 0; i < 4; i++) out.nrm.push(nrm[0], nrm[1], nrm[2]);
+  out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+function cardGeometry(out) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(out.pos, 3));
+  g.setAttribute("normal", new THREE.Float32BufferAttribute(out.nrm, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(out.uv, 2));
+  g.setIndex(out.idx);
+  return g;
+}
+
+// sapin : 14 verticilles de 6 à 8 rameaux qui retombent, flèche en croix
+function coniferCards() {
+  const R = rng(21), out = { pos: [], uv: [], nrm: [], idx: [] };
+  const UVB = [0, 0, 0.5, 1];
+  const n = 14;
+  for (let t = 0; t < n; t++) {
+    const k = t / (n - 1);
+    const y = 0.12 + k * 0.74, rad = 0.2 * (1 - k * 0.85) + 0.02, w = 0.08 * (1 - k * 0.45) + 0.025;
+    const m = k < 0.7 ? 8 : 6, off = R() * 6.28;
+    for (let i = 0; i < m; i++) {
+      const a = off + (i / m) * Math.PI * 2 + (R() - 0.5) * 0.4;
+      const ca = Math.cos(a), sa = Math.sin(a), px = -sa, pz = ca;
+      const L = rad * (0.85 + R() * 0.3), droop = L * (0.25 + R() * 0.2);
+      const roll = (i % 2 ? 1 : -1) * 0.35;
+      const wy = Math.sin(roll) * w, wh = Math.cos(roll) * w;
+      card(out,
+        [px * wh, y + wy, pz * wh], [ca * L + px * wh, y - droop + wy, sa * L + pz * wh],
+        [ca * L - px * wh, y - droop - wy, sa * L - pz * wh], [-px * wh, y - wy, -pz * wh],
+        UVB, [ca * 0.7, 0.7, sa * 0.7]);
+    }
+  }
+  // flèche : deux plaques verticales croisées
+  for (const a of [0, Math.PI / 2]) {
+    const ca = Math.cos(a) * 0.04, sa = Math.sin(a) * 0.04;
+    card(out, [-ca, 0.82, -sa], [-ca, 1.0, -sa], [ca, 1.0, sa], [ca, 0.82, sa], [0, 0.3, 0.5, 0.7], [0, 1, 0]);
+  }
+  return cardGeometry(out);
+}
+
+// feuillu : une trentaine de bouquets sur l'enveloppe du houppier
+function broadleafCards() {
+  const R = rng(9), out = { pos: [], uv: [], nrm: [], idx: [] };
+  const UVL = [0.5, 0, 1, 1];
+  const cx = 0, cy = 0.68, cz = 0;
+  for (let i = 0; i < 34; i++) {
+    // point de l'enveloppe (ellipsoïde), plaque tournée vers l'extérieur
+    const u = R() * 2 - 1, a = R() * Math.PI * 2, sq = Math.sqrt(1 - u * u);
+    const nx = sq * Math.cos(a), ny = u * 0.9, nz = sq * Math.sin(a);
+    const px = cx + nx * 0.25, py = cy + ny * 0.24, pz = cz + nz * 0.25;
+    const s = 0.1 + R() * 0.05;
+    // deux axes du plan de la plaque
+    let tx = -nz, tz = nx; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
+    const bx = ny * tz, by = nz * tx - nx * tz, bz = -ny * tx;
+    const rot = R() * Math.PI, cr = Math.cos(rot), sr = Math.sin(rot);
+    const ux = tx * cr + bx * sr, uy = by * sr, uz = tz * cr + bz * sr;
+    const vx = -tx * sr + bx * cr, vy = by * cr, vz = -tz * sr + bz * cr;
+    card(out,
+      [px - ux * s - vx * s, py - uy * s - vy * s, pz - uz * s - vz * s], [px + ux * s - vx * s, py + uy * s - vy * s, pz + uz * s - vz * s],
+      [px + ux * s + vx * s, py + uy * s + vy * s, pz + uz * s + vz * s], [px - ux * s + vx * s, py - uy * s + vy * s, pz - uz * s + vz * s],
+      UVL, [nx, ny + 0.4, nz]);
+  }
+  return cardGeometry(out);
+}
+
+// parties pleines des arbres à plaques : tronc, charpentières, cœur sombre
+function coniferCore() {
+  const trunk = new THREE.CylinderGeometry(0.007, 0.017, 0.92, 7, 1, true).translate(0, 0.46, 0);
+  paint(trunk, 0x4a3426);
+  const core = new THREE.ConeGeometry(0.1, 0.72, 8, 1, true).translate(0, 0.5, 0);
+  paint(core, 0x15281a);
+  return mergeGeometries([trunk.toNonIndexed(), core.toNonIndexed()].map((g) => { g.deleteAttribute("uv"); return g; }));
+}
+function broadleafCore() {
+  const parts = [];
+  const trunk = new THREE.CylinderGeometry(0.012, 0.026, 0.6, 7, 1, true).translate(0, 0.3, 0);
+  paint(trunk, 0x5a4636);
+  parts.push(trunk);
+  for (const [a, l] of [[0.6, 0.24], [2.4, 0.22], [4.3, 0.24], [5.4, 0.18]]) {
+    const b = new THREE.CylinderGeometry(0.005, 0.011, l, 5, 1, true).translate(0, l / 2, 0).rotateZ(0.75).rotateY(a).translate(0, 0.44, 0);
+    paint(b, 0x5a4636);
+    parts.push(b);
+  }
+  const core = new THREE.IcosahedronGeometry(0.2, 1).scale(1, 0.85, 1).translate(0, 0.68, 0);
+  paint(core, 0x22381c);
+  parts.push(core);
+  return mergeGeometries(parts.map((g) => { g = g.index ? g.toNonIndexed() : g; if (g.attributes.uv) g.deleteAttribute("uv"); return g; }));
+}
+
 // Végétation par cases de la grille, construite à la demande autour du
 // cycliste (carte de végétation BD TOPO : sapins, feuillus, vignes).
 export class Forest {
@@ -372,6 +518,12 @@ export class Forest {
     // deux niveaux de détail : près (~50 triangles, ~400 en Ultra) et loin
     // (8 à 10 triangles)
     this.geos = hi ? { conifer: coniferHi(), broadleaf: broadleafHi(), vine: vine() } : { conifer: conifer(true), broadleaf: broadleaf(true), vine: vine() };
+    // niveau le plus proche (Élevé, Ultra) : arbres à plaques ajourées
+    this.cards = {
+      conifer: { core: coniferCore(), cards: coniferCards() },
+      broadleaf: { core: broadleafCore(), cards: broadleafCards() },
+    };
+    this.cardMat = new THREE.MeshLambertMaterial({ map: foliageAtlas(), alphaTest: 0.45, side: THREE.DoubleSide, alphaToCoverage: true });
     this.far = { conifer: conifer(false), broadleaf: broadleaf(false) };
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.built = new Set();
@@ -435,7 +587,7 @@ export class Forest {
       }
     }
     const group = new THREE.Group();
-    const cell = { x: cx, z: cz, near: [], far: [], vines: [], group };
+    const cell = { x: cx, z: cz, hi: [], near: [], far: [], vines: [], group };
     const col = new THREE.Color();
     for (const type of Object.keys(lists)) {
       const L = lists[type];
@@ -462,6 +614,18 @@ export class Forest {
       fm.visible = false;
       group.add(fm);
       cell.far.push(fm);
+      // niveau le plus proche : tronc et cœur pleins, plaques de feuillage
+      for (const [geo, mat] of [[this.cards[type].core, this.mat], [this.cards[type].cards, this.cardMat]]) {
+        const hm = new THREE.InstancedMesh(geo, mat, L.length);
+        hm.instanceMatrix = im.instanceMatrix;
+        hm.instanceColor = im.instanceColor;
+        hm.boundingSphere = im.boundingSphere;
+        hm.matrixAutoUpdate = false;
+        hm.castShadow = true;
+        hm.visible = false;
+        group.add(hm);
+        cell.hi.push(hm);
+      }
     }
     this.built.add(cell);
     return {
@@ -473,13 +637,15 @@ export class Forest {
     };
   }
 
-  // niveau de détail : arbres détaillés à moins de nearDist
-  update(camPos, nearDist = 150) {
+  // niveaux de détail par case : plaques ajourées à moins de hiDist,
+  // arbres pleins détaillés à moins de nearDist, silhouettes au-delà
+  update(camPos, nearDist = 150, hiDist = 0) {
     for (const c of this.built) {
       const d = Math.hypot(c.x - camPos.x, c.z - camPos.z) - 125;
-      const near = d < nearDist;
+      const hi = d < hiDist, near = !hi && d < nearDist;
+      for (const m of c.hi) m.visible = hi;
       for (const m of c.near) m.visible = near;
-      for (const m of c.far) m.visible = !near;
+      for (const m of c.far) m.visible = !hi && !near;
       for (const m of c.vines) m.visible = d < nearDist * 1.6;
     }
   }
@@ -535,6 +701,8 @@ export class Streamer {
 }
 
 // ------------------------------------------------------------ bâtiments
+// crépis des maisons à colombages
+const COLOMB = ["#f2ead8", "#efe1c2", "#ead2ac", "#f3e3c9", "#e8c7a2", "#dfe5d2", "#efd7cf"];
 const WALLS = ["#efe6d2", "#e8d9b5", "#f0d2b4", "#e9c9a0", "#ddd6c6", "#f2e8c9", "#e6cbc4", "#d3dccf", "#f4efe6", "#e8dcc0", "#d9c3a4"];
 const ROOFS = ["#8a4a36", "#7b3f2f", "#9a5a40", "#6e4a3c", "#80463a", "#5f4b45"];
 
@@ -565,11 +733,15 @@ export function buildBuildings(list, hf, keep = () => true) {
     const height = Math.max(3, Math.min(60, h));
     const kindWall = kind === 2 ? "#b9b8b0" : kind === 1 ? "#ddd3c2" : kind === 3 ? "#a9a49a" : WALLS[Math.floor(R() * WALLS.length)];
     const kindRoof = kind === 2 ? "#7d8288" : kind === 1 ? "#4f4740" : ROOFS[Math.floor(R() * ROOFS.length)];
-    c1.set(kindWall); c2.set(kindRoof);
+    // maison à colombages (Alsace) : crépi clair, pans de bois dessinés par
+    // le shader ; une maison à pignon sur deux ou trois, basses seulement
+    const colomb = kind === 0 && pts.length === 4 && height < 13 && R() < 0.4;
+    c1.set(colomb ? COLOMB[Math.floor(R() * COLOMB.length)] : kindWall); c2.set(kindRoof);
     const shade = 0.9 + R() * 0.15;
     c1.multiplyScalar(shade);
-    const pos = [], col = [];
-    const pushV = (x, y, z, c) => { pos.push(x, y, z); col.push(c.r, c.g, c.b); };
+    const pos = [], col = [], sty = [];
+    const st = colomb ? 1 : 0;
+    const pushV = (x, y, z, c) => { pos.push(x, y, z); col.push(c.r, c.g, c.b); sty.push(st); };
     const base = ymin - 1;
     const gable = pts.length === 4 && kind !== 2 && height < 25;
     const top = ymax + (gable ? height * 0.62 : height);
@@ -643,21 +815,46 @@ export function buildBuildings(list, hf, keep = () => true) {
     }
     const key = `${Math.floor(cx / cell)},${Math.floor(cz / cell)}`;
     let bk = buckets.get(key);
-    if (!bk) buckets.set(key, (bk = { pos: [], col: [], x: (Math.floor(cx / cell) + 0.5) * cell, z: (Math.floor(cz / cell) + 0.5) * cell }));
+    if (!bk) buckets.set(key, (bk = { pos: [], col: [], sty: [], x: (Math.floor(cx / cell) + 0.5) * cell, z: (Math.floor(cz / cell) + 0.5) * cell }));
     for (let i = 0; i < pos.length; i++) bk.pos.push(pos[i]);
     for (let i = 0; i < col.length; i++) bk.col.push(col[i]);
+    for (let i = 0; i < sty.length; i++) bk.sty.push(sty[i]);
   }
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
   // fenêtres dessinées dans le shader : étages de 3 m, travées de 2,7 m
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;")
-      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);");
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nattribute float aStyle;\nvarying float vStyle;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);\nvStyle = aStyle;");
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;")
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nvarying float vStyle;")
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
+        float dCam = length(vWPos - cameraPosition);
+        // toits en pente : tuiles plates (écailles de castor), rangs décalés,
+        // teinte de chaque tuile légèrement différente
+        if (vWNor.y > 0.25 && vWNor.y < 0.97) {
+          vec2 tn = normalize(vec2(-vWNor.z, vWNor.x));
+          float row = vWPos.y / 0.17;
+          float colu = dot(vWPos.xz, tn) / 0.19 + 0.5 * mod(floor(row), 2.0);
+          float h = fract(sin(dot(vec2(floor(row), floor(colu)), vec2(12.9898, 78.233))) * 43758.5453);
+          float edge = smoothstep(0.0, 0.18, fract(row)) * (0.75 + 0.25 * smoothstep(0.0, 0.08, min(fract(colu), 1.0 - fract(colu))));
+          float fade = 1.0 - smoothstep(60.0, 320.0, dCam);
+          diffuseColor.rgb *= mix(1.0, (0.82 + 0.3 * h) * mix(0.72, 1.0, edge), fade);
+        }
+        // pans de bois : sablières aux étages, poteaux tous les 1,35 m,
+        // écharpes en diagonale dans les panneaux sans fenêtre
+        if (vStyle > 0.5 && abs(vWNor.y) < 0.3) {
+          vec2 tw = normalize(vec2(-vWNor.z, vWNor.x));
+          float pu = dot(vWPos.xz, tw) / 1.35, pv = vWPos.y / 3.0;
+          float fu = fract(pu), fv = fract(pv);
+          float beam = step(fv, 0.07) + step(0.94, fv) + step(fu, 0.085);
+          float odd = mod(floor(pu), 2.0);
+          float diag = odd * step(abs(fu - (mod(floor(pv), 2.0) > 0.5 ? fv : 1.0 - fv)), 0.065);
+          float k2 = min(1.0, beam + diag) * (1.0 - smoothstep(120.0, 450.0, dCam));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.17, 0.11), k2);
+        }
         if (abs(vWNor.y) < 0.3) {
           vec2 t = normalize(vec2(-vWNor.z, vWNor.x));
           float u = dot(vWPos.xz, t) / 2.7;
@@ -685,6 +882,7 @@ export function buildBuildings(list, hf, keep = () => true) {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(bk.pos, 3));
     g.setAttribute("color", new THREE.Float32BufferAttribute(bk.col, 3));
+    g.setAttribute("aStyle", new THREE.Float32BufferAttribute(bk.sty, 1));
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat);
     m.matrixAutoUpdate = false;

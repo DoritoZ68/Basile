@@ -1,0 +1,17 @@
+/* ---------------------------------------------------------- personnages */
+.chars { margin-bottom: 14px; }
+.coverflow { position: relative; height: 250px; perspective: 900px; outline: none; user-select: none; touch-action: pan-y; }
+.cf-stage { position: absolute; inset: 0; transform-style: preserve-3d; }
+.cf-card { position: absolute; left: 50%; top: 6px; width: 150px; height: 228px; margin-left: -75px; padding: 0 0 10px; border-radius: 14px; border: 1px solid var(--line); background: linear-gradient(180deg, #2a3a33, #121a17); color: var(--ink, #fff); cursor: pointer; overflow: hidden; display: flex; flex-direction: column; align-items: center; transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .45s; box-shadow: 0 12px 28px rgba(0,0,0,.45); }
+.cf-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 16px 34px rgba(0,0,0,.5); }
+.cf-card .cf-img { width: 100%; flex: 1; background: radial-gradient(circle at 50% 40%, #3f5a4e, #18221e) center / cover no-repeat; background-size: cover; }
+.cf-card b { font-family: "Barlow Condensed", sans-serif; font-size: 17px; margin-top: 6px; }
+.cf-card small { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.cf-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 200; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: rgba(14,22,19,.85); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+.cf-prev { left: 0; } .cf-next { right: 0; }
+.char-info h3 { margin: 10px 0 4px; font-size: 16px; }
+.char-info p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.char-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.char-stats div { position: relative; padding-bottom: 6px; font-size: 12px; display: flex; justify-content: space-between; }
+.char-stats small { color: var(--muted); }
+.char-stats i { position: absolute; left: 0; bottom: 0; height: 3px; border-radius: 2px; background: var(--accent); }

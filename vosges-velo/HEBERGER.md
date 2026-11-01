@@ -1,6 +1,6 @@
 # Héberger Vosges Vélo chez soi (DuckDNS + redirection de port)
 
-Le serveur sert le jeu à une adresse internet du type
+Le serveur sert le jeu (dossier `web/` : page, styles, code et données en fichiers séparés) à une adresse internet du type
 `http://monvelo.duckdns.org:8080` et fait passer les messages des parties
 multijoueur. Vos amis ouvrent simplement cette adresse dans leur
 navigateur : pas de code à échanger, pas de logiciel à installer chez eux.

@@ -1,4 +1,7 @@
-// Chargement des données intégrées au fichier HTML (voir tools/build.mjs).
+// Chargement des données : intégrées au fichier HTML unique (__VV_DATA__,
+// compressées en base64), ou fichiers séparés de la version web
+// (__VV_FILES__, téléchargés et mis en cache par le navigateur). Voir
+// tools/build.mjs.
 
 function b64ToBytes(b64) {
   const bin = atob(b64);
@@ -66,16 +69,23 @@ function loadImage(src) {
 }
 
 export async function loadData(onProgress) {
-  const raw = window.__VV_DATA__;
+  const raw = window.__VV_DATA__ || window.__VV_FILES__;
+  // octets d'un fichier de données, quelle que soit la forme du jeu
+  const bytes = window.__VV_DATA__ ? (k) => gunzip(raw[k]) : async (k) => {
+    const r = await fetch(raw[k]);
+    if (!r.ok) throw new Error(`${raw[k]} introuvable`);
+    return r.arrayBuffer();
+  };
+  const text = async (k) => new TextDecoder().decode(await bytes(k));
   onProgress(0.05, "Lecture des routes…");
-  const world = JSON.parse(new TextDecoder().decode(await gunzip(raw.world)));
+  const world = JSON.parse(await text("world"));
   onProgress(0.2, "Relief IGN RGE ALTI…");
-  const terrain = new Uint16Array(await gunzip(raw.terrain));
-  const outer = new Uint16Array(await gunzip(raw.outer));
+  const terrain = new Uint16Array(await bytes("terrain"));
+  const outer = new Uint16Array(await bytes("outer"));
   onProgress(0.3, "Réseau routier et cyclable…");
-  const network = decodeNetwork(new DataView(await gunzip(raw.network)), JSON.parse(new TextDecoder().decode(await gunzip(raw.networkNames))));
+  const network = decodeNetwork(new DataView(await bytes("network")), JSON.parse(await text("networkNames")));
   onProgress(0.4, "Bâtiments BD TOPO…");
-  const buildings = decodeBuildings(new DataView(await gunzip(raw.buildings)));
+  const buildings = decodeBuildings(new DataView(await bytes("buildings")));
   onProgress(0.5, "Photographies aériennes…");
   const [ortho, orthoSmall, vegetation, outerImg] = await Promise.all([
     loadImage(raw.ortho),

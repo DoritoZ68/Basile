@@ -183,6 +183,14 @@ réserve anaérobie W′ (modèle de Skiba), fréquence cardiaque, braquets
   par pixel sont chargées en continu autour du coureur (fenêtre de 1 km),
   avec une seconde fenêtre de 6,5 km à 1,6 m/px, comme un clipmap ; la
   photo intégrée (5 m/px) reste au-delà ou hors connexion.
+- Arbres en trois niveaux de détail par case de 250 m : en Élevé et
+  Ultra, les plus proches ont des rameaux et feuillages en plaques
+  ajourées (texture d'aiguilles et de feuilles dessinée au démarrage,
+  test alpha, autour d'un tronc et d'un cœur pleins) ; puis arbres pleins
+  détaillés ; puis silhouettes de 8 à 10 triangles.
+- Maisons alsaciennes : une maison basse à pignon sur trois environ à
+  colombages (sablières, poteaux, écharpes), crépis clairs ; toits en
+  tuiles plates dessinées tuile par tuile, rangs décalés.
 - Bâtiments : avant-toits et rives débordants, cheminées, soubassement,
   encadrements de fenêtres, vitres et crépi irrégulier.
 
@@ -211,8 +219,23 @@ npm install
 npm run build
 ```
 
-`npm run build` produit `dist/vosges-velo.html` (et une variante sans
-squelette HTML pour la publication en ligne). `npm run dev` reconstruit à
+`npm run build` produit deux versions :
+
+- `dist/vosges-velo.html` : un seul fichier autonome (et une variante sans
+  squelette HTML pour la publication en ligne) ;
+- `dist/web/` : la même chose en fichiers séparés, `index.html`,
+  `css/*.css`, `js/app.js` et `data/*`, servie par `npm run serve`
+  (`server/server.cjs`).
+
+Organisation des sources :
+
+| Dossier, fichier | Contenu |
+| --- | --- |
+| `src/index.html` | structure des écrans (menu, HUD, pause, résultats) |
+| `src/css/` | styles par thème : base, menu, HUD, résultats, tactile, personnages, multijoueur, inventaire, créateur, parcours, petits écrans |
+| `src/main.js` | démarrage, monde, simulation, caméra, HUD |
+| `src/ui/` | onglets du menu : parcours, coureurs, inventaire, multijoueur |
+| `src/*.js` | relief, routes, décor, coureurs, véhicules, physique, réseau… | `npm run dev` reconstruit à
 chaque modification des fichiers JavaScript.
 
 Les données sont déjà dans `data/`. Pour les télécharger de nouveau

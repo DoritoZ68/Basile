@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Serveur Vosges Vélo : sert le jeu (dist/vosges-velo.html) et relaie les
+// Serveur Vosges Vélo : sert le jeu (dist/web/, ou le fichier unique) et relaie les
 // messages des parties multijoueur (salons de 4 joueurs) par WebSocket.
 // Aucune dépendance : Node.js 12 ou plus suffit.
 //
@@ -23,46 +23,75 @@ try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf
 const PORT = Number(process.env.PORT || cfg.port || 8080);
 const DOMAIN = (process.env.DUCKDNS_DOMAIN || cfg.duckdnsDomain || "").replace(/\.duckdns\.org$/, "");
 const TOKEN = process.env.DUCKDNS_TOKEN || cfg.duckdnsToken || "";
-// le jeu : à côté du serveur (dossier distribué) ou dans dist/ (dépôt)
-const GAME = [path.join(__dirname, "vosges-velo.html"), path.join(__dirname, "..", "dist", "vosges-velo.html")].find((f) => fs.existsSync(f)) || path.join(__dirname, "vosges-velo.html");
+// le jeu : version web en fichiers séparés (dossier web/ à côté du serveur,
+// ou dist/web/ dans le dépôt), sinon le fichier unique vosges-velo.html
+const WEB = [path.join(__dirname, "web"), path.join(__dirname, "..", "dist", "web")].find((d) => fs.existsSync(path.join(d, "index.html")));
+const GAME = [path.join(__dirname, "vosges-velo.html"), path.join(__dirname, "..", "dist", "vosges-velo.html")].find((f) => fs.existsSync(f));
 const MAX_ROOM = 4, MAX_ROOMS = 20, MAX_MSG = 64 * 1024;
 
 const log = (...a) => console.log(new Date().toLocaleTimeString("fr-FR"), ...a);
 
-// ------------------------------------------------------------ fichier du jeu
-let page = null, pageGz = null;
+// ------------------------------------------------------------ fichiers du jeu
+const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream", ".jpg": "image/jpeg", ".png": "image/png" };
+const ZIP = new Set([".html", ".css", ".js", ".json", ".bin"]); // déjà compressés : jpg, png
+let files = new Map(); // "/chemin" -> { type, body, gz }
+
 function loadGame() {
-  if (!fs.existsSync(GAME)) {
-    console.error(`Fichier introuvable : ${GAME}\nPlacez vosges-velo.html à côté de server.cjs (ou lancez « npm run build » dans le dépôt).`);
+  const next = new Map();
+  if (WEB) {
+    const walk = (dir, rel) => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name), url = rel + "/" + e.name;
+        if (e.isDirectory()) { walk(full, url); continue; }
+        const ext = path.extname(e.name).toLowerCase();
+        if (!TYPES[ext]) continue;
+        const body = fs.readFileSync(full);
+        next.set(url, { type: TYPES[ext], body, gz: ZIP.has(ext) ? zlib.gzipSync(body, { level: 9 }) : null });
+      }
+    };
+    walk(WEB, "");
+  } else if (GAME) {
+    const body = fs.readFileSync(GAME);
+    next.set("/index.html", { type: TYPES[".html"], body, gz: zlib.gzipSync(body, { level: 9 }) });
+  } else {
+    console.error("Jeu introuvable : placez le dossier web/ (ou vosges-velo.html) à côté de server.cjs,\nou lancez « npm run build » dans le dépôt.");
     process.exit(1);
   }
-  page = fs.readFileSync(GAME);
-  pageGz = zlib.gzipSync(page, { level: 9 });
-  log(`Jeu chargé : ${(page.length / 1e6).toFixed(1)} Mo (${(pageGz.length / 1e6).toFixed(1)} Mo compressé)`);
+  files = next;
+  let raw = 0, sent = 0;
+  for (const f of files.values()) { raw += f.body.length; sent += (f.gz || f.body).length; }
+  log(`Jeu chargé (${WEB ? "version web, " + files.size + " fichiers" : "fichier unique"}) : ${(raw / 1e6).toFixed(1)} Mo, ${(sent / 1e6).toFixed(1)} Mo envoyés`);
 }
 loadGame();
-fs.watchFile(GAME, { interval: 5000 }, () => { try { loadGame(); } catch (e) { /* en cours d'écriture */ } });
+// nouvelle version du jeu (npm run build) : rechargée automatiquement
+let reloadT = null;
+const watchTarget = WEB ? path.join(WEB, "index.html") : GAME;
+fs.watchFile(watchTarget, { interval: 3000 }, () => { clearTimeout(reloadT); reloadT = setTimeout(() => { try { loadGame(); } catch (e) { /* en cours d'écriture */ } }, 1500); });
 
 const server = http.createServer((req, res) => {
-  const url = req.url.split("?")[0];
-  if (url === "/" || url === "/index.html" || url === "/vosges-velo.html") {
-    const gz = /\bgzip\b/.test(req.headers["accept-encoding"] || "");
-    res.writeHead(200, {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "no-cache",
-      ...(gz ? { "Content-Encoding": "gzip" } : {}),
-      "Content-Length": gz ? pageGz.length : page.length,
-    });
-    res.end(gz ? pageGz : page);
-    return;
-  }
+  let url = decodeURIComponent(req.url.split("?")[0]);
   if (url === "/vv-server") {
     res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
     res.end(JSON.stringify({ name: "Vosges Vélo", rooms: rooms.size, players: clients.size }));
     return;
   }
-  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("Introuvable");
+  if (url === "/" || url === "/vosges-velo.html") url = "/index.html";
+  const f = files.get(url);
+  if (!f || req.method !== "GET" && req.method !== "HEAD") {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Introuvable");
+    return;
+  }
+  const gz = f.gz && /\bgzip\b/.test(req.headers["accept-encoding"] || "");
+  const body = gz ? f.gz : f.body;
+  res.writeHead(200, {
+    "Content-Type": f.type,
+    // page et code : revalidés à chaque visite ; données : une heure de cache
+    "Cache-Control": url.startsWith("/data/") ? "public, max-age=3600" : "no-cache",
+    ...(gz ? { "Content-Encoding": "gzip" } : {}),
+    "Content-Length": body.length,
+  });
+  res.end(req.method === "HEAD" ? undefined : body);
 });
 
 // ------------------------------------------------------------ WebSocket (RFC 6455)

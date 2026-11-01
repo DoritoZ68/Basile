@@ -1,0 +1,21 @@
+/* Petits écrans */
+@media (max-width: 900px) {
+  .profile { left: 14px; right: 14px; bottom: auto; top: 96px; height: 60px; }
+  .minimap { width: 120px; height: 120px; }
+  .cam-hint { display: none; }
+  .hud-left { width: 190px; padding: 10px 12px; }
+  .big b { font-size: 40px; }
+  .power b { font-size: 22px; }
+  .hud-right { width: 170px; padding: 10px 12px; }
+  .grade { font-size: 30px; }
+  .hud-top { max-width: calc(100% - 160px); }
+}
+@media (max-width: 560px) {
+  #menu { padding: 0; }
+  .menu-panel { border-radius: 0; border: 0; }
+  .credits { display: none; }
+  .minis { display: none; }
+  .hud-left { width: 150px; }
+  .hud-right { width: 140px; }
+  .stats { grid-template-columns: 1fr; }
+}

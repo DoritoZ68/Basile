@@ -1,0 +1,15 @@
+/* ---------------------------------------------------------- créateur */
+.char-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.creator { display: flex; align-items: center; justify-content: center; background: rgba(6,10,8,.55); z-index: 50; padding: 16px; }
+.creator-panel { display: flex; gap: 18px; max-width: 860px; width: 100%; max-height: calc(100vh - 32px); overflow: auto; padding: 18px; border-radius: 16px; box-sizing: border-box; }
+.creator-view { flex: none; text-align: center; }
+.creator-view canvas { border-radius: 12px; background: radial-gradient(circle at 50% 45%, #3f5a4e, #121a17); cursor: grab; touch-action: none; max-width: 100%; }
+.creator-form { flex: 1; min-width: 0; }
+.creator-form h2 { margin: 0 0 10px; font-family: "Barlow Condensed", sans-serif; font-size: 26px; }
+.creator-form input.cr-name { flex: 1; min-width: 0; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; color: inherit; padding: 7px 10px; font: inherit; }
+.cr-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; margin: 8px 0; }
+.cr-color { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.cr-color input { width: 34px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.creator-btns { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 12px; }
+.creator-btns .go { width: auto; padding: 10px 26px; margin: 0; }
+@media (max-width: 720px) { .creator-panel { flex-direction: column; align-items: center; } }

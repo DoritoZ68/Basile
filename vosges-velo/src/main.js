@@ -3,23 +3,26 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { loadData } from "./data.js";
 import { Heightfield, Terrain, makeTerrainMaterial, buildOuterTerrain } from "./terrain.js";
 import { Ground, routeLine, networkLine, makeRoadMaterials, buildRoutes, NetworkCells, onRoute, MASK_RANGE, DISCARD } from "./ground.js";
-import { RoadIndex, Forest, Streamer, buildBuildings, buildLandmarks, buildSky, buildRain, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
+import { Forest, Streamer, buildBuildings, buildLandmarks, buildSky, buildRain, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
 import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
 import { makeRider, step, computeDrafts, aiThink, assignChains, gearLabel, G, makeFuel, eat, refill } from "./physics.js";
-import { normKit, applyKit, kitMass, kitCarbs, kitLiquid, WHEELS, TYRES, POCKETS } from "./kit.js";
+import { normKit, applyKit, kitMass, WHEELS, TYRES, POCKETS } from "./kit.js";
 import { makeField, PelotonView, Convoy, groups } from "./race.js";
 import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
 import { Traffic } from "./traffic.js";
 import { HdOrtho } from "./hdortho.js";
-import { ROSTER, setCustomCharacters, characterById, paletteOf, renderPortraits, Coverflow, CharacterEditor } from "./characters.js";
-import { Net, WsNet, netSupported, findServer } from "./net.js";
+import { characterById, paletteOf } from "./characters.js";
+import { addRemote, buildMp, followNet, hostStart, net, netTick } from "./ui/multiplayer.js";
+import { buildInventory } from "./ui/inventory.js";
+import { buildCharacters } from "./ui/riders.js";
+import { renderRouteList } from "./ui/routes.js";
 
-const $ = (id) => document.getElementById(id);
-const fmt1 = (v) => v.toFixed(1).replace(".", ",");
-const fmtInt = (v) => Math.round(v).toLocaleString("fr-FR");
-const fmtTime = (t) => {
+export const $ = (id) => document.getElementById(id);
+export const fmt1 = (v) => v.toFixed(1).replace(".", ",");
+export const fmtInt = (v) => Math.round(v).toLocaleString("fr-FR");
+export const fmtTime = (t) => {
   t = Math.max(0, t);
   const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = Math.floor(t % 60);
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
@@ -32,18 +35,18 @@ const DEFAULTS = {
   time: "matin", weather: "beau", wind: "none", timescale: 1,
   quality: "auto", sound: true, character: "perso", pseudo: "", hdPhoto: true, customChars: [], kit: null,
 };
-const settings = { ...DEFAULTS, ...readLS("vv-settings", {}) };
-function readLS(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
+export const settings = { ...DEFAULTS, ...readLS("vv-settings", {}) };
+export function readLS(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
 function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* stockage indisponible */ } }
-const saveSettings = () => writeLS("vv-settings", settings);
+export const saveSettings = () => writeLS("vv-settings", settings);
 
 // bas : pensé pour les cartes graphiques anciennes à 512 Mo (Radeon HD 6000,
 // Intel HD 3000/4000…) : textures réduites, pas d'ombres, horizon plus proche
 const QUALITY = {
   bas: { traffic: 4, nearRiders: 5, netR: 750, budget: 5, treeNear: 90, mask: 4096, discard: 520, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
   moyen: { traffic: 7, nearRiders: 9, netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 880, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
-  ultra: { traffic: 14, nearRiders: 20, netR: 2200, budget: 12, treeNear: 260, mask: 4096, discard: 1800, pr: 2, lod: 1.8, trees: 320, treeDist: 1500, density: 1.25, bDist: 3500, bRadius: 600, ortho: 4096, outer: 2048, shadow: 4096, fogFar: 42000, hd: true, hi: true },
-  eleve: { hd: true, traffic: 10, nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
+  ultra: { treeHi: 170, traffic: 14, nearRiders: 20, netR: 2200, budget: 12, treeNear: 260, mask: 4096, discard: 1800, pr: 2, lod: 1.8, trees: 320, treeDist: 1500, density: 1.25, bDist: 3500, bRadius: 600, ortho: 4096, outer: 2048, shadow: 4096, fogFar: 42000, hd: true, hi: true },
+  eleve: { treeHi: 100, hd: true, traffic: 10, nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
 };
 
 // carte graphique : les modèles anciens ou à peu de mémoire passent en « bas »
@@ -68,14 +71,14 @@ const GPU = detectGpu();
 let autoTier = GPU.weak ? "bas" : GPU.strong ? "ultra" : "moyen";
 const qKey = () => (settings.quality === "auto" ? autoTier : settings.quality);
 
-const DEST = {
+export const DEST = {
   "vieil-armand": "Vieil Armand",
   "grand-ballon-willer": "Grand Ballon",
   "route-des-cretes": "Grand Ballon",
   "grand-ballon-markstein": "Grand Ballon",
   piemont: "Guebwiller",
 };
-const ORIGIN = {
+export const ORIGIN = {
   "vieil-armand": "Cernay",
   "grand-ballon-willer": "Willer-sur-Thur",
   "route-des-cretes": "Cernay",
@@ -86,12 +89,12 @@ const ORIGIN = {
 const LEVEL_WKG = { cyclo: 2.9, amateur: 3.7, elite: 4.9 };
 
 // ------------------------------------------------------------ moteur 3D
-const canvas = $("gl");
+export const canvas = $("gl");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: qKey() !== "bas", powerPreference: "high-performance" });
 renderer.setSize(innerWidth, innerHeight);
 let pixelRatio = Math.min(devicePixelRatio, QUALITY[qKey()].pr);
 renderer.setPixelRatio(pixelRatio);
-const scene = new THREE.Scene();
+export const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.5, 60000);
 scene.fog = new THREE.Fog(0xcfe0ef, 2000, 16000);
 const hemi = new THREE.HemisphereLight(0xbfd8ff, 0x5b5544, 1.5);
@@ -130,13 +133,13 @@ addEventListener("resize", () => {
   camera.updateProjectionMatrix();
 });
 
-const sound = new Sound();
+export const sound = new Sound();
 sound.setEnabled(settings.sound);
 
 let spawnMap, miniMap, bigMap;
 let hd = null;
 function applyHd() { if (hd) hd.setEnabled(!!settings.hdPhoto && !!QUALITY[qKey()].hd); }
-let D, hf, ground, roads, roadMats, terrain, forest, roadIndex, netStream, buildStream, treeStream, signs = new THREE.Group();
+export let D, hf, ground, roads, roadMats, terrain, forest, roadIndex, netStream, buildStream, treeStream, signs = new THREE.Group();
 // distance (m) jusqu'à laquelle le relief grossier est masqué le long des routes
 const discardU = { value: 1600 };
 scene.add(signs);
@@ -144,7 +147,7 @@ const crowd = new Crowd();
 scene.add(crowd.group);
 
 // ------------------------------------------------------------ état de jeu
-const game = {
+export const game = {
   state: "loading", // menu | countdown | ride | paused | finished
   route: null,
   remotes: new Map(),
@@ -166,7 +169,7 @@ const game = {
   env: { windX: 0, windZ: 0 },
   fogBase: { near: 2000, far: 16000 },
 };
-let START_S = 12;
+export let START_S = 12;
 const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
 
 // ------------------------------------------------------------ chargement
@@ -387,7 +390,7 @@ function roadsidePosts(r) {
 }
 
 // ------------------------------------------------------------ conditions
-function applyConditions() {
+export function applyConditions() {
   const T = {
     matin: { dir: [0.75, 0.32, 0.45], sun: 0xffe2bf, si: 1.9, hs: 0xa9c8ec, hg: 0x5a5040, hi: 1.35, top: 0x4a82c8, hor: 0xf1dcc0 },
     midi: { dir: [0.15, 0.9, 0.4], sun: 0xffffff, si: 1.9, hs: 0xc3dbff, hg: 0x5b5544, hi: 1.45, top: 0x3a76c4, hor: 0xcfe0ef },
@@ -470,7 +473,7 @@ function updateFog(camY) {
 }
 
 // ------------------------------------------------------------ menu
-function seg(container, label, key, options, onChange) {
+export function seg(container, label, key, options, onChange) {
   const row = document.createElement("div");
   row.className = "opt";
   row.innerHTML = `<label>${label}</label><div class="seg"></div>`;
@@ -491,7 +494,7 @@ function seg(container, label, key, options, onChange) {
   return row;
 }
 
-const rangeRefresh = {};
+export const rangeRefresh = {};
 function range(container, label, key, min, max, stepV, unit, onChange) {
   const row = document.createElement("div");
   row.className = "opt";
@@ -691,7 +694,7 @@ function drawRideMaps() {
   }
 }
 
-function updateModeUi() {
+export function updateModeUi() {
   const open = settings.mode === "open";
   $("route-list").hidden = open;
   $("menu-profile").hidden = open;
@@ -701,7 +704,7 @@ function updateModeUi() {
   else requestAnimationFrame(() => drawProfile($("menu-profile"), game.route, null));
 }
 
-function routeStats(def, reverse) {
+export function routeStats(def, reverse) {
   const r = new Route(def, reverse);
   let maxG = 0;
   for (let s = 0; s < r.length - 500; s += 100) maxG = Math.max(maxG, r.avgGrade(s, s + 500));
@@ -709,27 +712,7 @@ function routeStats(def, reverse) {
   return { r, km: r.finish / 1000, gain: r.gain, avg: climb / r.length, maxG };
 }
 
-function recordKey(id, reverse) { return `${id}${reverse ? ":r" : ""}`; }
-
-function renderRouteList() {
-  const list = $("route-list");
-  list.innerHTML = "";
-  const recs = readLS("vv-records", {});
-  for (const def of D.routes) {
-    const st = routeStats(def, settings.reverse);
-    const rec = recs[recordKey(def.id, settings.reverse)];
-    const b = document.createElement("button");
-    b.className = "route-card" + (def.id === settings.route ? " on" : "");
-    const from = settings.reverse ? DEST[def.id] : ORIGIN[def.id];
-    const to = settings.reverse ? ORIGIN[def.id] : DEST[def.id];
-    b.innerHTML = `<span class="n">${def.name}</span>
-      <span class="s">${settings.reverse ? `${from} → ${to} (sens inverse)` : def.subtitle}</span>
-      <span class="k"><b>${fmt1(st.km)} km</b><br>D+ ${fmtInt(st.gain)} m · ${fmt1(st.avg * 100)} %</span>
-      ${rec ? `<span class="rec">Record : ${fmtTime(rec.time)} · ${fmtInt(rec.avgP)} W</span>` : ""}`;
-    b.onclick = () => selectRoute(def.id, settings.reverse);
-    list.appendChild(b);
-  }
-}
+export function recordKey(id, reverse) { return `${id}${reverse ? ":r" : ""}`; }
 
 // montées : d'un creux au sommet suivant, au moins 80 m de dénivelé et
 // 3,5 % de moyenne ; nom du col le plus proche du sommet, sinon du village
@@ -798,7 +781,7 @@ function climbStep(p) {
   });
 }
 
-function selectRoute(id, reverse) {
+export function selectRoute(id, reverse) {
   settings.route = id;
   settings.reverse = reverse;
   saveSettings();
@@ -963,385 +946,6 @@ function drawProfileMarkers(g, route, riders, X, Y) {
   }
 }
 
-// ------------------------------------------------------------ personnages
-let coverflow = null;
-let editor = null;
-function buildCharacters(container) {
-  setCustomCharacters(settings.customChars);
-  const box = document.createElement("div");
-  box.className = "chars";
-  box.innerHTML = `<div class="cf-host"></div><div class="char-info"><h3></h3><p></p><div class="char-stats"></div><div class="char-btns"><button class="mp-btn small cr-new">＋ Créer un personnage</button><button class="mp-btn small cr-edit" hidden>Modifier</button><button class="mp-btn small ghost cr-del" hidden>Supprimer</button></div></div>`;
-  container.appendChild(box);
-  // le personnage choisi impose son poids et sa puissance
-  const c0 = characterById(settings.character);
-  if (!c0.custom) { settings.mass = c0.mass; settings.ftp = c0.ftp; }
-  const info = () => {
-    const c = characterById(settings.character);
-    box.querySelector("h3").textContent = c.custom ? c.name : `${c.name} · ${c.style}`;
-    box.querySelector("p").textContent = c.text;
-    const stat = (k, v, pct) => `<div><small>${k}</small><b>${v}</b><i style="width:${Math.max(4, Math.min(100, pct))}%"></i></div>`;
-    const wkg = settings.ftp / settings.mass;
-    box.querySelector(".char-stats").innerHTML =
-      stat("Poids", `${settings.mass} kg`, (settings.mass - 45) / 0.6) +
-      stat("Seuil (FTP)", `${settings.ftp} W`, (settings.ftp - 120) / 2.6) +
-      stat("Grimpe (W/kg)", fmt1(wkg), (wkg - 2) * 28) +
-      stat("Explosivité (W′)", `${Math.round(c.wp / 1000)} kJ`, (c.wp - 12000) / 200);
-    box.querySelector(".cr-edit").hidden = box.querySelector(".cr-del").hidden = !c.user;
-  };
-  let portraits = false;
-  const mount = () => {
-    const idx = Math.max(0, ROSTER.findIndex((c) => c.id === settings.character));
-    coverflow = new Coverflow(box.querySelector(".cf-host"), ROSTER, idx, (c) => {
-      settings.character = c.id;
-      if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
-      saveSettings();
-      rangeRefresh.mass?.();
-      rangeRefresh.ftp?.();
-      info();
-      if (net.active) net.updateMe(myInfo());
-    });
-    if (portraits) coverflow.setImages(renderPortraits(ROSTER, settings.jersey));
-  };
-  mount();
-  game.charInfo = info;
-  info();
-  // portraits rendus quand l'onglet s'ouvre (le contexte WebGL temporaire
-  // ne coûte rien tant qu'on ne regarde pas les personnages)
-  const tab = document.querySelector('#tabs [data-tab="rider"]');
-  tab.addEventListener("click", () => {
-    if (portraits) return;
-    portraits = true;
-    setTimeout(() => coverflow.setImages(renderPortraits(ROSTER, settings.jersey)), 30);
-  });
-  const select = (id) => {
-    setCustomCharacters(settings.customChars);
-    settings.character = id;
-    const c = characterById(id);
-    if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
-    saveSettings();
-    mount();
-    rangeRefresh.mass?.();
-    rangeRefresh.ftp?.();
-    info();
-    if (net.active) net.updateMe(myInfo());
-  };
-  editor = editor || new CharacterEditor((c) => {
-    const list = (settings.customChars || []).filter((x) => x.id !== c.id);
-    list.push(c);
-    settings.customChars = list;
-    select(c.id);
-  });
-  box.querySelector(".cr-new").onclick = () => editor.open(null, { mass: settings.mass, ftp: settings.ftp });
-  box.querySelector(".cr-edit").onclick = () => editor.open(characterById(settings.character));
-  box.querySelector(".cr-del").onclick = () => {
-    const c = characterById(settings.character);
-    if (!c.user || !confirm(`Supprimer ${c.name} ?`)) return;
-    settings.customChars = (settings.customChars || []).filter((x) => x.id !== c.id);
-    select("perso");
-  };
-}
-
-// ------------------------------------------------------------ inventaire
-function buildInventory() {
-  const el = $("opts-kit");
-  const kit = (settings.kit = normKit(settings.kit));
-  const save = () => { settings.kit = normKit(kit); saveSettings(); render(); };
-  const segH = (opts, cur, onPick) => `<div class="seg">${opts.map(([v, l]) => `<button data-v="${v}" class="${String(v) === String(cur) ? "on" : ""}">${l}</button>`).join("")}</div>`;
-  const render = () => {
-    const cages = [0, 1].map((i) => {
-      const b = kit.bottles[i];
-      return `<div class="kit-card" data-cage="${i}"><div class="kit-ico bottle ${b ? (b.drink === "eau" ? "eau" : "iso") : "none"} ${b && b.size === 750 ? "big" : ""}"></div>
-        <div><b>Porte-bidon ${i + 1}</b>${segH([["0", "Vide"], ["500", "500 mL"], ["750", "750 mL"]], b ? b.size : 0)}
-        ${b ? segH([["iso", "Isotonique"], ["eau", "Eau"]], b.drink) : ""}</div></div>`;
-    }).join("");
-    const used = kit.bars + kit.gels + kit.cafGels;
-    const slots = [];
-    for (let i = 0; i < POCKETS; i++) slots.push(`<i class="${i < kit.bars ? "bar" : i < kit.bars + kit.gels ? "gel" : i < used ? "caf" : ""}"></i>`);
-    const row = (k, label, sub) => `<div class="kit-row"><span><b>${label}</b><small>${sub}</small></span><div class="kit-count"><button data-k="${k}" data-d="-1">−</button><b>${kit[k]}</b><button data-k="${k}" data-d="1" ${used >= POCKETS ? "disabled" : ""}>+</button></div></div>`;
-    const ftp = settings.ftp, P = 0.7 * ftp;
-    const burn = (((P / 0.23 + 90) * Math.min(1, 0.25 + 0.75 * 0.7)) / 17000) * 3600; // g/h
-    const carbs = kitCarbs(kit), liquid = kitLiquid(kit);
-    const autoC = (320 + carbs) / Math.max(1, burn), autoL = liquid / 1000 / (0.35 + 0.9 * 0.7) + 0.6;
-    const hm = (h) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
-    const W = WHEELS[kit.wheels], T = TYRES[kit.tyres];
-    el.innerHTML = `
-      <h3 class="kit-h">Porte-bidons</h3><div class="kit-cages">${cages}</div>
-      <h3 class="kit-h">Poches du maillot <small>${used} / ${POCKETS}</small></h3>
-      <div class="kit-slots">${slots.join("")}</div>
-      ${row("bars", "Barres", "40 g de glucides, lentes · touche 1")}
-      ${row("gels", "Gels", "25 g, rapides · touche 2")}
-      ${row("cafGels", "Gels caféinés", "25 g et +3 % de puissance pendant 45 min · touche 4")}
-      <h3 class="kit-h">Matériel</h3>
-      <div class="opt"><label>Roues</label>${segH(Object.entries(WHEELS).map(([k, w]) => [k, w.name]), kit.wheels)}</div>
-      <p class="opt-note kit-wheels">${W.text}.</p>
-      <div class="opt"><label>Pneus</label>${segH(Object.entries(TYRES).map(([k, t]) => [k, t.name]), kit.tyres)}</div>
-      <p class="opt-note kit-tyres">${T.text}.</p>
-      <div class="kit-sum">
-        <div><small>Masse emportée</small><b>${fmt1(kitMass(kit))} kg</b></div>
-        <div><small>Glucides</small><b>${fmtInt(carbs)} g</b></div>
-        <div><small>Boisson</small><b>${fmt1(liquid / 1000)} L</b></div>
-        <div><small>Autonomie (~70 % FTP)</small><b>${hm(Math.min(autoC, autoL))}</b></div>
-        <div><small>Traînée</small><b>${W.cda < 1 ? "−" + fmtInt((1 - W.cda) * 100) + " %" : "réf."}</b></div>
-        <div><small>Roulement</small><b>${T.crr !== 1 ? (T.crr < 1 ? "−" : "+") + fmtInt(Math.abs(1 - T.crr) * 100) + " %" : "réf."}</b></div>
-        <div><small>Adhérence mouillé</small><b>${T.wet > 1 ? "+" + fmtInt((T.wet - 1) * 100) + " %" : "réf."}</b></div>
-      </div>
-      <p class="opt-note">La voiture d'équipe et la musette remplissent les bidons de boisson isotonique, la fontaine d'eau. Les poches se rechargent aussi à la voiture.</p>`;
-    el.querySelectorAll(".kit-card").forEach((card) => {
-      const i = Number(card.dataset.cage);
-      const [sz, dr] = card.querySelectorAll(".seg");
-      sz.querySelectorAll("button").forEach((b) => (b.onclick = () => {
-        const v = Number(b.dataset.v);
-        if (!v) kit.bottles.splice(i, 1);
-        else if (kit.bottles[i]) kit.bottles[i].size = v;
-        else kit.bottles.push({ size: v, drink: "iso" });
-        save();
-      }));
-      if (dr) dr.querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.bottles[i].drink = b.dataset.v; save(); }));
-    });
-    el.querySelectorAll(".kit-count button").forEach((b) => (b.onclick = () => { kit[b.dataset.k] = Math.max(0, kit[b.dataset.k] + Number(b.dataset.d)); save(); }));
-    const segs = el.querySelectorAll(":scope > .opt .seg");
-    segs[0].querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.wheels = b.dataset.v; save(); }));
-    segs[1].querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.tyres = b.dataset.v; save(); }));
-  };
-  render();
-  game.kitRender = render;
-}
-
-// ------------------------------------------------------------ multijoueur
-let net = new Net();
-function myInfo() {
-  const c = characterById(settings.character);
-  return { name: (settings.pseudo || "").trim() || c.name.split(" ")[0] || "Joueur", palette: paletteOf(c, settings.jersey), height: c.height, bike: settings.bike, mass: settings.mass, ftp: settings.ftp, char: c.id };
-}
-
-function nameTag(text, color) {
-  const c = document.createElement("canvas");
-  c.width = 256; c.height = 64;
-  const g = c.getContext("2d");
-  g.fillStyle = "rgba(14,22,19,0.75)";
-  g.beginPath(); g.roundRect(4, 8, 248, 48, 12); g.fill();
-  g.fillStyle = color; g.fillRect(16, 22, 8, 20);
-  g.fillStyle = "#fff"; g.font = "700 30px Barlow, Arial, sans-serif"; g.textBaseline = "middle";
-  g.fillText(text, 34, 33, 210);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
-  sp.scale.set(1.8, 0.45, 1);
-  sp.renderOrder = 5;
-  return sp;
-}
-
-function addRemote(info) {
-  if (game.remotes.has(info.id) || !game.player) return;
-  const rider = makeRider({ name: info.name, mass: info.mass || 72, ftp: info.ftp || 230, s: START_S, o: 0, bike: info.bike || "route" });
-  rider.remote = true;
-  rider.netId = info.id;
-  rider.team = game.player.team;
-  Object.assign(rider, { x: game.player.x, y: game.player.y, z: game.player.z, yaw: game.player.yaw, lean: 0 });
-  const model = new RiderModel({ palette: info.palette || {}, type: info.bike || "route" });
-  model.root.scale.setScalar(info.height || 1);
-  scene.add(model.root);
-  const tag = nameTag(info.name, (info.palette && info.palette.jersey) || "#fff");
-  model.root.parent.add(tag);
-  game.models.push({ root: tag });
-  game.remotes.set(info.id, { rider, model, tag, info });
-  game.riders.push(rider);
-  game.models.push(model);
-}
-
-function removeRemote(id) {
-  const x = game.remotes.get(id);
-  if (!x) return;
-  scene.remove(x.model.root);
-  scene.remove(x.tag);
-  game.remotes.delete(id);
-  game.riders = game.riders.filter((r) => r !== x.rider);
-  toast(`${x.info.name} a quitté la partie`, 3);
-}
-
-// position reçue : extrapolée avec la vitesse, rejointe en douceur
-function followNet(x, dt) {
-  const n = x.net;
-  if (!n) return;
-  const age = Math.min(1, (performance.now() - n.at) / 1000);
-  const k = Math.min(1, dt * 6);
-  const sT = n.s + n.v * age;
-  x.s += x.v * dt;
-  x.s += (sT - x.s) * (Math.abs(sT - x.s) > 30 ? 1 : k);
-  x.o += (n.o - x.o) * k;
-  x.v = n.v;
-  x.cadence = n.cad; x.posture = n.post; x.power = n.p || 0;
-  x.time = n.time + age;
-  x.crashed = n.cr || 0;
-  if (n.fin && !x.finished) { x.finished = true; x.finishTime = n.ft; x.place = game.riders.filter((o) => o.finished).length - 1; }
-  if (x.remote) {
-    const xT = n.x + Math.sin(n.yaw) * n.v * age, zT = n.z + Math.cos(n.yaw) * n.v * age;
-    const far = Math.hypot(xT - x.x, zT - x.z) > 25;
-    x.x = far ? xT : x.x + Math.sin(x.yaw) * x.v * dt + (xT - x.x - Math.sin(x.yaw) * x.v * dt) * k;
-    x.z = far ? zT : x.z + Math.cos(x.yaw) * x.v * dt + (zT - x.z - Math.cos(x.yaw) * x.v * dt) * k;
-    x.y += (n.y - x.y) * (far ? 1 : k);
-    let dy = n.yaw - x.yaw;
-    dy = Math.atan2(Math.sin(dy), Math.cos(dy));
-    x.yaw += dy * (far ? 1 : k);
-    x.lean += (n.lean - x.lean) * k;
-    x.pitch = n.pitch;
-  }
-}
-
-const r2 = (v, k = 100) => Math.round(v * k) / k;
-function netTick(dt) {
-  if (!net.connected || !game.player) return;
-  const p = game.player;
-  game.netT = (game.netT || 0) - dt;
-  if (game.netT <= 0) {
-    game.netT = 0.1;
-    net.send({ t: "st", s: r2(p.s, 10), o: r2(p.o), x: r2(p.x), y: r2(p.yS), z: r2(p.z), yaw: r2(p.yaw, 1000), lean: r2(p.lean, 1000), pitch: r2(Math.atan(p.gradeS || 0), 1000), v: r2(p.v), cad: Math.round(p.cadence), post: p.posture, p: Math.round(p.power), time: r2(p.time, 10), fin: p.finished ? 1 : 0, ft: p.finishTime || 0, cr: p.crashed > 0 ? 1 : 0 }, true);
-  }
-  // l'hôte diffuse le peloton (5 fois par seconde)
-  if (net.role === "host" && game.field) {
-    game.aiNetT = (game.aiNetT || 0) - dt;
-    if (game.aiNetT <= 0) {
-      game.aiNetT = 0.2;
-      net.send({ t: "ai", d: game.field.map((x) => [r2(x.s, 10), r2(x.o), r2(x.v), Math.round(x.cadence), x.posture, x.finished ? 1 : 0, r2(x.time, 10), r2(x.finishTime || 0, 10), x.crashed > 0 ? 1 : 0]) }, true);
-    }
-  }
-}
-
-// l'hôte lance la partie pour tout le monde
-function hostStart() {
-  game.mpJersey = null;
-  if (net.role === "host" && net.connected) {
-    const keys = ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"];
-    const ms = Object.fromEntries(keys.map((k) => [k, settings[k]]));
-    ms.jersey = paletteOf(characterById(settings.character), settings.jersey).jersey;
-    game.mpJersey = ms.jersey;
-    net.send({ t: "start", settings: ms });
-  }
-  startRide();
-}
-
-function bindNet() {
-  net.on("start", (m) => {
-    if (net.role !== "guest") return;
-    const ms = m.settings;
-    for (const k of ["route", "reverse", "mode", "weather", "time", "wind", "field", "level", "spawn"]) if (k in ms) settings[k] = ms[k];
-    game.mpJersey = ms.jersey;
-    selectRoute(ms.route, ms.reverse);
-    applyConditions();
-    updateModeUi();
-    $("pause").hidden = true;
-    $("results").hidden = true;
-    sound.start();
-    startRide();
-  });
-  net.on("st", (m) => {
-    const x = game.remotes.get(m.from);
-    if (x) { m.at = performance.now(); x.rider.net = m; }
-  });
-  net.on("ai", (m) => {
-    if (net.role !== "guest" || !game.field) return;
-    const at = performance.now();
-    m.d.forEach((a, i) => {
-      const x = game.field[i];
-      if (x) x.net = { s: a[0], o: a[1], v: a[2], cad: a[3], post: a[4], fin: a[5], time: a[6], ft: a[7], cr: a[8], at };
-    });
-  });
-  net.on("join", (info) => { toast(`${info.name} a rejoint la partie`, 3); });
-  net.on("leave", (id) => removeRemote(id));
-  net.on("lost", () => { toast("Connexion perdue avec l'hôte : vous roulez seul", 4); });
-  net.on("lobby", () => renderMp());
-  net.on("error", (msg) => { $("mp-status").textContent = msg; });
-}
-bindNet();
-
-function renderMp() {
-  const st = $("mp-status"), list = $("mp-players");
-  if (!st) return;
-  const host = net.role === "host", guest = net.role === "guest";
-  const srv = !!net.server;
-  $("mp-start").hidden = srv || net.active;
-  $("mp-hostbox").hidden = srv || !host;
-  $("mp-guestbox").hidden = srv || !guest || net.connected;
-  $("mp-serverbox").hidden = !srv || net.active;
-  if (srv) {
-    const rl = $("mp-rooms");
-    rl.innerHTML = net.rooms.length ? "" : "<li class=\"empty\">Aucun salon ouvert pour l'instant.</li>";
-    for (const r of net.rooms) {
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${r.name} <small>${r.players}/4</small></span>`;
-      const b = document.createElement("button");
-      b.className = "mp-btn small";
-      b.textContent = r.full ? "Complet" : "Rejoindre";
-      b.disabled = r.full;
-      b.onclick = () => { st.textContent = "Connexion au salon…"; net.enter(r.id, myInfo()); };
-      li.appendChild(b);
-      rl.appendChild(li);
-    }
-  }
-  $("mp-leave").hidden = !net.active;
-  const n = net.players.size;
-  if (srv && net.active && !net.connected) st.textContent = host ? `${net.roomName} ouvert : vos amis le voient dans leur liste en ouvrant la même adresse.` : "Connexion au salon…";
-  else st.textContent = !net.active ? "" : net.connected
-    ? host ? `${n} joueurs connectés. Choisissez le parcours et le mode, puis « Partir » : tout le monde part en même temps.` : "Connecté ! L'hôte choisit le parcours et lancera la partie."
-    : host ? "En attente d'un joueur…" : "";
-  list.innerHTML = [...net.players.values()].map((p) => `<li><i style="background:${(p.palette && p.palette.jersey) || "#fff"}"></i>${p.name}${p.host ? " <small>hôte</small>" : ""}${p.id === net.id ? " <small>vous</small>" : ""}</li>`).join("");
-  const go = $("go");
-  if (guest && net.connected) { go.textContent = "En attente de l'hôte…"; go.disabled = true; }
-  else { go.textContent = host && net.connected ? `Partir à ${n}` : "Partir"; go.disabled = false; }
-  $("restart").disabled = $("r-again").disabled = guest && net.connected;
-}
-
-function buildMp() {
-  // jeu servi par server/server.cjs : salons par le serveur, sans codes
-  findServer().then((ok) => {
-    if (!ok) return;
-    net.close();
-    net = new WsNet();
-    bindNet();
-    $("mp-intro").textContent = "Partie sur ce serveur : créez un salon, ou rejoignez celui d'un ami qui a ouvert la même adresse. 4 joueurs par salon. L'hôte (créateur du salon) choisit le parcours, le mode et les conditions, puis lance la partie avec « Partir ».";
-    $("mp-create").onclick = () => { $("mp-status").textContent = "Ouverture du salon…"; net.create(myInfo()); };
-    renderMp();
-  });
-  if (!netSupported()) { $("mp-intro").textContent = "Ce navigateur ne permet pas les connexions directes (WebRTC)."; $("mp-start").hidden = true; return; }
-  const name = $("mp-name");
-  name.value = settings.pseudo || "";
-  name.oninput = () => { settings.pseudo = name.value.slice(0, 16); saveSettings(); if (net.active) net.updateMe(myInfo()); };
-  const err = (e) => { $("mp-status").textContent = e.message || String(e); };
-  const copy = (id, btn) => {
-    const t = $(id);
-    t.select();
-    (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).catch(() => document.execCommand("copy"));
-    const old = btn.textContent; btn.textContent = "Copié !"; setTimeout(() => (btn.textContent = old), 1500);
-  };
-  $("mp-host").onclick = () => { net.role = "host"; net.players.set(net.id, { ...myInfo(), id: net.id, host: true }); renderMp(); };
-  $("mp-join").onclick = () => { net.role = "guest"; renderMp(); };
-  $("mp-invite").onclick = async () => {
-    if (net.players.size >= 4) return err("4 joueurs au plus");
-    $("mp-status").textContent = "Préparation du code…";
-    try {
-      $("mp-offer").value = await net.invite(myInfo());
-      $("mp-answer-in").value = "";
-      $("mp-offerbox").hidden = false;
-      renderMp();
-    } catch (e) { err(e); }
-  };
-  $("mp-copy-offer").onclick = (e) => copy("mp-offer", e.target);
-  $("mp-copy-answer").onclick = (e) => copy("mp-answer", e.target);
-  $("mp-connect").onclick = async () => {
-    try { await net.accept($("mp-answer-in").value); $("mp-offerbox").hidden = true; $("mp-status").textContent = "Connexion…"; } catch (e) { err(e); }
-  };
-  $("mp-answer-btn").onclick = async () => {
-    $("mp-status").textContent = "Préparation du code…";
-    try {
-      $("mp-answer").value = await net.join($("mp-offer-in").value, myInfo());
-      $("mp-answerbox").hidden = false;
-      $("mp-status").textContent = "Envoyez ce code de réponse à l'hôte.";
-    } catch (e) { err(e); }
-  };
-  $("mp-leave").onclick = () => { net.close(); $("mp-offerbox").hidden = true; $("mp-answerbox").hidden = true; renderMp(); };
-  renderMp();
-}
-
 // ------------------------------------------------------------ course
 function clearRiders() {
   for (const m of game.models) scene.remove(m.root);
@@ -1358,7 +962,7 @@ function clearRiders() {
   game.ghost = null;
 }
 
-function startRide() {
+export function startRide() {
   clearRiders();
   const r = game.route;
   $("menu").hidden = true;
@@ -1499,7 +1103,7 @@ function setPaused(p) {
 }
 
 let toastTimer = 0;
-function toast(text, dur = 3.5) {
+export function toast(text, dur = 3.5) {
   const t = $("toast");
   t.textContent = text;
   t.classList.add("on");
@@ -1554,7 +1158,7 @@ function finish() {
 }
 
 // ------------------------------------------------------------ commandes
-const keys = new Set();
+export const keys = new Set();
 const touchKeys = new Set();
 const EFFORT_STEP = 20; // watts par pression
 // lettres tapées (indépendantes de la disposition AZERTY / QWERTY)
@@ -1888,7 +1492,7 @@ function loop(now) {
   roads.update(camera.position, q.discard);
   terrain.update(camera.position, q.lod);
   streamWorld(q.budget);
-  forest.update(camera.position, q.treeNear);
+  forest.update(camera.position, q.treeNear, q.treeHi || 0);
   hd.update(focus0().x, focus0().z, dtReal);
   sky.position.copy(camera.position);
   sky.material.uniforms.time.value = now / 1000;

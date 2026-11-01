@@ -1,0 +1,6 @@
+/* ---------------------------------------------------------- parcours */
+.coverflow.routes { height: 270px; }
+.coverflow.routes .cf-card { width: 170px; height: 252px; margin-left: -85px; }
+.coverflow.routes .cf-card .cf-img { background-size: cover; background-position: center top; }
+.route-info h3 { margin: 8px 0 2px; font-size: 16px; }
+.route-info p { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
