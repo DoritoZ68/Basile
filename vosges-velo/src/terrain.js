@@ -1,6 +1,7 @@
 // Relief IGN (grille ~30 m) découpé en dalles avec niveaux de détail,
 // texturé par la photographie aérienne IGN + texture de détail procédurale.
 import * as THREE from "three";
+import { HD_GLSL_DECL, HD_GLSL } from "./hdortho.js";
 
 export class Heightfield {
   constructor(meta, raw) {
@@ -96,6 +97,7 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.detailMap = { value: detailTex };
     if (opts.veg) sh.uniforms.vegMap = { value: opts.veg };
+    if (opts.hd) Object.assign(sh.uniforms, opts.hd);
     if (opts.mask) {
       sh.uniforms.roadMask = { value: opts.mask };
       sh.uniforms.discardDist = mat.userData.discardDist;
@@ -106,12 +108,13 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;" + (opts.veg ? "\nuniform sampler2D vegMap;" : "") + (opts.mask ? "\nuniform sampler2D roadMask;\nuniform float discardDist;" : ""),
+        "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;" + (opts.veg ? "\nuniform sampler2D vegMap;" : "") + (opts.mask ? "\nuniform sampler2D roadMask;\nuniform float discardDist;" : "") + (opts.hd ? "\n" + HD_GLSL_DECL : ""),
       )
       .replace(
         "#include <map_fragment>",
         `${opts.mask ? `if (texture2D(roadMask, vMapUv).r * ${opts.maskRange.toFixed(1)} < ${opts.discard.toFixed(1)} && length(vWPos - cameraPosition) < discardDist) discard;` : ""}
         #include <map_fragment>
+        ${opts.hd ? HD_GLSL : ""}
         {
           float camD = length(vWPos - cameraPosition);
           float near = 1.0 - smoothstep(30.0, 600.0, camD);
@@ -146,7 +149,7 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
       );
   };
   // les deux variantes (masquée ou non) ne doivent pas partager leur programme
-  mat.customProgramCacheKey = () => `terrain-${opts.mask ? "m" : ""}${opts.veg ? "v" : ""}`;
+  mat.customProgramCacheKey = () => `terrain-${opts.mask ? "m" : ""}${opts.veg ? "v" : ""}${opts.hd ? "h" : ""}`;
   return mat;
 }
 

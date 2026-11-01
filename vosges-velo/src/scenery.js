@@ -238,6 +238,79 @@ function conifer(near) {
   return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
 }
 
+// sapin détaillé (qualité Ultra) : 8 étages de branches en étoile, pointes
+// tombantes, tronc visible à la base ; ~400 triangles
+function coniferHi() {
+  const parts = [];
+  const trunk = new THREE.CylinderGeometry(0.007, 0.016, 0.34, 7, 1, true);
+  trunk.translate(0, 0.17, 0);
+  paint(trunk, 0x4a3426);
+  parts.push(trunk);
+  const R = rng(11);
+  const n = 8;
+  for (let t = 0; t < n; t++) {
+    const k = t / (n - 1);
+    const rad = 0.17 * (1 - k * 0.82) + 0.012;
+    const h = 0.2 - k * 0.06;
+    const y = 0.1 + k * 0.78;
+    const seg = 12;
+    const c = new THREE.ConeGeometry(rad, h, seg, 2, true);
+    const pa = c.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      const vy = pa.getY(i);
+      if (vy < h / 2 - 1e-4) {
+        // anneau du bas : une branche sur deux plus longue, qui retombe
+        const ang = Math.atan2(pa.getZ(i), pa.getX(i));
+        const id = Math.round(((ang + Math.PI) / (2 * Math.PI)) * seg);
+        const long = id % 2 === 0;
+        const f = (long ? 1.0 : 0.72) * (0.9 + R() * 0.2);
+        const low = vy < -h / 2 + 1e-4;
+        pa.setX(i, pa.getX(i) * (low ? f : 0.5 + f * 0.5));
+        pa.setZ(i, pa.getZ(i) * (low ? f : 0.5 + f * 0.5));
+        if (low && long) pa.setY(i, vy - 0.025 - R() * 0.02);
+      }
+    }
+    c.rotateY(R() * 3);
+    c.translate(0, y + h / 2, 0);
+    paintGrad(c, k < 0.3 ? 0x1c3420 : 0x223e26, k > 0.7 ? 0x5b8452 : 0x4a7244);
+    parts.push(c.toNonIndexed());
+  }
+  return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
+}
+
+// feuillu détaillé (qualité Ultra) : tronc et charpentières, houppier en
+// cinq masses irrégulières ; ~450 triangles
+function broadleafHi() {
+  const parts = [];
+  const R = rng(5);
+  const trunk = new THREE.CylinderGeometry(0.012, 0.026, 0.52, 7, 1, true);
+  trunk.translate(0, 0.26, 0);
+  paint(trunk, 0x5a4636);
+  parts.push(trunk);
+  for (const [a, l] of [[0.6, 0.2], [2.4, 0.18], [4.3, 0.2]]) {
+    const b = new THREE.CylinderGeometry(0.006, 0.011, l, 5, 1, true);
+    b.translate(0, l / 2, 0);
+    b.rotateZ(0.7);
+    b.rotateY(a);
+    b.translate(0, 0.42, 0);
+    paint(b, 0x5a4636);
+    parts.push(b);
+  }
+  const crowns = [[0, 0.66, 0, 0.21], [0.11, 0.58, 0.05, 0.15], [-0.1, 0.6, -0.06, 0.15], [0.03, 0.82, -0.04, 0.15], [-0.05, 0.72, 0.1, 0.14]];
+  for (const [x, y, z, r] of crowns) {
+    const sp = new THREE.IcosahedronGeometry(r, 1);
+    const pa = sp.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      const k = 0.82 + R() * 0.3;
+      pa.setXYZ(i, pa.getX(i) * k, pa.getY(i) * k * 0.92, pa.getZ(i) * k);
+    }
+    sp.translate(x, y, z);
+    paintGrad(sp, 0x2e4826, 0x7a9a4c);
+    parts.push(sp);
+  }
+  return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
+}
+
 // feuillu (hêtre, chêne) : houppier en deux masses, éclairé par le haut
 function broadleaf(near) {
   const parts = [];
@@ -292,12 +365,13 @@ function paint(g, hex) {
 // Végétation par cases de la grille, construite à la demande autour du
 // cycliste (carte de végétation BD TOPO : sapins, feuillus, vignes).
 export class Forest {
-  constructor(data, ground) {
+  constructor(data, ground, { hi = false } = {}) {
     this.ground = ground;
     this.veg = data.veg;
     this.meta = data.meta;
-    // deux niveaux de détail : près (~50 triangles) et loin (8 à 10 triangles)
-    this.geos = { conifer: conifer(true), broadleaf: broadleaf(true), vine: vine() };
+    // deux niveaux de détail : près (~50 triangles, ~400 en Ultra) et loin
+    // (8 à 10 triangles)
+    this.geos = hi ? { conifer: coniferHi(), broadleaf: broadleafHi(), vine: vine() } : { conifer: conifer(true), broadleaf: broadleaf(true), vine: vine() };
     this.far = { conifer: conifer(false), broadleaf: broadleaf(false) };
     this.mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     this.built = new Set();
@@ -468,7 +542,8 @@ export function buildBuildings(list, hf, keep = () => true) {
   const R = rng(list.length ? Math.floor(list[0][2][0] * 31 + list[0][2][1] * 17) : 99);
   const cell = 600;
   const buckets = new Map();
-  const c1 = new THREE.Color(), c2 = new THREE.Color();
+  const c1 = new THREE.Color(), c2 = new THREE.Color(), c3 = new THREE.Color();
+  const cCh = new THREE.Color("#7a5f50"), cTop = new THREE.Color("#2a2522");
   for (const [h, kind, flat] of list) {
     if (!keep(flat[0], flat[1])) continue;
     let pts = [];
@@ -498,11 +573,17 @@ export function buildBuildings(list, hf, keep = () => true) {
     const base = ymin - 1;
     const gable = pts.length === 4 && kind !== 2 && height < 25;
     const top = ymax + (gable ? height * 0.62 : height);
-    // murs
+    // murs, avec un soubassement plus sombre (crépi taloché, grès)
+    const plinth = kind !== 2 ? ymax + 0.55 : base;
+    c3.copy(c1).multiplyScalar(0.72);
     for (let i = 0; i < pts.length; i++) {
       const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % pts.length];
-      pushV(x0, base, z0, c1); pushV(x1, base, z1, c1); pushV(x1, top, z1, c1);
-      pushV(x0, base, z0, c1); pushV(x1, top, z1, c1); pushV(x0, top, z0, c1);
+      if (plinth > base) {
+        pushV(x0, base, z0, c3); pushV(x1, base, z1, c3); pushV(x1, plinth, z1, c3);
+        pushV(x0, base, z0, c3); pushV(x1, plinth, z1, c3); pushV(x0, plinth, z0, c3);
+      }
+      pushV(x0, plinth, z0, c1); pushV(x1, plinth, z1, c1); pushV(x1, top, z1, c1);
+      pushV(x0, plinth, z0, c1); pushV(x1, top, z1, c1); pushV(x0, top, z0, c1);
     }
     if (gable) {
       // toit à deux pans le long du grand côté
@@ -516,11 +597,33 @@ export function buildBuildings(list, hf, keep = () => true) {
       // pignons
       pushV(q[1][0], top, q[1][1], c1); pushV(q[2][0], top, q[2][1], c1); pushV(m0[0], ridgeH, m0[1], c1);
       pushV(q[3][0], top, q[3][1], c1); pushV(q[0][0], top, q[0][1], c1); pushV(m1[0], ridgeH, m1[1], c1);
-      // pans
-      pushV(q[0][0], top, q[0][1], c2); pushV(q[1][0], top, q[1][1], c2); pushV(m0[0], ridgeH, m0[1], c2);
-      pushV(q[0][0], top, q[0][1], c2); pushV(m0[0], ridgeH, m0[1], c2); pushV(m1[0], ridgeH, m1[1], c2);
-      pushV(q[2][0], top, q[2][1], c2); pushV(q[3][0], top, q[3][1], c2); pushV(m1[0], ridgeH, m1[1], c2);
-      pushV(q[2][0], top, q[2][1], c2); pushV(m1[0], ridgeH, m1[1], c2); pushV(m0[0], ridgeH, m0[1], c2);
+      // pans, débordant des murs (avant-toits de 50 cm, rives de 35 cm)
+      const ux = q[1][0] - q[0][0], uz = q[1][1] - q[0][1], ul = Math.hypot(ux, uz) || 1;
+      const wx = q[3][0] - q[0][0], wz = q[3][1] - q[0][1], wl = Math.hypot(wx, wz) || 1;
+      const U = [ux / ul, uz / ul], Wv = [wx / wl, wz / wl];
+      const ov = 0.5, og = 0.35, drop = ov * (ridgeH - top) / Math.max(1, short / 2);
+      const ex = (p, su, sw) => [p[0] + U[0] * og * su + Wv[0] * ov * sw, p[1] + U[1] * og * su + Wv[1] * ov * sw];
+      const k0 = ex(q[0], -1, -1), k1 = ex(q[1], 1, -1), k2 = ex(q[2], 1, 1), k3 = ex(q[3], -1, 1);
+      const r0 = [m0[0] + U[0] * og, m0[1] + U[1] * og], r1 = [m1[0] - U[0] * og, m1[1] - U[1] * og];
+      const ty = top - drop;
+      pushV(k0[0], ty, k0[1], c2); pushV(k1[0], ty, k1[1], c2); pushV(r0[0], ridgeH, r0[1], c2);
+      pushV(k0[0], ty, k0[1], c2); pushV(r0[0], ridgeH, r0[1], c2); pushV(r1[0], ridgeH, r1[1], c2);
+      pushV(k2[0], ty, k2[1], c2); pushV(k3[0], ty, k3[1], c2); pushV(r1[0], ridgeH, r1[1], c2);
+      pushV(k2[0], ty, k2[1], c2); pushV(r1[0], ridgeH, r1[1], c2); pushV(r0[0], ridgeH, r0[1], c2);
+      // cheminée sur un pan
+      if (kind === 0 && Math.abs(area) > 120 && R() < 0.7) {
+        const t = 0.25 + R() * 0.5, side = R() < 0.5 ? -1 : 1;
+        const px = m1[0] + (m0[0] - m1[0]) * t + Wv[0] * side * 0.9, pz = m1[1] + (m0[1] - m1[1]) * t + Wv[1] * side * 0.9;
+        const a = 0.32, y0 = ridgeH - 1.6, y1 = ridgeH + 0.8;
+        const cs = [[px - U[0] * a - Wv[0] * a, pz - U[1] * a - Wv[1] * a], [px + U[0] * a - Wv[0] * a, pz + U[1] * a - Wv[1] * a], [px + U[0] * a + Wv[0] * a, pz + U[1] * a + Wv[1] * a], [px - U[0] * a + Wv[0] * a, pz - U[1] * a + Wv[1] * a]];
+        for (let k = 0; k < 4; k++) {
+          const [ax, az] = cs[k], [bx, bz] = cs[(k + 1) % 4];
+          pushV(ax, y0, az, cCh); pushV(bx, y0, bz, cCh); pushV(bx, y1, bz, cCh);
+          pushV(ax, y0, az, cCh); pushV(bx, y1, bz, cCh); pushV(ax, y1, az, cCh);
+        }
+        pushV(cs[0][0], y1, cs[0][1], cTop); pushV(cs[2][0], y1, cs[2][1], cTop); pushV(cs[1][0], y1, cs[1][1], cTop);
+        pushV(cs[0][0], y1, cs[0][1], cTop); pushV(cs[3][0], y1, cs[3][1], cTop); pushV(cs[2][0], y1, cs[2][1], cTop);
+      }
     } else {
       const tri = THREE.ShapeUtils.triangulateShape(pts.map(([x, z]) => new THREE.Vector2(x, z)), []);
       for (const [a, b, c] of tri) {
@@ -563,7 +666,13 @@ export function buildBuildings(list, hf, keep = () => true) {
           float wy = step(0.38, fract(v)) * step(fract(v), 0.8);
           float d = length(vWPos - cameraPosition);
           float k = wx * wy * (1.0 - smoothstep(150.0, 600.0, d));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.19, 0.22), k * 0.85);
+          // crépi irrégulier, encadrement clair, vitre qui reflète un peu le ciel
+          float n = fract(sin(dot(floor(vWPos * 2.3), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          diffuseColor.rgb *= 0.95 + 0.07 * n * (1.0 - smoothstep(60.0, 250.0, d));
+          float fx = step(0.29, fract(u)) * step(fract(u), 0.73), fy = step(0.35, fract(v)) * step(fract(v), 0.83);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.9, 0.86), (fx * fy - wx * wy) * (1.0 - smoothstep(80.0, 300.0, d)) * 0.8);
+          vec3 glass = mix(vec3(0.13, 0.16, 0.2), vec3(0.42, 0.5, 0.6), smoothstep(0.55, 0.8, fract(v)) * 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, glass, k * 0.88);
           // volets en bois de part et d'autre
           float sh = (step(0.22, fract(u)) * step(fract(u), 0.31) + step(0.71, fract(u)) * step(fract(u), 0.8)) * wy;
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.42, 0.3), sh * 0.6 * (1.0 - smoothstep(150.0, 400.0, d)));

@@ -58,7 +58,9 @@ export function airDensity(alt) {
 export function maxPower(r) {
   // au-dessus de CP, limité par la réserve W' ; fringale et déshydratation
   const reserve = Math.max(0, r.wbal / r.wPrime);
-  return r.cp * (0.95 + 1.6 * Math.min(1, reserve * 1.4)) * (r.fuel ? fuelFactor(r) : 1);
+  // caféine : environ 3 % de puissance en plus pendant 45 min
+  const caf = r.fuel && r.fuel.caf > 0 ? 1.03 : 1;
+  return r.cp * (0.95 + 1.6 * Math.min(1, reserve * 1.4)) * (r.fuel ? fuelFactor(r) : 1) * caf;
 }
 
 // ------------------------------------------------------------ ravitaillement
@@ -66,15 +68,27 @@ export function maxPower(r) {
 // bidons (mL) et poches. Un coureur brûle surtout des glucides au-dessus de
 // ~75 % de son seuil ; l'intestin n'en absorbe qu'environ 75 g/h ; on perd
 // 0,4 à 1,4 L de sueur par heure selon l'effort et la chaleur.
-export function makeFuel(mass, heat = 1) {
+// kit : inventaire (bidons, poches) choisi avant le départ
+export function makeFuel(mass, heat = 1, kit = null) {
+  const b = kit ? kit.bottles : [{ size: 500, drink: "iso" }, { size: 500, drink: "iso" }];
   return {
     gly: 380, glyMax: 500, gut: 0,
     deficit: 0, // litres perdus et non compensés
     heat,
-    bottles: [500, 500], // mL dans chaque bidon (500 mL pleins)
-    bars: 2, gels: 2,
+    bottles: b.map((x) => x.size), // mL dans chaque bidon
+    cap: b.map((x) => x.size), // contenance
+    iso: b.map((x) => x.drink !== "eau"), // boisson isotonique (40 g/L) ou eau
+    bars: kit ? kit.bars : 2, gels: kit ? kit.gels : 2, cafGels: kit ? kit.cafGels : 0,
+    caf: 0, // effet de la caféine restant (s)
     mass,
   };
+}
+
+// remplit les bidons à leur contenance ; iso : boisson isotonique (voiture,
+// musette) ou eau (fontaine)
+export function refill(f, iso) {
+  f.bottles = f.cap.slice();
+  f.iso = f.cap.map(() => iso);
 }
 
 export function fuelFactor(r) {
@@ -96,11 +110,13 @@ function fuelStep(r, dt) {
   f.gut -= absorb;
   f.gly = Math.min(f.glyMax, f.gly + absorb);
   f.deficit += ((0.35 + 0.9 * Math.min(1.4, r.power / r.cp)) * f.heat / 3600) * dt;
+  if (f.caf > 0) f.caf -= dt;
 }
 
-// actions : "bar" (40 g), "gel" (25 g), "drink" (150 mL)
+// actions : "bar" (40 g), "gel" (25 g), "caf" (gel caféiné), "drink" (150 mL)
 export function eat(r, what) {
   const f = r.fuel;
+  if (what === "caf" && f.cafGels > 0) { f.cafGels--; f.gut += 25; f.gly = Math.min(f.glyMax, f.gly + 6); f.caf = 45 * 60; return "Gel caféiné : +25 g, et un coup de fouet pour 45 min"; }
   if (what === "bar" && f.bars > 0) { f.bars--; f.gut += 40; return "Barre énergétique : +40 g de glucides"; }
   if (what === "gel" && f.gels > 0) { f.gels--; f.gut += 25; f.gly = Math.min(f.glyMax, f.gly + 6); return "Gel : +25 g de glucides, rapide"; }
   if (what === "drink") {
@@ -109,7 +125,7 @@ export function eat(r, what) {
     const ml = Math.min(150, f.bottles[i]);
     f.bottles[i] -= ml;
     f.deficit = Math.max(-0.3, f.deficit - ml / 1000);
-    f.gut += ml * 0.04; // boisson isotonique : 40 g/L
+    if (f.iso[i]) f.gut += ml * 0.04; // boisson isotonique : 40 g/L
     return `Une gorgée : ${ml} mL`;
   }
   return null;
@@ -170,13 +186,14 @@ export function step(r, route, env, dt) {
   // descente 0,22 ; en contre-la-montre allongé sur les prolongateurs 0,245
   let cda = r.tuck ? 0.22 : r.posture > 0 ? 0.36 : 0.32;
   if (r.bike === "clm" && !r.tuck) cda = r.posture > 0 ? 0.35 : 0.245;
+  cda *= r.cdaK || 1; // roues
   cda *= 1 - r.draft;
   const rho = airDensity(p.y);
   const head = env.windX * p.dx + env.windZ * p.dz; // composante du vent dans le sens de marche
   const vAir = r.v - head;
   const fAero = 0.5 * rho * cda * vAir * Math.abs(vAir);
   const fGrav = m * G * Math.sin(theta);
-  const fRoll = (r.free ? r.free.crr : r.offRoad ? 0.02 : CRR) * (env.wet ? 1.08 : 1) * m * G * Math.cos(theta);
+  const fRoll = (r.free ? r.free.crr : r.offRoad ? 0.02 : CRR) * (env.wet ? 1.08 : 1) * (r.crrK || 1) * m * G * Math.cos(theta);
   const fPedal = (r.power * ETA) / Math.max(r.v, 1.5);
   // freinage limité par l'adhérence : 6,5 m/s² au sec, 4,6 sur route mouillée
   let fBrake = r.brake * m * (env.wet ? 4.6 : 6.5);

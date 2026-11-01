@@ -6,12 +6,14 @@ import { Ground, routeLine, networkLine, makeRoadMaterials, buildRoutes, Network
 import { RoadIndex, Forest, Streamer, buildBuildings, buildLandmarks, buildSky, buildRain, textSign, signPost, gantry, Crowd, roadPaint } from "./scenery.js";
 import { Route, townCrossings, townAt } from "./route.js";
 import { RiderModel } from "./rider.js";
-import { makeRider, step, computeDrafts, aiThink, assignChains, gearLabel, G, makeFuel, eat } from "./physics.js";
+import { makeRider, step, computeDrafts, aiThink, assignChains, gearLabel, G, makeFuel, eat, refill } from "./physics.js";
+import { normKit, applyKit, kitMass, kitCarbs, kitLiquid, WHEELS, TYRES, POCKETS } from "./kit.js";
 import { makeField, PelotonView, Convoy, groups } from "./race.js";
 import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
 import { Traffic } from "./traffic.js";
-import { CHARACTERS, characterById, paletteOf, renderPortraits, Coverflow } from "./characters.js";
+import { HdOrtho } from "./hdortho.js";
+import { ROSTER, setCustomCharacters, characterById, paletteOf, renderPortraits, Coverflow, CharacterEditor } from "./characters.js";
 import { Net, WsNet, netSupported, findServer } from "./net.js";
 
 const $ = (id) => document.getElementById(id);
@@ -28,7 +30,7 @@ const DEFAULTS = {
   route: "grand-ballon-willer", reverse: false, mode: "race",
   mass: 72, ftp: 230, jersey: "#d8323c", level: "amateur", bike: "route", field: 40,
   time: "matin", weather: "beau", wind: "none", timescale: 1,
-  quality: "auto", sound: true, character: "perso", pseudo: "",
+  quality: "auto", sound: true, character: "perso", pseudo: "", hdPhoto: true, customChars: [], kit: null,
 };
 const settings = { ...DEFAULTS, ...readLS("vv-settings", {}) };
 function readLS(k, def) { try { return JSON.parse(localStorage.getItem(k)) ?? def; } catch { return def; } }
@@ -40,10 +42,13 @@ const saveSettings = () => writeLS("vv-settings", settings);
 const QUALITY = {
   bas: { traffic: 4, nearRiders: 5, netR: 750, budget: 5, treeNear: 90, mask: 4096, discard: 520, pr: 0.85, lod: 0.5, trees: 90, treeDist: 320, density: 0.5, bDist: 450, bRadius: 180, ortho: 2048, outer: 1024, shadow: 0, fogFar: 15000 },
   moyen: { traffic: 7, nearRiders: 9, netR: 1100, budget: 7, treeNear: 150, mask: 4096, discard: 880, pr: 1, lod: 0.85, trees: 170, treeDist: 700, density: 0.8, bDist: 1300, bRadius: 300, ortho: 4096, outer: 2048, shadow: 1024, fogFar: 42000 },
-  eleve: { traffic: 10, nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
+  ultra: { traffic: 14, nearRiders: 20, netR: 2200, budget: 12, treeNear: 260, mask: 4096, discard: 1800, pr: 2, lod: 1.8, trees: 320, treeDist: 1500, density: 1.25, bDist: 3500, bRadius: 600, ortho: 4096, outer: 2048, shadow: 4096, fogFar: 42000, hd: true, hi: true },
+  eleve: { hd: true, traffic: 10, nearRiders: 14, netR: 1500, budget: 9, treeNear: 230, mask: 4096, discard: 1260, pr: 1.5, lod: 1.25, trees: 240, treeDist: 1100, density: 1, bDist: 2600, bRadius: 400, ortho: 4096, outer: 2048, shadow: 2048, fogFar: 42000 },
 };
 
 // carte graphique : les modèles anciens ou à peu de mémoire passent en « bas »
+// banc d'essai : résolution et ombres réduites pour le rendu logiciel
+if (window.__vvQualityOverride) for (const k in QUALITY) Object.assign(QUALITY[k], window.__vvQualityOverride);
 function detectGpu() {
   try {
     const gl = document.createElement("canvas").getContext("webgl");
@@ -53,13 +58,14 @@ function detectGpu() {
     const weak =
       /Radeon (HD )?[2-7]\d{3}|Radeon (X|R[5-9] M?2)|FirePro|Intel.*(HD|GMA|Iris)( Graphics)? ?(\d{3,4})?\b|GeForce (\d{3}M?|G[T]?S? ?[1-7]\d{2}M?)\b|Quadro|Mali|Adreno|PowerVR|SwiftShader|llvmpipe|Software/i.test(name) &&
       !/Iris (Pro|Xe)|Intel.*(UHD|Arc)/i.test(name);
-    return { name, weak };
+    const strong = /RTX|RX ?[5-9]\d{3}|Radeon (RX )?(6|7|9)\d{3}|Arc A|Apple M\d|GeForce GTX (10[6-8]|16)/i.test(name);
+    return { name, weak, strong };
   } catch {
     return { name: "", weak: true };
   }
 }
 const GPU = detectGpu();
-let autoTier = GPU.weak ? "bas" : "moyen";
+let autoTier = GPU.weak ? "bas" : GPU.strong ? "ultra" : "moyen";
 const qKey = () => (settings.quality === "auto" ? autoTier : settings.quality);
 
 const DEST = {
@@ -128,6 +134,8 @@ const sound = new Sound();
 sound.setEnabled(settings.sound);
 
 let spawnMap, miniMap, bigMap;
+let hd = null;
+function applyHd() { if (hd) hd.setEnabled(!!settings.hdPhoto && !!QUALITY[qKey()].hd); }
 let D, hf, ground, roads, roadMats, terrain, forest, roadIndex, netStream, buildStream, treeStream, signs = new THREE.Group();
 // distance (m) jusqu'à laquelle le relief grossier est masqué le long des routes
 const discardU = { value: 1600 };
@@ -184,14 +192,15 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     const mask = ground.buildMask(Q.mask);
     const veg = new THREE.Texture(D.vegImage);
     veg.needsUpdate = true;
-    const mat = makeTerrainMaterial(D.ortho, Q.ortho, renderer, { mask, veg, maskRange: MASK_RANGE, discard: DISCARD, discardDist: discardU });
+    hd = new HdOrtho(D.meta);
+    const mat = makeTerrainMaterial(D.ortho, Q.ortho, renderer, { mask, veg, maskRange: MASK_RANGE, discard: DISCARD, discardDist: discardU, hd: hd.uniforms });
     terrain = new Terrain(hf, mat);
     scene.add(terrain.group);
     scene.add(buildOuterTerrain(D.outerMeta, D.outer, hf, makeTerrainMaterial(D.outerImg, QUALITY[qKey()].outer, renderer)));
     $("loadbar").style.width = "70%";
     $("loadmsg").textContent = "Routes et bâtiments…";
     await frame();
-    roadMats = makeRoadMaterials(makeTerrainMaterial(D.ortho, Q.ortho, renderer, { texture: mat.map, veg }), renderer);
+    roadMats = makeRoadMaterials(makeTerrainMaterial(D.ortho, Q.ortho, renderer, { texture: mat.map, veg, hd: hd.uniforms }), renderer, !!Q.hi);
     roads = buildRoutes(ground, routeLines.length, roadMats);
     scene.add(roads.group);
     // rues, routes et pistes cyclables, bâtiments, arbres : par cases autour du cycliste
@@ -212,18 +221,19 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     $("loadbar").style.width = "85%";
     $("loadmsg").textContent = "Plantation des sapins…";
     await frame();
-    forest = new Forest(D, ground);
+    forest = new Forest(D, ground, { hi: !!Q.hi });
     treeStream = new Streamer(250, (i, j) => forest.buildCell(i, j, 250, QUALITY[qKey()].density));
     scene.add(treeStream.group);
     $("credits").textContent = D.meta.attribution;
     applyConditions();
     applyShadows();
+    applyHd();
     buildMenu();
     selectRoute(settings.route, settings.reverse);
     $("loading").hidden = true;
     showMenu();
     requestAnimationFrame(loop);
-    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, placePlayerFree, rideCamera, poseRiders, startRide, selectRoute, streamWorld, applyConditions, D };
+    window.__vv = { THREE, scene, camera, game, hf, ground, terrain, renderer, settings, simulate, keys, look, placePlayerOnRoad, placePlayerFree, rideCamera, poseRiders, startRide, selectRoute, streamWorld, applyConditions, hd, D };
   } catch (e) {
     console.error(e);
     $("loadmsg").textContent = "Erreur de chargement : " + e.message;
@@ -601,12 +611,18 @@ function buildMenu() {
   w.appendChild(wn);
 
   const g = $("opts-gfx");
-  seg(g, "Graphismes", "quality", [["auto", "Auto"], ["bas", "Bas"], ["moyen", "Moyen"], ["eleve", "Élevé"]], () => {
+  seg(g, "Graphismes", "quality", [["auto", "Auto"], ["bas", "Bas"], ["moyen", "Moyen"], ["eleve", "Élevé"], ["ultra", "Ultra"]], () => {
     pixelRatio = Math.min(devicePixelRatio, QUALITY[qKey()].pr);
     renderer.setPixelRatio(pixelRatio);
     treeStream.clear();
     applyShadows();
+    applyHd();
   });
+  seg(g, "Photos aériennes HD", "hdPhoto", [[true, "En ligne"], [false, "Non"]], applyHd);
+  const hn = document.createElement("p");
+  hn.className = "opt-note";
+  hn.textContent = "Qualité Élevé et Ultra : photos IGN à 40 cm par pixel chargées en continu autour du coureur (connexion internet nécessaire), au lieu de la photo intégrée à 5 m. Ultra : sapins et feuillus détaillés, route plus fine, ombres 4096, horizon plus dense ; pour une carte graphique récente. Le changement des arbres et de la route prend effet au prochain lancement.";
+  g.appendChild(hn);
   seg(g, "Son", "sound", [[true, "Oui"], [false, "Non"]], (v) => sound.setEnabled(v));
   const gn = document.createElement("p");
   gn.className = "opt-note";
@@ -614,6 +630,7 @@ function buildMenu() {
   g.appendChild(gn);
 
   buildMp();
+  buildInventory();
   $("go").onclick = () => {
     if (net.role === "guest" && net.connected) return;
     sound.start();
@@ -948,12 +965,13 @@ function drawProfileMarkers(g, route, riders, X, Y) {
 
 // ------------------------------------------------------------ personnages
 let coverflow = null;
+let editor = null;
 function buildCharacters(container) {
+  setCustomCharacters(settings.customChars);
   const box = document.createElement("div");
   box.className = "chars";
-  box.innerHTML = `<div class="cf-host"></div><div class="char-info"><h3></h3><p></p><div class="char-stats"></div></div>`;
+  box.innerHTML = `<div class="cf-host"></div><div class="char-info"><h3></h3><p></p><div class="char-stats"></div><div class="char-btns"><button class="mp-btn small cr-new">＋ Créer un personnage</button><button class="mp-btn small cr-edit" hidden>Modifier</button><button class="mp-btn small ghost cr-del" hidden>Supprimer</button></div></div>`;
   container.appendChild(box);
-  const idx = Math.max(0, CHARACTERS.findIndex((c) => c.id === settings.character));
   // le personnage choisi impose son poids et sa puissance
   const c0 = characterById(settings.character);
   if (!c0.custom) { settings.mass = c0.mass; settings.ftp = c0.ftp; }
@@ -968,27 +986,125 @@ function buildCharacters(container) {
       stat("Seuil (FTP)", `${settings.ftp} W`, (settings.ftp - 120) / 2.6) +
       stat("Grimpe (W/kg)", fmt1(wkg), (wkg - 2) * 28) +
       stat("Explosivité (W′)", `${Math.round(c.wp / 1000)} kJ`, (c.wp - 12000) / 200);
+    box.querySelector(".cr-edit").hidden = box.querySelector(".cr-del").hidden = !c.user;
   };
-  coverflow = new Coverflow(box.querySelector(".cf-host"), CHARACTERS, idx, (c) => {
-    settings.character = c.id;
-    if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
-    saveSettings();
-    rangeRefresh.mass?.();
-    rangeRefresh.ftp?.();
-    info();
-    if (net.active) net.updateMe(myInfo());
-  });
+  let portraits = false;
+  const mount = () => {
+    const idx = Math.max(0, ROSTER.findIndex((c) => c.id === settings.character));
+    coverflow = new Coverflow(box.querySelector(".cf-host"), ROSTER, idx, (c) => {
+      settings.character = c.id;
+      if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
+      saveSettings();
+      rangeRefresh.mass?.();
+      rangeRefresh.ftp?.();
+      info();
+      if (net.active) net.updateMe(myInfo());
+    });
+    if (portraits) coverflow.setImages(renderPortraits(ROSTER, settings.jersey));
+  };
+  mount();
   game.charInfo = info;
   info();
   // portraits rendus quand l'onglet s'ouvre (le contexte WebGL temporaire
   // ne coûte rien tant qu'on ne regarde pas les personnages)
-  let done = false;
   const tab = document.querySelector('#tabs [data-tab="rider"]');
   tab.addEventListener("click", () => {
-    if (done) return;
-    done = true;
-    setTimeout(() => coverflow.setImages(renderPortraits(CHARACTERS, settings.jersey)), 30);
+    if (portraits) return;
+    portraits = true;
+    setTimeout(() => coverflow.setImages(renderPortraits(ROSTER, settings.jersey)), 30);
   });
+  const select = (id) => {
+    setCustomCharacters(settings.customChars);
+    settings.character = id;
+    const c = characterById(id);
+    if (!c.custom) { settings.mass = c.mass; settings.ftp = c.ftp; }
+    saveSettings();
+    mount();
+    rangeRefresh.mass?.();
+    rangeRefresh.ftp?.();
+    info();
+    if (net.active) net.updateMe(myInfo());
+  };
+  editor = editor || new CharacterEditor((c) => {
+    const list = (settings.customChars || []).filter((x) => x.id !== c.id);
+    list.push(c);
+    settings.customChars = list;
+    select(c.id);
+  });
+  box.querySelector(".cr-new").onclick = () => editor.open(null, { mass: settings.mass, ftp: settings.ftp });
+  box.querySelector(".cr-edit").onclick = () => editor.open(characterById(settings.character));
+  box.querySelector(".cr-del").onclick = () => {
+    const c = characterById(settings.character);
+    if (!c.user || !confirm(`Supprimer ${c.name} ?`)) return;
+    settings.customChars = (settings.customChars || []).filter((x) => x.id !== c.id);
+    select("perso");
+  };
+}
+
+// ------------------------------------------------------------ inventaire
+function buildInventory() {
+  const el = $("opts-kit");
+  const kit = (settings.kit = normKit(settings.kit));
+  const save = () => { settings.kit = normKit(kit); saveSettings(); render(); };
+  const segH = (opts, cur, onPick) => `<div class="seg">${opts.map(([v, l]) => `<button data-v="${v}" class="${String(v) === String(cur) ? "on" : ""}">${l}</button>`).join("")}</div>`;
+  const render = () => {
+    const cages = [0, 1].map((i) => {
+      const b = kit.bottles[i];
+      return `<div class="kit-card" data-cage="${i}"><div class="kit-ico bottle ${b ? (b.drink === "eau" ? "eau" : "iso") : "none"} ${b && b.size === 750 ? "big" : ""}"></div>
+        <div><b>Porte-bidon ${i + 1}</b>${segH([["0", "Vide"], ["500", "500 mL"], ["750", "750 mL"]], b ? b.size : 0)}
+        ${b ? segH([["iso", "Isotonique"], ["eau", "Eau"]], b.drink) : ""}</div></div>`;
+    }).join("");
+    const used = kit.bars + kit.gels + kit.cafGels;
+    const slots = [];
+    for (let i = 0; i < POCKETS; i++) slots.push(`<i class="${i < kit.bars ? "bar" : i < kit.bars + kit.gels ? "gel" : i < used ? "caf" : ""}"></i>`);
+    const row = (k, label, sub) => `<div class="kit-row"><span><b>${label}</b><small>${sub}</small></span><div class="kit-count"><button data-k="${k}" data-d="-1">−</button><b>${kit[k]}</b><button data-k="${k}" data-d="1" ${used >= POCKETS ? "disabled" : ""}>+</button></div></div>`;
+    const ftp = settings.ftp, P = 0.7 * ftp;
+    const burn = (((P / 0.23 + 90) * Math.min(1, 0.25 + 0.75 * 0.7)) / 17000) * 3600; // g/h
+    const carbs = kitCarbs(kit), liquid = kitLiquid(kit);
+    const autoC = (320 + carbs) / Math.max(1, burn), autoL = liquid / 1000 / (0.35 + 0.9 * 0.7) + 0.6;
+    const hm = (h) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+    const W = WHEELS[kit.wheels], T = TYRES[kit.tyres];
+    el.innerHTML = `
+      <h3 class="kit-h">Porte-bidons</h3><div class="kit-cages">${cages}</div>
+      <h3 class="kit-h">Poches du maillot <small>${used} / ${POCKETS}</small></h3>
+      <div class="kit-slots">${slots.join("")}</div>
+      ${row("bars", "Barres", "40 g de glucides, lentes · touche 1")}
+      ${row("gels", "Gels", "25 g, rapides · touche 2")}
+      ${row("cafGels", "Gels caféinés", "25 g et +3 % de puissance pendant 45 min · touche 4")}
+      <h3 class="kit-h">Matériel</h3>
+      <div class="opt"><label>Roues</label>${segH(Object.entries(WHEELS).map(([k, w]) => [k, w.name]), kit.wheels)}</div>
+      <p class="opt-note kit-wheels">${W.text}.</p>
+      <div class="opt"><label>Pneus</label>${segH(Object.entries(TYRES).map(([k, t]) => [k, t.name]), kit.tyres)}</div>
+      <p class="opt-note kit-tyres">${T.text}.</p>
+      <div class="kit-sum">
+        <div><small>Masse emportée</small><b>${fmt1(kitMass(kit))} kg</b></div>
+        <div><small>Glucides</small><b>${fmtInt(carbs)} g</b></div>
+        <div><small>Boisson</small><b>${fmt1(liquid / 1000)} L</b></div>
+        <div><small>Autonomie (~70 % FTP)</small><b>${hm(Math.min(autoC, autoL))}</b></div>
+        <div><small>Traînée</small><b>${W.cda < 1 ? "−" + fmtInt((1 - W.cda) * 100) + " %" : "réf."}</b></div>
+        <div><small>Roulement</small><b>${T.crr !== 1 ? (T.crr < 1 ? "−" : "+") + fmtInt(Math.abs(1 - T.crr) * 100) + " %" : "réf."}</b></div>
+        <div><small>Adhérence mouillé</small><b>${T.wet > 1 ? "+" + fmtInt((T.wet - 1) * 100) + " %" : "réf."}</b></div>
+      </div>
+      <p class="opt-note">La voiture d'équipe et la musette remplissent les bidons de boisson isotonique, la fontaine d'eau. Les poches se rechargent aussi à la voiture.</p>`;
+    el.querySelectorAll(".kit-card").forEach((card) => {
+      const i = Number(card.dataset.cage);
+      const [sz, dr] = card.querySelectorAll(".seg");
+      sz.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+        const v = Number(b.dataset.v);
+        if (!v) kit.bottles.splice(i, 1);
+        else if (kit.bottles[i]) kit.bottles[i].size = v;
+        else kit.bottles.push({ size: v, drink: "iso" });
+        save();
+      }));
+      if (dr) dr.querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.bottles[i].drink = b.dataset.v; save(); }));
+    });
+    el.querySelectorAll(".kit-count button").forEach((b) => (b.onclick = () => { kit[b.dataset.k] = Math.max(0, kit[b.dataset.k] + Number(b.dataset.d)); save(); }));
+    const segs = el.querySelectorAll(":scope > .opt .seg");
+    segs[0].querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.wheels = b.dataset.v; save(); }));
+    segs[1].querySelectorAll("button").forEach((b) => (b.onclick = () => { kit.tyres = b.dataset.v; save(); }));
+  };
+  render();
+  game.kitRender = render;
 }
 
 // ------------------------------------------------------------ multijoueur
@@ -1255,7 +1371,11 @@ function startRide() {
   const ch = characterById(settings.character);
   const pal = paletteOf(ch, settings.jersey);
   const player = makeRider({ name: "Vous", isPlayer: true, mass: settings.mass, ftp: settings.ftp, wPrime: ch.wp, o: 1.3, s: START_S, bike: settings.bike });
-  player.fuel = makeFuel(settings.mass, { matin: 0.85, midi: 1.25, soir: 1.0 }[settings.time] * (game.wet ? 0.75 : 1));
+  const kit = normKit(settings.kit);
+  player.fuel = makeFuel(settings.mass, { matin: 0.85, midi: 1.25, soir: 1.0 }[settings.time] * (game.wet ? 0.75 : 1), kit);
+  applyKit(player, kit);
+  // bidons et poches pèsent aussi (le cadre et les roues sont dans applyKit)
+  player.bikeMass += kitMass(kit) - WHEELS[kit.wheels].mass - TYRES[kit.tyres].mass;
   player.target = Math.round(settings.ftp * 0.7 / 5) * 5;
   player.color = pal.jersey;
   game.free = settings.mode === "open";
@@ -1451,11 +1571,11 @@ addEventListener("keydown", (e) => {
   const L = (e.key || "").toLowerCase();
   if (L === "x" && p) p.tuck = !p.tuck;
   if (p && p.fuel && game.state === "ride") {
-    const act = { "1": "bar", "2": "gel", "3": "drink", "&": "bar", "é": "gel", '"': "drink" }[e.key] || ({ Numpad1: "bar", Numpad2: "gel", Numpad3: "drink" })[e.code];
+    const act = { "1": "bar", "2": "gel", "3": "drink", "4": "caf", "&": "bar", "é": "gel", '"': "drink", "'": "caf" }[e.key] || ({ Numpad1: "bar", Numpad2: "gel", Numpad3: "drink", Numpad4: "caf" })[e.code];
     if (act) {
       const msg = eat(p, act);
       if (msg) { toast(msg, 2); if (game.playerModel) game.playerModel.feed = act === "drink" ? 1.2 : 1.8; }
-      else toast(act === "drink" ? "Bidons vides" : act === "bar" ? "Plus de barres" : "Plus de gels", 2);
+      else toast(act === "drink" ? "Bidons vides" : act === "bar" ? "Plus de barres" : act === "caf" ? "Plus de gels caféinés" : "Plus de gels", 2);
     }
     if (L === "v" && game.convoy && !game.convoy.tt) {
       if (game.callCool > 0) toast("La voiture d'équipe est déjà en route", 2);
@@ -1463,9 +1583,9 @@ addEventListener("keydown", (e) => {
         game.callCool = 45;
         toast("Voiture d'équipe appelée : elle remonte jusqu'à vous", 2.5);
         game.convoy.call(() => {
-          p.fuel.bottles = [500, 500];
-          p.fuel.bars = Math.min(4, p.fuel.bars + 1);
-          p.fuel.gels = Math.min(4, p.fuel.gels + 1);
+          refill(p.fuel, true);
+          p.fuel.bars = Math.min(POCKETS, p.fuel.bars + 1);
+          p.fuel.gels = Math.min(POCKETS, p.fuel.gels + 1);
           if (game.playerModel) game.playerModel.feed = 1.5;
           toast("Voiture d'équipe : 2 bidons pleins, 1 barre, 1 gel", 3);
         });
@@ -1474,13 +1594,13 @@ addEventListener("keydown", (e) => {
     if (L === "f") {
       if (game.inFeed && !game.gotMusette) {
         game.gotMusette = true;
-        p.fuel.bottles = [500, 500];
-        p.fuel.bars = Math.min(4, p.fuel.bars + 2);
-        p.fuel.gels = Math.min(4, p.fuel.gels + 1);
+        refill(p.fuel, true);
+        p.fuel.bars = Math.min(POCKETS, p.fuel.bars + 2);
+        p.fuel.gels = Math.min(POCKETS, p.fuel.gels + 1);
         if (game.playerModel) game.playerModel.feed = 1.5;
         toast("Musette attrapée : 2 bidons, 2 barres, 1 gel", 3);
       } else if (game.free && p.v < 1.5 && placeNames(p.x, p.z).town) {
-        p.fuel.bottles = [500, 500];
+        refill(p.fuel, false);
         toast("Fontaine du village : bidons remplis", 2.5);
       } else if (game.free) toast("Arrêtez-vous dans un village pour remplir vos bidons à la fontaine", 2.5);
     }
@@ -1663,7 +1783,7 @@ function movePlayer(p, dt) {
   p.offRoad = g0.surf > 0;
   // adhérence
   // route mouillée : adhérence de l'enrobé réduite d'un quart environ
-  const mu = MU[g0.surf] * (game.wet ? (g0.surf === 0 ? 0.74 : 0.85) : settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1);
+  const mu = MU[g0.surf] * (game.wet ? (g0.surf === 0 ? 0.74 : 0.85) * (p.wetGripK || 1) : (settings.weather === "brouillard" && g0.surf === 0 ? 0.85 : 1) * (p.gripK || 1));
   p.latG = v > 3 ? Math.abs(Math.tan(p.lean)) : 0;
   if (p.latG > mu) crash(p, g0.surf ? "Chute ! Le vélo a glissé hors de la route" : "Chute ! Trop penché, la roue a glissé");
   else if (p.latG > mu * 0.8) warn(`Limite d'adhérence · ${Math.round((Math.abs(p.lean) * 180) / Math.PI)}°`, "red");
@@ -1769,6 +1889,7 @@ function loop(now) {
   terrain.update(camera.position, q.lod);
   streamWorld(q.budget);
   forest.update(camera.position, q.treeNear);
+  hd.update(focus0().x, focus0().z, dtReal);
   sky.position.copy(camera.position);
   sky.material.uniforms.time.value = now / 1000;
   if (rain.visible) {
@@ -1786,6 +1907,7 @@ function loop(now) {
   renderer.render(scene, camera);
 }
 
+const focus0 = () => (game.player && game.state !== "menu" ? game.player : camera.position);
 // point autour duquel le monde est construit : le cycliste, sinon la caméra
 function streamWorld(budget) {
   const q = QUALITY[qKey()];
@@ -1805,8 +1927,11 @@ function autoQuality(dt) {
   const maxPr = Math.min(devicePixelRatio, QUALITY[autoTier].pr);
   // toujours trop lent à basse résolution : on passe au niveau inférieur
   if (fps < 28 && pixelRatio <= 0.6 && autoTier !== "bas") {
-    autoTier = "bas";
+    autoTier = { ultra: "eleve", eleve: "moyen", moyen: "bas" }[autoTier] || "bas";
+    pixelRatio = Math.min(devicePixelRatio, QUALITY[autoTier].pr);
+    renderer.setPixelRatio(pixelRatio);
     applyShadows();
+    applyHd();
     treeStream.clear();
     return;
   }
@@ -2131,7 +2256,7 @@ function updateHud(dt) {
     $("h-gly").style.width = `${(f.gly / f.glyMax) * 100}%`;
     $("h-hyd").style.width = `${hyd * 100}%`;
     const ml = f.bottles.reduce((a, b) => a + b, 0);
-    $("h-pockets").innerHTML = `<b>${f.bars}</b> barres (1) · <b>${f.gels}</b> gels (2) · <b>${(ml / 1000).toFixed(1).replace(".", ",")} L</b> (3)${game.convoy && !game.convoy.tt ? " · voiture (V)" : ""}`;
+    $("h-pockets").innerHTML = `<b>${f.bars}</b> barres (1) · <b>${f.gels}</b> gels (2) · <b>${(ml / 1000).toFixed(1).replace(".", ",")} L</b> (3)${f.cafGels ? ` · <b>${f.cafGels}</b> caféinés (4)` : ""}${f.caf > 0 ? " · caféine" : ""}${game.convoy && !game.convoy.tt ? " · voiture (V)" : ""}`;
     if (f.gly / f.glyMax < 0.12) warn("Fringale ! Mangez (1 ou 2)", "red");
     else if ((f.deficit / f.mass) * 100 > 2) warn("Déshydratation : buvez (3)", "amber");
   }

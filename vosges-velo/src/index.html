@@ -30,6 +30,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="routes" class="on">Parcours</button>
       <button data-tab="rider">Coureur</button>
+      <button data-tab="kit">Inventaire</button>
       <button data-tab="world">Conditions</button>
       <button data-tab="mp">Multijoueur</button>
       <button data-tab="gfx">Réglages</button>
@@ -55,6 +56,7 @@
         <div id="opts-routes"></div>
       </section>
       <section data-panel="rider" hidden><div id="opts-rider"></div></section>
+      <section data-panel="kit" hidden><div id="opts-kit" class="kit"></div></section>
       <section data-panel="world" hidden><div id="opts-world"></div></section>
       <section data-panel="mp" hidden>
         <div class="opt"><label>Pseudo</label><input id="mp-name" class="mp-name" maxlength="16" placeholder="Votre nom en course"></div>
@@ -101,7 +103,7 @@
             <dt>Souris</dt><dd>Regarder autour (clic pour capturer, Échap pour libérer)</dd>
             <dt>R / double-clic</dt><dd>Recentrer le regard</dd>
             <dt>Molette</dt><dd>Zoomer / dézoomer la caméra (ou la carte sous la souris)</dd>
-            <dt>1 / 2 / 3</dt><dd>Manger une barre / prendre un gel / boire une gorgée</dd>
+            <dt>1 / 2 / 3 / 4</dt><dd>Manger une barre / prendre un gel / boire une gorgée / gel caféiné</dd>
             <dt>V</dt><dd>Appeler la voiture d'équipe (course) : bidons et ravitaillement</dd>
             <dt>F</dt><dd>Attraper une musette (zone de ravitaillement) ou remplir ses bidons à une fontaine (village, à l'arrêt)</dd>
             <dt>M</dt><dd>Carte : petite → grande → masquée</dd>

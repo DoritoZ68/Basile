@@ -22,7 +22,18 @@ export const CHARACTERS = [
   { id: "perso", name: "Personnalisé", style: "Votre réglage", text: "Votre poids, votre puissance seuil et votre maillot (réglages ci-dessous).", custom: true, wp: 20000, height: 1.0, palette: {} },
 ];
 
-export const characterById = (id) => CHARACTERS.find((c) => c.id === id) || CHARACTERS[CHARACTERS.length - 1];
+// liste affichée : personnages fournis, ceux créés par le joueur, puis
+// « Personnalisé »
+export const ROSTER = CHARACTERS.slice();
+export function setCustomCharacters(list) {
+  ROSTER.length = 0;
+  ROSTER.push(...CHARACTERS.filter((c) => !c.custom), ...(list || []).map((c) => ({ ...c, user: true })), CHARACTERS.find((c) => c.custom));
+}
+export const characterById = (id) => ROSTER.find((c) => c.id === id) || ROSTER[ROSTER.length - 1];
+
+// profils du créateur : réserve anaérobie W′ (J)
+export const PROFILES = [["grimpeur", "Grimpeur", 17000], ["rouleur", "Rouleur", 22000], ["sprinteur", "Sprinteur", 30000], ["puncheur", "Puncheur", 24000], ["complet", "Complet", 20000]];
+export const SKINS = ["#f6d3b8", "#f1c6a6", "#e0b08f", "#c99272", "#8d5a3b", "#5e3a26"];
 
 // palette effective : celle du personnage, ou le maillot choisi pour
 // « Personnalisé »
@@ -129,5 +140,144 @@ export class Coverflow {
       c.classList.toggle("on", d === 0);
       c.tabIndex = d === 0 ? 0 : -1;
     });
+  }
+}
+
+// ------------------------------------------------------------ créateur
+// Fenêtre d'édition : aperçu 3D qui tourne (contexte WebGL ouvert pendant
+// l'édition seulement), nom, profil, taille, poids, seuil et couleurs de
+// chaque pièce (maillot, cuissard, casque, chaussures, cadre, peau).
+export class CharacterEditor {
+  constructor(onSave) {
+    this.onSave = onSave;
+    const el = (this.el = document.createElement("div"));
+    el.className = "screen creator";
+    el.hidden = true;
+    el.innerHTML = `<div class="creator-panel glass">
+      <div class="creator-view"><canvas></canvas><p class="opt-note">Glissez pour tourner le coureur.</p></div>
+      <div class="creator-form">
+        <h2>Créateur de personnage</h2>
+        <div class="opt"><label>Nom</label><input class="cr-name" maxlength="18"></div>
+        <div class="opt"><label>Profil</label><div class="seg cr-profile"></div></div>
+        <div class="opt"><label>Taille</label><div class="range"><input type="range" class="cr-height" min="0.9" max="1.1" step="0.01"><output></output></div></div>
+        <div class="opt"><label>Poids</label><div class="range"><input type="range" class="cr-mass" min="45" max="110" step="1"><output></output></div></div>
+        <div class="opt"><label>Seuil (FTP)</label><div class="range"><input type="range" class="cr-ftp" min="120" max="420" step="5"><output></output></div></div>
+        <div class="opt"><label>Peau</label><div class="swatches cr-skin"></div></div>
+        <div class="cr-colors"></div>
+        <p class="opt-note cr-sum"></p>
+        <div class="creator-btns"><button class="mp-btn ghost cr-cancel">Annuler</button><button class="go cr-save">Enregistrer</button></div>
+      </div></div>`;
+    document.body.appendChild(el);
+    const q = (c) => el.querySelector(c);
+    this.q = q;
+    for (const [id, label] of PROFILES) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.dataset.v = id;
+      b.onclick = () => { this.c.profile = id; this.c.wp = PROFILES.find((p) => p[0] === id)[2]; this.sync(); };
+      q(".cr-profile").appendChild(b);
+    }
+    for (const col of SKINS) {
+      const b = document.createElement("button");
+      b.style.background = col;
+      b.dataset.v = col;
+      b.onclick = () => { this.c.palette.skin = col; this.sync(); };
+      q(".cr-skin").appendChild(b);
+    }
+    const fields = [["jersey", "Maillot"], ["jersey2", "Maillot (bandes)"], ["shorts", "Cuissard"], ["helmet", "Casque"], ["helmet2", "Casque (motif)"], ["shoes", "Chaussures"], ["frame", "Cadre"], ["frame2", "Cadre (déco)"]];
+    for (const [k, label] of fields) {
+      const d = document.createElement("label");
+      d.className = "cr-color";
+      d.innerHTML = `<input type="color" data-k="${k}"><span>${label}</span>`;
+      d.querySelector("input").oninput = (e) => { this.c.palette[k] = e.target.value; this.sync(); };
+      q(".cr-colors").appendChild(d);
+    }
+    for (const k of ["height", "mass", "ftp"]) q(`.cr-${k}`).oninput = (e) => { this.c[k] = Number(e.target.value); this.sync(); };
+    q(".cr-name").oninput = (e) => { this.c.name = e.target.value; };
+    q(".cr-cancel").onclick = () => this.close();
+    q(".cr-save").onclick = () => {
+      const c = this.c;
+      c.name = (c.name || "").trim() || "Mon coureur";
+      c.style = PROFILES.find((p) => p[0] === c.profile)[1];
+      c.text = `Personnage créé : ${c.style.toLowerCase()}, ${Math.round(175 * c.height)} cm.`;
+      this.close();
+      this.onSave({ ...c, palette: { ...c.palette } });
+    };
+    // rotation à la souris ou au doigt
+    let drag = null;
+    const cv = q("canvas");
+    cv.addEventListener("pointerdown", (e) => { drag = e.clientX; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener("pointermove", (e) => { if (drag !== null) { this.rot += (e.clientX - drag) * 0.012; drag = e.clientX; this.spin = false; } });
+    cv.addEventListener("pointerup", () => { drag = null; });
+  }
+
+  // c : personnage à modifier (copie), ou un nouveau à partir de base
+  open(c, base) {
+    this.c = c ? JSON.parse(JSON.stringify(c)) : {
+      id: `u-${Math.random().toString(36).slice(2, 8)}`, name: "", profile: "complet", wp: 20000, height: 1, mass: base?.mass || 70, ftp: base?.ftp || 240,
+      palette: { jersey: "#1f6fd1", jersey2: "#ffffff", shorts: "#1c1c22", skin: SKINS[1], helmet: "#ffffff", helmet2: "#1f6fd1", shoes: "#ffffff", frame: "#202020", frame2: "#1f6fd1" },
+    };
+    if (!this.c.profile) this.c.profile = "complet";
+    this.el.hidden = false;
+    this.q(".cr-name").value = this.c.name;
+    for (const k of ["height", "mass", "ftp"]) this.q(`.cr-${k}`).value = this.c[k];
+    for (const inp of this.el.querySelectorAll(".cr-color input")) inp.value = this.c.palette[inp.dataset.k] || "#ffffff";
+    this.start();
+    this.sync();
+  }
+
+  sync() {
+    const c = this.c, q = this.q;
+    q(".cr-height").nextElementSibling.textContent = `${Math.round(175 * c.height)} cm`;
+    q(".cr-mass").nextElementSibling.textContent = `${c.mass} kg`;
+    q(".cr-ftp").nextElementSibling.textContent = `${c.ftp} W`;
+    for (const b of q(".cr-profile").children) b.classList.toggle("on", b.dataset.v === c.profile);
+    for (const b of q(".cr-skin").children) b.classList.toggle("on", b.dataset.v === c.palette.skin);
+    q(".cr-sum").textContent = `${(c.ftp / c.mass).toFixed(1).replace(".", ",")} W/kg au seuil · réserve anaérobie ${Math.round(c.wp / 1000)} kJ`;
+    if (this.model) { this.model.setPalette(c.palette); this.model.root.scale.setScalar(c.height); }
+  }
+
+  start() {
+    const cv = this.q("canvas");
+    const w = 300, h = 380;
+    cv.width = w * Math.min(2, devicePixelRatio); cv.height = h * Math.min(2, devicePixelRatio);
+    cv.style.width = w + "px"; cv.style.height = h + "px";
+    try { this.r = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); } catch { return; }
+    this.r.setPixelRatio(Math.min(2, devicePixelRatio));
+    this.r.setSize(w, h, false);
+    this.r.toneMapping = THREE.ACESFilmicToneMapping;
+    this.r.toneMappingExposure = 1.2;
+    const scene = (this.scene = new THREE.Scene());
+    scene.add(new THREE.HemisphereLight(0xdfeaff, 0x4a4338, 1.6));
+    const sun = new THREE.DirectionalLight(0xfff1dc, 2.2);
+    sun.position.set(2, 3, 2.5);
+    scene.add(sun);
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(1.4, 40).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0x2c3a33 }));
+    scene.add(ground);
+    this.cam = new THREE.PerspectiveCamera(32, w / h, 0.1, 50);
+    this.cam.position.set(0, 1.25, 3.6);
+    this.cam.lookAt(0, 0.85, 0);
+    this.model = new RiderModel({ palette: this.c.palette, type: "route" });
+    scene.add(this.model.root);
+    this.rot = 0.7;
+    this.spin = true;
+    let last = performance.now();
+    const tick = (now) => {
+      if (this.el.hidden || !this.r) return;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (this.spin) this.rot += dt * 0.5;
+      this.model.root.rotation.y = this.rot;
+      this.model.animate(dt, 7, 80, 0, 0, 0);
+      this.r.render(scene, this.cam);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  close() {
+    this.el.hidden = true;
+    if (this.r) { this.r.dispose(); this.r.forceContextLoss(); this.r = null; }
+    this.model = null;
   }
 }

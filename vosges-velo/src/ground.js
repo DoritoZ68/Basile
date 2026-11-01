@@ -181,8 +181,9 @@ export class Ground {
 // Atlas de 4 revêtements côte à côte (256 px chacun, 13 m de long) :
 // 0 route avec axe et rives, 1 rue sans marquage, 2 piste cyclable,
 // 3 route empierrée
-function roadTexture() {
-  const W = 256, H = 1024;
+// k = 2 en qualité Ultra : texture deux fois plus fine (granulats, fissures)
+function roadTexture(k = 1) {
+  const W = 256 * k, H = 1024 * k;
   const c = document.createElement("canvas");
   c.width = W * 4; c.height = H;
   const g = c.getContext("2d");
@@ -191,18 +192,18 @@ function roadTexture() {
   const asphalt = (x0, base, light) => {
     g.fillStyle = base;
     g.fillRect(x0, 0, W, H);
-    for (let i = 0; i < 22000; i++) {
+    for (let i = 0; i < 22000 * k * k; i++) {
       const v = light + r() * 60;
       g.fillStyle = `rgba(${v},${v},${v + 2},${0.18 + r() * 0.35})`;
       g.fillRect(x0 + r() * W, r() * H, 1 + r() * 2.2, 1 + r() * 2.2);
     }
     g.strokeStyle = "rgba(25,25,25,0.4)";
-    g.lineWidth = 1.2;
+    g.lineWidth = 1.2 * k;
     for (let i = 0; i < 7; i++) {
       let x = x0 + 10 + r() * (W - 20), y = r() * H;
       g.beginPath();
       g.moveTo(x, y);
-      for (let k = 0; k < 8; k++) { x = Math.max(x0 + 2, Math.min(x0 + W - 2, x + (r() - 0.5) * 18)); y += r() * 14; g.lineTo(x, y); }
+      for (let j = 0; j < 8; j++) { x = Math.max(x0 + 2, Math.min(x0 + W - 2, x + (r() - 0.5) * 18 * k)); y += r() * 14 * k; g.lineTo(x, y); }
       g.stroke();
     }
     const grd = g.createLinearGradient(x0, 0, x0 + W, 0);
@@ -220,20 +221,20 @@ function roadTexture() {
   // 0 : route départementale
   asphalt(0, "#58585a", 60);
   g.fillStyle = "rgba(236,236,228,0.92)";
-  g.fillRect(W / 2 - 4, 0, 8, Math.round((H * 3) / 13));
+  g.fillRect(W / 2 - 4 * k, 0, 8 * k, Math.round((H * 3) / 13));
   g.fillStyle = "rgba(232,232,222,0.8)";
-  g.fillRect(9, 0, 5, H);
-  g.fillRect(W - 14, 0, 5, H);
+  g.fillRect(9 * k, 0, 5 * k, H);
+  g.fillRect(W - 14 * k, 0, 5 * k, H);
   // 1 : rue de village
   asphalt(W, "#5d5c5c", 64);
   // 2 : piste cyclable, enrobé plus clair, axe discontinu court
   asphalt(2 * W, "#68676a", 76);
   g.fillStyle = "rgba(236,236,228,0.85)";
-  for (let y = 0; y < H; y += H / 4) g.fillRect(2 * W + W / 2 - 3, y, 6, H / 10);
+  for (let y = 0; y < H; y += H / 4) g.fillRect(2 * W + W / 2 - 3 * k, y, 6 * k, H / 10);
   // 3 : route empierrée (graviers, ornières)
   g.fillStyle = "#8a7e66";
   g.fillRect(3 * W, 0, W, H);
-  for (let i = 0; i < 26000; i++) {
+  for (let i = 0; i < 26000 * k * k; i++) {
     const v = r();
     g.fillStyle = `rgba(${110 + v * 70},${100 + v * 60},${80 + v * 50},${0.35 + r() * 0.4})`;
     g.fillRect(3 * W + r() * W, r() * H, 1 + r() * 3, 1 + r() * 3);
@@ -441,10 +442,10 @@ function pull(mat, k) {
   mat.customProgramCacheKey = () => "pull" + k;
 }
 
-export function makeRoadMaterials(groundMat, renderer) {
+export function makeRoadMaterials(groundMat, renderer, hi = false) {
   // Phong : léger reflet du soleil sur l'enrobé, fort sur route mouillée
-  const road = new THREE.MeshPhongMaterial({ map: roadTexture(), specular: 0x161616, shininess: 14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  road.map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const road = new THREE.MeshPhongMaterial({ map: roadTexture(hi ? 2 : 1), specular: 0x161616, shininess: 14, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  road.map.anisotropy = Math.min(hi ? 16 : 8, renderer.capabilities.getMaxAnisotropy());
   const verge = new THREE.MeshLambertMaterial({ map: vergeTexture(), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   // priorité de profondeur : la chaussée et l'accotement sont rapprochés de la
   // caméra d'une fraction de leur distance (position à l'écran inchangée).

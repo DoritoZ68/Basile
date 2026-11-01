@@ -30,7 +30,7 @@ résolution, puis la qualité, si l'image n'est pas fluide.
 | R / double-clic | Recentrer le regard |
 | Molette | Zoomer / dézoomer (chaque caméra garde son zoom) |
 | Échap / P | Pause |
-| 1 / 2 / 3 | Manger une barre / prendre un gel / boire une gorgée |
+| 1 / 2 / 3 / 4 | Manger une barre / prendre un gel / boire une gorgée / gel caféiné |
 | V | Course : appeler la voiture d'équipe (bidons pleins, barre, gel) |
 | F | Attraper une musette dans la zone de ravitaillement ; en mode libre, remplir ses bidons à la fontaine d'un village (à l'arrêt) |
 | M | Carte : petite → grande → masquée (molette pour zoomer, glisser pour se déplacer ; en mode libre, double-clic pour s'y téléporter) |
@@ -75,6 +75,19 @@ Montées : chaque col ou côte du parcours (au moins 80 m de dénivelé à
 restantes) ; au sommet, temps de montée, VAM et record personnel (par
 parcours, sens et vélo). Le bilan d'arrivée ajoute la puissance normalisée
 et les temps de chaque montée.
+
+Créateur de personnage : nom, profil (grimpeur, rouleur, sprinteur,
+puncheur, complet : réserve anaérobie), taille, poids, seuil, couleur de
+peau et couleurs de chaque pièce (maillot, cuissard, casque, chaussures,
+cadre), avec un aperçu 3D qui tourne. Les personnages créés rejoignent le
+coverflow et se modifient ou se suppriment.
+
+Inventaire : deux porte-bidons (vide, 500 ou 750 mL ; boisson isotonique à
+40 g/L ou eau), huit poches pour les barres (40 g), gels (25 g) et gels
+caféinés (+3 % de puissance pendant 45 min), roues (alu, carbone 50 ou
+80 mm : masse et traînée) et pneus (25 mm, tubeless 28 mm, pluie :
+roulement et adhérence). Le menu calcule la masse emportée, les glucides,
+la boisson et l'autonomie estimée.
 
 Personnages : sept coureurs fictifs (grimpeuse, rouleur, sprinteur,
 puncheuse, baroudeur, cyclosportif, débutante) choisis dans un coverflow
@@ -159,6 +172,19 @@ réserve anaérobie W′ (modèle de Skiba), fréquence cardiaque, braquets
 50/34 × 11-32, vitesse limite en virage selon la courbure réelle.
 
 ## Rendu
+
+- Qualité **Ultra** (cartes graphiques récentes, choisie d'office pour les
+  RTX, Radeon RX récentes, Apple M…) : sapins à huit étages de branches,
+  feuillus à cinq masses avec charpentières, route deux fois plus fine,
+  ombres 4096, résolution jusqu'à 2×, végétation et bâtiments plus loin.
+  La qualité automatique redescend d'un cran à la fois si l'image n'est
+  pas fluide.
+- **Photos aériennes HD** (Élevé et Ultra) : les orthophotos IGN à 40 cm
+  par pixel sont chargées en continu autour du coureur (fenêtre de 1 km),
+  avec une seconde fenêtre de 6,5 km à 1,6 m/px, comme un clipmap ; la
+  photo intégrée (5 m/px) reste au-delà ou hors connexion.
+- Bâtiments : avant-toits et rives débordants, cheminées, soubassement,
+  encadrements de fenêtres, vitres et crépi irrégulier.
 
 - Le relief IGN est une grille de 30 m, trop grossière pour une chaussée de
   6 m. Un ruban de sol fin (une section tous les 5 m, ±30 m de part et
