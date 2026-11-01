@@ -101,6 +101,9 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
     if (opts.mask) {
       sh.uniforms.roadMask = { value: opts.mask };
       sh.uniforms.discardDist = mat.userData.discardDist;
+      sh.uniforms.routeMask = { value: opts.routeMask };
+      sh.uniforms.cellMap = { value: opts.cells.tex };
+      sh.uniforms.cellRect = { value: opts.cells.rect };
     }
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;")
@@ -108,11 +111,19 @@ export function makeTerrainMaterial(orthoImage, maxSize, renderer, opts = {}) {
     sh.fragmentShader = sh.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;" + (opts.veg ? "\nuniform sampler2D vegMap;" : "") + (opts.mask ? "\nuniform sampler2D roadMask;\nuniform float discardDist;" : "") + (opts.hd ? "\n" + HD_GLSL_DECL : ""),
+        "#include <common>\nvarying vec3 vWPos;\nuniform sampler2D detailMap;" + (opts.veg ? "\nuniform sampler2D vegMap;" : "") + (opts.mask ? "\nuniform sampler2D roadMask;\nuniform float discardDist;\nuniform sampler2D routeMask;\nuniform sampler2D cellMap;\nuniform vec4 cellRect;" : "") + (opts.hd ? "\n" + HD_GLSL_DECL : ""),
       )
       .replace(
         "#include <map_fragment>",
-        `${opts.mask ? `if (texture2D(roadMask, vMapUv).r * ${opts.maskRange.toFixed(1)} < ${opts.discard.toFixed(1)} && length(vWPos - cameraPosition) < discardDist) discard;` : ""}
+        `${opts.mask ? `
+        // relief masqué sous le ruban de sol des voies : toujours pour les
+        // parcours (construits au démarrage), et pour les rues seulement
+        // quand leur case est construite (sinon le relief reste : pas de trou)
+        if (length(vWPos - cameraPosition) < discardDist) {
+          float th = ${opts.discard.toFixed(1)} / ${opts.maskRange.toFixed(1)};
+          if (texture2D(routeMask, vMapUv).r < th) discard;
+          if (texture2D(roadMask, vMapUv).r < th && texture2D(cellMap, (vWPos.xz - cellRect.xy) / cellRect.zw).r > 0.99) discard;
+        }` : ""}
         #include <map_fragment>
         ${opts.hd ? HD_GLSL : ""}
         {

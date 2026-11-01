@@ -138,6 +138,31 @@ sound.setEnabled(settings.sound);
 
 let spawnMap, miniMap, bigMap;
 let hd = null;
+let netCellsMap = null;
+// cases de 500 m du réseau déjà construites (texture lue par le shader du
+// relief) ; filtrage linéaire : près d'une case pas encore prête, le relief
+// reste visible plutôt que de laisser un trou
+class CellMap {
+  constructor(hf, size) {
+    this.size = size;
+    this.i0 = Math.floor(hf.x0 / size) - 1;
+    this.j0 = Math.floor(hf.z0 / size) - 1;
+    this.nx = Math.ceil((hf.x0 + hf.w) / size) - this.i0 + 2;
+    this.nz = Math.ceil((hf.z0 + hf.d) / size) - this.j0 + 2;
+    this.data = new Uint8Array(this.nx * this.nz);
+    this.tex = new THREE.DataTexture(this.data, this.nx, this.nz, THREE.RedFormat, THREE.UnsignedByteType);
+    this.tex.magFilter = this.tex.minFilter = THREE.LinearFilter;
+    this.tex.unpackAlignment = 1;
+    this.tex.needsUpdate = true;
+    this.rect = new THREE.Vector4(this.i0 * size, this.j0 * size, this.nx * size, this.nz * size);
+  }
+  set(i, j, on) {
+    const a = i - this.i0, b = j - this.j0;
+    if (a < 0 || b < 0 || a >= this.nx || b >= this.nz) return;
+    this.data[b * this.nx + a] = on ? 255 : 0;
+    this.tex.needsUpdate = true;
+  }
+}
 function applyHd() { if (hd) hd.setEnabled(!!settings.hdPhoto && !!QUALITY[qKey()].hd); }
 export let D, hf, ground, roads, roadMats, terrain, forest, roadIndex, netStream, buildStream, treeStream, signs = new THREE.Group();
 // distance (m) jusqu'à laquelle le relief grossier est masqué le long des routes
@@ -193,10 +218,12 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     $("loadmsg").textContent = "Raccord des routes au relief…";
     await frame();
     const mask = ground.buildMask(Q.mask);
+    const routeMask = ground.buildMask(2048, ground.lines.slice(0, routeLines.length));
+    netCellsMap = new CellMap(hf, 500);
     const veg = new THREE.Texture(D.vegImage);
     veg.needsUpdate = true;
     hd = new HdOrtho(D.meta);
-    const mat = makeTerrainMaterial(D.ortho, Q.ortho, renderer, { mask, veg, maskRange: MASK_RANGE, discard: DISCARD, discardDist: discardU, hd: hd.uniforms });
+    const mat = makeTerrainMaterial(D.ortho, Q.ortho, renderer, { mask, veg, maskRange: MASK_RANGE, discard: DISCARD, discardDist: discardU, hd: hd.uniforms, routeMask, cells: netCellsMap });
     terrain = new Terrain(hf, mat);
     scene.add(terrain.group);
     scene.add(buildOuterTerrain(D.outerMeta, D.outer, hf, makeTerrainMaterial(D.outerImg, QUALITY[qKey()].outer, renderer)));
@@ -208,7 +235,16 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
     scene.add(roads.group);
     // rues, routes et pistes cyclables, bâtiments, arbres : par cases autour du cycliste
     const netCells = new NetworkCells(ground, routeLines.length, 500);
-    netStream = new Streamer(500, (i, j) => netCells.build(i, j, roadMats));
+    // chaque case construite est notée dans la carte des cases : le relief
+    // n'est masqué sous les rues qu'une fois leur ruban de sol en place
+    netStream = new Streamer(500, (i, j) => {
+      const obj = netCells.build(i, j, roadMats);
+      netCellsMap.set(i, j, true);
+      if (!obj) return { group: new THREE.Group(), dispose: () => netCellsMap.set(i, j, false) };
+      const d0 = obj.dispose;
+      obj.dispose = () => { netCellsMap.set(i, j, false); d0.call(obj); };
+      return obj;
+    });
     const bCells = new Map();
     for (const b of D.buildings) {
       const k = `${Math.floor(b[2][0] / 500)},${Math.floor(b[2][1] / 500)}`;

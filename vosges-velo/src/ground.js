@@ -136,11 +136,12 @@ export class Ground {
   // de sorte que le seuil unique DISCARD masque jusqu'à corr - 8 m de l'axe
   // pour chaque voie (le ruban de sol va jusqu'à corr). Pas de bouts arrondis
   // aux extrémités des lignes, que le ruban ne couvre pas.
-  buildMask(size) {
+  // lines : voies prises en compte (toutes par défaut, ou les parcours seuls)
+  buildMask(size, lines = this.lines) {
     const hf = this.hf;
     const data = new Uint8Array(size * size).fill(255);
     const px = hf.w / size, pz = hf.d / size;
-    for (const r of this.lines) {
+    for (const r of lines) {
       const n = r.x.length;
       const shift = r.corr - 30;
       const R = DISCARD + shift + 4;
@@ -291,9 +292,7 @@ function vergeTexture() {
 
 // bande le long d'une portion de route ; cols = décalages latéraux,
 // hfun(x, z, off) = altitude, uvMode : "road" (u en travers, v en long) ou "world"
-// covered(x, z) : vrai si le point est sur la chaussée ou l'accotement d'une
-// autre voie ; les quadrilatères de sol concernés ne sont pas émis
-function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1], covered = null) {
+function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1]) {
   const nc = cols.length, nr = b - a + 1;
   const pos = new Float32Array(nr * nc * 3);
   const uv = new Float32Array(nr * nc * 2);
@@ -327,21 +326,10 @@ function strip(r, a, b, cols, hfun, uvMode, hf, inner, uRange = [0, 1], covered 
       else { uv[q] = (x - hf.x0) / hf.w; uv[q + 1] = 1 - (z - hf.z0) / hf.d; }
     }
   }
-  let cov = null;
-  if (covered) {
-    cov = new Uint8Array(nr * nc);
-    for (let p = 0; p < nr * nc; p++) cov[p] = covered(pos[p * 3], pos[p * 3 + 2]) ? 1 : 0;
-  }
   const idx = [];
   for (let k = 0; k < nr - 1; k++) {
     for (let c = 0; c < nc - 1; c++) {
       const p = k * nc + c;
-      if (cov) {
-        if (cov[p] || cov[p + 1] || cov[p + nc] || cov[p + nc + 1]) continue;
-        const mx = (pos[p * 3] + pos[(p + 1) * 3] + pos[(p + nc) * 3] + pos[(p + nc + 1) * 3]) / 4;
-        const mz = (pos[p * 3 + 2] + pos[(p + 1) * 3 + 2] + pos[(p + nc) * 3 + 2] + pos[(p + nc + 1) * 3 + 2]) / 4;
-        if (covered(mx, mz)) continue;
-      }
       idx.push(p, p + 1, p + nc, p + nc, p + 1, p + nc + 1);
     }
   }
@@ -403,17 +391,18 @@ function lineGeometry(ground, L, a, b, inner, out) {
   const cr = L.corr;
   const colsR = L.route ? [v - 0.05, 8.5, 13, 18, 24, cr] : [v - 0.05, v + 3, v + 6.5, cr];
   const colsL = colsR.map((c) => -c).reverse();
-  const hfun = (x, z) => ground.height(x, z);
-  // le ruban de sol d'une voie ne passe pas sur la chaussée ni l'accotement
-  // d'une autre (carrefours, rues parallèles) : les deux surfaces, à la même
-  // hauteur, se disputaient l'affichage et le sol mordait sur l'enrobé.
-  // L'autre voie a son propre ruban, qui couvre cet endroit.
-  const covered = (x, z) => {
-    const q = ground.road(x, z, VERGE_W - 0.3);
-    return !!q && q.line !== L && Math.abs(q.y - hf.height(x, z)) < 4;
+  // le ruban de sol d'une voie qui passe sur la chaussée ou l'accotement
+  // d'une autre (carrefours, rues parallèles) est abaissé de 15 cm : les deux
+  // surfaces, à la même hauteur, se disputaient l'affichage et le sol mordait
+  // sur l'enrobé. (Le retirer laissait des trous tant que l'autre voie
+  // n'était pas construite.)
+  const gfun = (x, z) => {
+    const y = ground.height(x, z);
+    const q = ground.road(x, z, VERGE_W);
+    return q && q.line !== L && Math.abs(q.y - y) < 4 ? Math.min(y, q.y + q.line.lift - 0.15) : y;
   };
-  out.ground.push(strip(L, a, b, colsL, hfun, "world", hf, inner, undefined, covered));
-  out.ground.push(strip(L, a, b, colsR, hfun, "world", hf, inner, undefined, covered));
+  out.ground.push(strip(L, a, b, colsL, gfun, "world", hf, inner));
+  out.ground.push(strip(L, a, b, colsR, gfun, "world", hf, inner));
 }
 
 function finishMeshes(out, mats, chunked) {
