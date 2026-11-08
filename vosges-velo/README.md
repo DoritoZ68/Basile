@@ -138,6 +138,28 @@ peloton freine plus tôt dans les virages.
 
 ## Ce qui est réel
 
+**Guebwiller en détail** (départ du Markstein, arrivée du piémont) :
+
+- les 5 600 bâtiments de la ville avec leurs vraies hauteurs (BD TOPO :
+  altitude du sol, de l'égout du toit et du faîtage, nombre d'étages) :
+  toits à deux pans, à croupes ou plats selon ces altitudes, fenêtres
+  alignées sur les vrais étages ;
+- la couleur réelle de chaque toit, mesurée sur les orthophotos IGN à
+  40 cm (médiane des pixels de l'emprise) : tuiles rouges et brunes,
+  ardoises, zinc ;
+- les monuments, repérés par leur emprise OpenStreetMap et modélisés
+  d'après des photographies (Wikimedia Commons) : église Saint-Léger
+  (massif occidental à deux tours, flèches et pinacles, porche à trois
+  arcades, nef et bas-côtés, tour de croisée octogonale, abside, grès
+  rose), église Notre-Dame (façade classique à colonnes, tour à horloge et
+  dôme, transept arrondi, chœur), hôtel de ville (crépi ocre, chaînes
+  d'angle, grand toit, clocheton à horloge, oriel, lucarnes), église des
+  Dominicains (baies gothiques, contreforts, clocheton), chapelle
+  Notre-Dame-du-Saering (croupe, oculus, clocheton).
+
+La caméra de poursuite ne traverse plus les façades : dans les rues
+étroites, elle se rapproche du coureur.
+
 - **Routes** : tracés OpenStreetMap, calculés par le routeur OSRM entre les
   points de passage, avec les noms et numéros de route (D 431, D 13B6…).
 - **Altitude** : IGN RGE ALTI, un point tous les 5 m le long des routes,
@@ -253,6 +275,9 @@ python3 tools/fetch_outer.py
 python3 tools/fetch_network.py
 ```
 
+`tools/fetch_guebwiller.py` (bâtiments détaillés de Guebwiller, couleurs
+des toits, monuments) écrit `data/guebwiller.json`.
+
 `fetch_network.py` (réseau complet et tous les bâtiments, pour le mode
 libre) lit aussi la Base nationale des aménagements cyclables au format
 Parquet : il faut `pip install pyarrow`.
@@ -270,3 +295,6 @@ scripts puis le build.
 - Pistes cyclables et voies vertes : Base nationale des aménagements
   cyclables (export OpenStreetMap, data.gouv.fr), ODbL
 - Relief hors de France : EU-DEM v1.1, © Copernicus
+- Emprises et noms des monuments de Guebwiller : © contributeurs
+  OpenStreetMap, ODbL ; photographies de référence (non intégrées au jeu) :
+  Wikimedia Commons

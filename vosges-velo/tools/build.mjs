@@ -16,7 +16,7 @@ const watch = process.argv.includes("--watch");
 // fichiers de données (dossier data/) et leur nom dans le jeu
 const DATA = {
   world: "world.json", terrain: "terrain.bin", outer: "outer.bin", buildings: "buildings.bin",
-  network: "network.bin", networkNames: "network.json",
+  network: "network.bin", networkNames: "network.json", gueb: "guebwiller.json",
 };
 const IMAGES = { outerImg: "outer.jpg", ortho: "ortho.jpg", orthoSmall: "ortho-1k.jpg", vegetation: "vegetation.png" };
 

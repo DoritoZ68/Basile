@@ -86,6 +86,8 @@ export async function loadData(onProgress) {
   const network = decodeNetwork(new DataView(await bytes("network")), JSON.parse(await text("networkNames")));
   onProgress(0.4, "Bâtiments BD TOPO…");
   const buildings = decodeBuildings(new DataView(await bytes("buildings")));
+  // Guebwiller en détail (tools/fetch_guebwiller.py)
+  const gueb = raw.gueb ? JSON.parse(await text("gueb")) : null;
   onProgress(0.5, "Photographies aériennes…");
   const [ortho, orthoSmall, vegetation, outerImg] = await Promise.all([
     loadImage(raw.ortho),
@@ -100,5 +102,5 @@ export async function loadData(onProgress) {
   const ctx = c.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(vegetation, 0, 0);
   const veg = { w: c.width, h: c.height, px: ctx.getImageData(0, 0, c.width, c.height).data };
-  return { ...world, outerMeta: world.outer, terrain, outer, outerImg, buildings, network, ortho, orthoSmall, veg, vegImage: vegetation };
+  return { ...world, outerMeta: world.outer, terrain, outer, outerImg, buildings, gueb, network, ortho, orthoSmall, veg, vegImage: vegetation };
 }

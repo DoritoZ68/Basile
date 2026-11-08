@@ -706,6 +706,76 @@ const COLOMB = ["#f2ead8", "#efe1c2", "#ead2ac", "#f3e3c9", "#e8c7a2", "#dfe5d2"
 const WALLS = ["#efe6d2", "#e8d9b5", "#f0d2b4", "#e9c9a0", "#ddd6c6", "#f2e8c9", "#e6cbc4", "#d3dccf", "#f4efe6", "#e8dcc0", "#d9c3a4"];
 const ROOFS = ["#8a4a36", "#7b3f2f", "#9a5a40", "#6e4a3c", "#80463a", "#5f4b45"];
 
+let bMat = null;
+// Matériau des bâtiments : fenêtres, colombages et tuiles dessinés dans le
+// shader. Attributs : aStyle (0 crépi, 1 colombages, 2 monument : ni fenêtres
+// ni pans de bois), aFloor (altitude du sol, hauteur d'étage ; 0 : étages de
+// 3 m comptés depuis l'altitude 0).
+export function buildingMaterial() {
+  if (bMat) return bMat;
+  const mat = (bMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  // fenêtres dessinées dans le shader : étages de 3 m, travées de 2,7 m
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nattribute float aStyle;\nvarying float vStyle;\nattribute vec2 aFloor;\nvarying vec2 vFloor;")
+      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);\nvStyle = aStyle;\nvFloor = aFloor;");
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nvarying float vStyle;\nvarying vec2 vFloor;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float dCam = length(vWPos - cameraPosition);
+        // étages : hauteur réelle (Guebwiller) ou 3 m
+        float flH = vFloor.y > 0.5 ? vFloor.y : 3.0;
+        float flV = (vWPos.y - vFloor.x) / flH;
+        // toits en pente : tuiles plates (écailles de castor), rangs décalés,
+        // teinte de chaque tuile légèrement différente
+        if (vWNor.y > 0.25 && vWNor.y < 0.97) {
+          vec2 tn = normalize(vec2(-vWNor.z, vWNor.x));
+          float row = vWPos.y / 0.17;
+          float colu = dot(vWPos.xz, tn) / 0.19 + 0.5 * mod(floor(row), 2.0);
+          float h = fract(sin(dot(vec2(floor(row), floor(colu)), vec2(12.9898, 78.233))) * 43758.5453);
+          float edge = smoothstep(0.0, 0.18, fract(row)) * (0.75 + 0.25 * smoothstep(0.0, 0.08, min(fract(colu), 1.0 - fract(colu))));
+          // estompé dès que les rangs deviennent trop fins à l'écran (moirage)
+          float fade = (1.0 - smoothstep(20.0, 160.0, dCam)) * (1.0 - smoothstep(0.18, 0.45, fwidth(row)));
+          diffuseColor.rgb *= mix(1.0, (0.82 + 0.3 * h) * mix(0.72, 1.0, edge), fade);
+        }
+        // pans de bois : sablières aux étages, poteaux tous les 1,35 m,
+        // écharpes en diagonale dans les panneaux sans fenêtre
+        if (vStyle > 0.5 && vStyle < 1.5 && abs(vWNor.y) < 0.3) {
+          vec2 tw = normalize(vec2(-vWNor.z, vWNor.x));
+          float pu = dot(vWPos.xz, tw) / 1.35, pv = flV;
+          float fu = fract(pu), fv = fract(pv);
+          float beam = step(fv, 0.07) + step(0.94, fv) + step(fu, 0.085);
+          float odd = mod(floor(pu), 2.0);
+          float diag = odd * step(abs(fu - (mod(floor(pv), 2.0) > 0.5 ? fv : 1.0 - fv)), 0.065);
+          float k2 = min(1.0, beam + diag) * (1.0 - smoothstep(120.0, 450.0, dCam));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.17, 0.11), k2);
+        }
+        if (abs(vWNor.y) < 0.3 && vStyle < 1.5) {
+          vec2 t = normalize(vec2(-vWNor.z, vWNor.x));
+          float u = dot(vWPos.xz, t) / 2.7;
+          float v = flV;
+          float wx = step(0.32, fract(u)) * step(fract(u), 0.7);
+          float wy = step(0.38, fract(v)) * step(fract(v), 0.8);
+          float d = length(vWPos - cameraPosition);
+          float k = wx * wy * (1.0 - smoothstep(150.0, 600.0, d));
+          // crépi irrégulier, encadrement clair, vitre qui reflète un peu le ciel
+          float n = fract(sin(dot(floor(vWPos * 2.3), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+          diffuseColor.rgb *= 0.95 + 0.07 * n * (1.0 - smoothstep(60.0, 250.0, d));
+          float fx = step(0.29, fract(u)) * step(fract(u), 0.73), fy = step(0.35, fract(v)) * step(fract(v), 0.83);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.9, 0.86), (fx * fy - wx * wy) * (1.0 - smoothstep(80.0, 300.0, d)) * 0.8);
+          vec3 glass = mix(vec3(0.13, 0.16, 0.2), vec3(0.42, 0.5, 0.6), smoothstep(0.55, 0.8, fract(v)) * 0.6);
+          diffuseColor.rgb = mix(diffuseColor.rgb, glass, k * 0.88);
+          // volets en bois de part et d'autre
+          float sh = (step(0.22, fract(u)) * step(fract(u), 0.31) + step(0.71, fract(u)) * step(fract(u), 0.8)) * wy;
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.42, 0.3), sh * 0.6 * (1.0 - smoothstep(150.0, 400.0, d)));
+        }`,
+      );
+  };
+  return mat;
+}
+
 export function buildBuildings(list, hf, keep = () => true) {
   const R = rng(list.length ? Math.floor(list[0][2][0] * 31 + list[0][2][1] * 17) : 99);
   const cell = 600;
@@ -820,62 +890,7 @@ export function buildBuildings(list, hf, keep = () => true) {
     for (let i = 0; i < col.length; i++) bk.col.push(col[i]);
     for (let i = 0; i < sty.length; i++) bk.sty.push(sty[i]);
   }
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
-  // fenêtres dessinées dans le shader : étages de 3 m, travées de 2,7 m
-  mat.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nattribute float aStyle;\nvarying float vStyle;")
-      .replace("#include <fog_vertex>", "#include <fog_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvWNor = normalize(mat3(modelMatrix) * objectNormal);\nvStyle = aStyle;");
-    sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos;\nvarying vec3 vWNor;\nvarying float vStyle;")
-      .replace(
-        "#include <color_fragment>",
-        `#include <color_fragment>
-        float dCam = length(vWPos - cameraPosition);
-        // toits en pente : tuiles plates (écailles de castor), rangs décalés,
-        // teinte de chaque tuile légèrement différente
-        if (vWNor.y > 0.25 && vWNor.y < 0.97) {
-          vec2 tn = normalize(vec2(-vWNor.z, vWNor.x));
-          float row = vWPos.y / 0.17;
-          float colu = dot(vWPos.xz, tn) / 0.19 + 0.5 * mod(floor(row), 2.0);
-          float h = fract(sin(dot(vec2(floor(row), floor(colu)), vec2(12.9898, 78.233))) * 43758.5453);
-          float edge = smoothstep(0.0, 0.18, fract(row)) * (0.75 + 0.25 * smoothstep(0.0, 0.08, min(fract(colu), 1.0 - fract(colu))));
-          float fade = 1.0 - smoothstep(60.0, 320.0, dCam);
-          diffuseColor.rgb *= mix(1.0, (0.82 + 0.3 * h) * mix(0.72, 1.0, edge), fade);
-        }
-        // pans de bois : sablières aux étages, poteaux tous les 1,35 m,
-        // écharpes en diagonale dans les panneaux sans fenêtre
-        if (vStyle > 0.5 && abs(vWNor.y) < 0.3) {
-          vec2 tw = normalize(vec2(-vWNor.z, vWNor.x));
-          float pu = dot(vWPos.xz, tw) / 1.35, pv = vWPos.y / 3.0;
-          float fu = fract(pu), fv = fract(pv);
-          float beam = step(fv, 0.07) + step(0.94, fv) + step(fu, 0.085);
-          float odd = mod(floor(pu), 2.0);
-          float diag = odd * step(abs(fu - (mod(floor(pv), 2.0) > 0.5 ? fv : 1.0 - fv)), 0.065);
-          float k2 = min(1.0, beam + diag) * (1.0 - smoothstep(120.0, 450.0, dCam));
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.27, 0.17, 0.11), k2);
-        }
-        if (abs(vWNor.y) < 0.3) {
-          vec2 t = normalize(vec2(-vWNor.z, vWNor.x));
-          float u = dot(vWPos.xz, t) / 2.7;
-          float v = vWPos.y / 3.0;
-          float wx = step(0.32, fract(u)) * step(fract(u), 0.7);
-          float wy = step(0.38, fract(v)) * step(fract(v), 0.8);
-          float d = length(vWPos - cameraPosition);
-          float k = wx * wy * (1.0 - smoothstep(150.0, 600.0, d));
-          // crépi irrégulier, encadrement clair, vitre qui reflète un peu le ciel
-          float n = fract(sin(dot(floor(vWPos * 2.3), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-          diffuseColor.rgb *= 0.95 + 0.07 * n * (1.0 - smoothstep(60.0, 250.0, d));
-          float fx = step(0.29, fract(u)) * step(fract(u), 0.73), fy = step(0.35, fract(v)) * step(fract(v), 0.83);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.9, 0.86), (fx * fy - wx * wy) * (1.0 - smoothstep(80.0, 300.0, d)) * 0.8);
-          vec3 glass = mix(vec3(0.13, 0.16, 0.2), vec3(0.42, 0.5, 0.6), smoothstep(0.55, 0.8, fract(v)) * 0.6);
-          diffuseColor.rgb = mix(diffuseColor.rgb, glass, k * 0.88);
-          // volets en bois de part et d'autre
-          float sh = (step(0.22, fract(u)) * step(fract(u), 0.31) + step(0.71, fract(u)) * step(fract(u), 0.8)) * wy;
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.42, 0.3), sh * 0.6 * (1.0 - smoothstep(150.0, 400.0, d)));
-        }`,
-      );
-  };
+  const mat = buildingMaterial();
   const group = new THREE.Group();
   const chunks = [];
   for (const bk of buckets.values()) {

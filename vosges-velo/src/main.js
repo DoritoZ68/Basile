@@ -13,6 +13,7 @@ import { Sound } from "./audio.js";
 import { MapView } from "./map.js";
 import { Traffic } from "./traffic.js";
 import { HdOrtho } from "./hdortho.js";
+import { Guebwiller } from "./gueb.js";
 import { characterById, paletteOf } from "./characters.js";
 import { addRemote, buildMp, followNet, hostStart, net, netTick } from "./ui/multiplayer.js";
 import { buildInventory } from "./ui/inventory.js";
@@ -139,6 +140,7 @@ sound.setEnabled(settings.sound);
 let spawnMap, miniMap, bigMap;
 let hd = null;
 let netCellsMap = null;
+let gueb = null;
 // cases de 500 m du réseau déjà construites (texture lue par le shader du
 // relief) ; filtrage linéaire : près d'une case pas encore prête, le relief
 // reste visible plutôt que de laisser un trou
@@ -245,15 +247,23 @@ const CAMS = ["Poursuite", "Première personne", "Moto TV", "Drone"];
       obj.dispose = () => { netCellsMap.set(i, j, false); d0.call(obj); };
       return obj;
     });
+    // Guebwiller : bâtiments détaillés et monuments à la place du jeu de base
+    gueb = D.gueb ? new Guebwiller(D.gueb, ground) : null;
     const bCells = new Map();
     for (const b of D.buildings) {
+      if (gueb && gueb.covers(b[2][0], b[2][1])) continue;
       const k = `${Math.floor(b[2][0] / 500)},${Math.floor(b[2][1] / 500)}`;
       if (!bCells.has(k)) bCells.set(k, []);
       bCells.get(k).push(b);
     }
     buildStream = new Streamer(500, (i, j) => {
       const list = bCells.get(`${i},${j}`);
-      return list ? buildBuildings(list, ground) : null;
+      const a = list ? buildBuildings(list, ground) : null;
+      const b = gueb ? gueb.buildCell(i, j) : null;
+      if (!a || !b) return a || b;
+      const group = new THREE.Group();
+      group.add(a.group, b.group);
+      return { group, dispose() { a.dispose(); b.dispose(); } };
     });
     scene.add(netStream.group, buildStream.group);
     scene.add(buildLandmarks(D.landmarks, ground, roadIndex));
@@ -1765,6 +1775,8 @@ function placeCameraImmediately() {
 }
 
 const camEuler = new THREE.Euler(0, 0, 0, "YXZ");
+const camRay = new THREE.Raycaster(), camHead = new THREE.Vector3(), camDir = new THREE.Vector3();
+let camRayN = 0, camClip = 1, camClipT = 1;
 let camYaw = 0;
 let camY = 0;
 function rideCamera(dt, snap = false) {
@@ -1837,6 +1849,21 @@ function rideCamera(dt, snap = false) {
   camPos.y = Math.max(camY, floor - 0.6);
   // téléportation, relève après une chute : pas de longue glissade de caméra
   if (Math.hypot(camPos.x - want.x, camPos.z - want.z) > 60 || Math.abs(camY - want.y) > 20) { camPos.copy(want); camY = want.y; }
+  // caméra de poursuite : ne traverse pas les façades (rues étroites) ; un
+  // mur entre le coureur et la caméra la rapproche aussitôt, elle recule
+  // ensuite en douceur (test toutes les 4 images)
+  if (mode === 0 && buildStream) {
+    const head = camHead.set(px, py + 1.4, pz);
+    if ((camRayN++ & 3) === 0 || snap) {
+      const dir = camDir.subVectors(camPos, head), len = dir.length();
+      camRay.set(head, dir.normalize());
+      camRay.far = len;
+      const hit = camRay.intersectObject(buildStream.group, true)[0];
+      camClipT = hit ? Math.max(0.12, (hit.distance - 0.5) / len) : 1;
+    }
+    camClip = camClipT < camClip || snap ? camClipT : camClip + (camClipT - camClip) * (1 - Math.exp(-dt * 2.5));
+    if (camClip < 0.999) camPos.lerpVectors(head, camPos, camClip);
+  }
   camera.position.copy(camPos);
   camera.lookAt(lk);
   // léger roulis de la caméra de poursuite avec le vélo
